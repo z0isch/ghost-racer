@@ -1,5 +1,7 @@
+local basic_map = require "tile-map.basic"
+
 local game_width = 640
-local game_height = 360
+local game_height = 352
 
 function _config()
   return { name = "Usagi Test", game_width = game_width, game_height = game_height }
@@ -30,7 +32,7 @@ local car = {
   skid_max_count = 200
 }
 
-local RUN_DURATION = 10
+local RUN_DURATION = 100
 local GHOST_ALPHA = 0.4
 
 local run = {
@@ -149,8 +151,8 @@ function _update(dt)
   local drift_factor = 1
   if is_drifitng then drift_factor = 1.1 end
   local vel_vec = util.vec_from_angle(car.vel_angle, drift_factor * car.vel * dt)
-  car.x = util.clamp(car.x + vel_vec.x, 0, game_width - 14)
-  car.y = util.clamp(car.y + vel_vec.y, 0, game_height - 14)
+  car.x = util.clamp(car.x + vel_vec.x, 0, game_width - 16)
+  car.y = util.clamp(car.y + vel_vec.y, 0, game_height - 16)
 
   if input.held(input.BTN1)
   then
