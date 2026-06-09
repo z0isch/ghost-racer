@@ -30,6 +30,18 @@ local car = {
   skid_max_count = 200
 }
 
+local RUN_DURATION = 10
+local GHOST_ALPHA = 0.4
+
+local run = {
+  active = false,
+  time = 0,
+  samples = {}
+}
+
+local ghost = nil
+local ghost_time = 0
+
 ---Normalize an angle to be between 0 and 2 * PI
 ---@param angle number
 ---@return number
@@ -48,7 +60,74 @@ local function lerp_angle(a, b, t)
   return a + diff * math.min(t, 1)
 end
 
+---Interpolate the ghost's recorded transform at a given time into its run
+---@param time number
+---@return table|nil
+local function ghost_sample_at(time)
+  if not ghost or #ghost == 0 then return nil end
+
+  if time <= ghost[1].t then return ghost[1] end
+  local last = ghost[#ghost]
+  if time >= last.t then return last end
+
+  for i = 1, #ghost - 1 do
+    local a = ghost[i]
+    local b = ghost[i + 1]
+    if time >= a.t and time <= b.t then
+      local span = b.t - a.t
+      local t = 0
+      if span > 0 then t = (time - a.t) / span end
+      return {
+        x = util.lerp(a.x, b.x, t),
+        y = util.lerp(a.y, b.y, t),
+        angle = lerp_angle(a.angle, b.angle, t),
+        drift = a.drift
+      }
+    end
+  end
+
+  return last
+end
+
+---Stop the current run, promoting its recording to the new ghost
+local function end_run()
+  if run.active and #run.samples > 0 then
+    ghost = run.samples
+    ghost_time = 0
+  end
+  run.active = false
+end
+
+---Reset the car to spawn and begin a fresh run
+local function reset_run()
+  end_run()
+
+  car.x = 10
+  car.y = 100
+  car.vel = 0
+  car.facing_angle = 0
+  car.vel_angle = 0
+  car.is_drifitng = false
+
+  skid_marks = {}
+  skid_prev = nil
+
+  run.active = true
+  run.time = 0
+  run.samples = {}
+end
+
 function _update(dt)
+  if input.pressed(input.BTN3) then
+    reset_run()
+  end
+
+  if not run.active then return end
+
+  if ghost then
+    ghost_time = ghost_time + dt
+  end
+
   local holding_left = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
   local is_drifitng = false
@@ -140,13 +219,34 @@ function _update(dt)
       i = i + 1
     end
   end
+
+  run.time = run.time + dt
+  run.samples[#run.samples + 1] = {
+    t = run.time,
+    x = car.x,
+    y = car.y,
+    angle = car.facing_angle,
+    drift = car.is_drifitng
+  }
+
+  if run.time >= RUN_DURATION then
+    end_run()
+  end
 end
 
 function _draw(dt)
-  gfx.clear(gfx.COLOR_DARK_BLUE)
+  gfx.clear(gfx.COLOR_INDIGO)
   for _, mark in ipairs(skid_marks) do
     gfx.line(mark.lx1, mark.ly1, mark.lx2, mark.ly2, gfx.COLOR_BLACK)
     gfx.line(mark.rx1, mark.ry1, mark.rx2, mark.ry2, gfx.COLOR_BLACK)
   end
+
+  if run.active and ghost then
+    local g = ghost_sample_at(ghost_time)
+    if g then
+      gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, GHOST_ALPHA)
+    end
+  end
+
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, gfx.COLOR_WHITE, 1)
 end
