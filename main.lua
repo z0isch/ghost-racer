@@ -3,6 +3,38 @@ local basic_map = require "tile-map.basic"
 local game_width = 640
 local game_height = 352
 
+local tile_size = basic_map.tilewidth
+local map_layer = basic_map.layers[1].data
+local map_width = basic_map.width
+local map_height = basic_map.height
+
+local tile_colors = {
+  [0] = gfx.COLOR_PEACH,
+  [1] = gfx.COLOR_INDIGO,
+  [2] = gfx.COLOR_BLACK,
+}
+
+local function get_tile(x, y)
+  local col = math.floor(x / tile_size)
+  local row = math.floor(y / tile_size)
+  if col < 0 or col >= map_width or row < 0 or row >= map_height then
+    return 0
+  end
+  return map_layer[row * map_width + col + 1]
+end
+
+local CAR_SIZE = 16
+local CAR_MARGIN = 3
+local SPAWN_TILE = { col = 0, row = 10 }
+
+local function car_on_road(x, y)
+  local inner = CAR_SIZE - CAR_MARGIN - 1
+  return get_tile(x + CAR_MARGIN, y + CAR_MARGIN) == 1
+      and get_tile(x + inner, y + CAR_MARGIN) == 1
+      and get_tile(x + CAR_MARGIN, y + inner) == 1
+      and get_tile(x + inner, y + inner) == 1
+end
+
 function _config()
   return { name = "Usagi Test", game_width = game_width, game_height = game_height }
 end
@@ -15,8 +47,8 @@ local skid_marks = {}
 local skid_prev = nil
 
 local car = {
-  x = 10,
-  y = 100,
+  x = SPAWN_TILE.col * tile_size,
+  y = SPAWN_TILE.row * tile_size,
   vel = 0,
   top_vel = 200,
   facing_angle = 0,
@@ -24,12 +56,19 @@ local car = {
   turn_speed = 0.03,
   drift_turn_speed = 0.06,
   drift_slide = math.pi / 8,
+  drift_deccel = 180,
   accel = 50,
   deccel = 150,
   is_drifitng = false,
   turn_speed_factor = 0.0001,
   skid_max_age = 2.5,
-  skid_max_count = 200
+  skid_max_count = 200,
+  boost_value = 120,
+  boost_length = 1.2,
+  drift_threshold = .6,
+  drift_time = 0,
+  boost_ready = false,
+  boost_time_remaining = 0,
 }
 
 local RUN_DURATION = 100
@@ -104,12 +143,15 @@ end
 local function reset_run()
   end_run()
 
-  car.x = 10
-  car.y = 100
+  car.x = SPAWN_TILE.col * tile_size
+  car.y = SPAWN_TILE.row * tile_size
   car.vel = 0
   car.facing_angle = 0
   car.vel_angle = 0
   car.is_drifitng = false
+  car.drift_time = 0
+  car.boost_ready = false
+  car.boost_time_remaining = 0
 
   skid_marks = {}
   skid_prev = nil
@@ -151,17 +193,36 @@ function _update(dt)
   local drift_factor = 1
   if is_drifitng then drift_factor = 1.1 end
   local vel_vec = util.vec_from_angle(car.vel_angle, drift_factor * car.vel * dt)
-  car.x = util.clamp(car.x + vel_vec.x, 0, game_width - 16)
-  car.y = util.clamp(car.y + vel_vec.y, 0, game_height - 16)
+  local new_x = util.clamp(car.x + vel_vec.x, 0, game_width - CAR_SIZE)
+  local new_y = util.clamp(car.y + vel_vec.y, 0, game_height - CAR_SIZE)
+
+  if car_on_road(new_x, new_y) then
+    car.x = new_x
+    car.y = new_y
+  elseif car_on_road(new_x, car.y) then
+    car.x = new_x
+    car.vel = car.vel * 0.5
+  elseif car_on_road(car.x, new_y) then
+    car.y = new_y
+    car.vel = car.vel * 0.5
+  else
+    car.vel = 0
+  end
+
+  local effective_top_vel = car.top_vel
 
   if input.held(input.BTN1)
   then
-    car.vel = util.clamp(car.vel + car.accel * dt, 0, car.top_vel)
+    car.vel = util.clamp(car.vel + car.accel * dt, 0, effective_top_vel)
   else
-    car.vel = util.clamp(car.vel - car.deccel * dt, 0, car.top_vel)
+    car.vel = util.clamp(car.vel - car.deccel * dt, 0, effective_top_vel)
   end
 
-  if car.vel > 0 and (holding_left or holding_right)
+  if is_drifitng then
+    car.vel = util.clamp(car.vel - car.drift_deccel * dt, 0, effective_top_vel)
+  end
+
+  if holding_left or holding_right
   then
     local turn_speed = car.turn_speed
     if is_drifitng then turn_speed = car.drift_turn_speed end
@@ -175,11 +236,22 @@ function _update(dt)
   if is_drifitng
   then
     car.is_drifitng = true
+    car.drift_time = car.drift_time + dt
+    if car.drift_time >= car.drift_threshold and not car.boost_ready then
+      car.boost_ready = true
+    end
   else
-    if car.is_drifitng then
-      effect.screen_shake(.2, 1.5)
+    if car.boost_ready then
+      car.boost_time_remaining = car.boost_length
+      car.vel = math.min(car.vel + car.boost_value, car.top_vel)
+      car.boost_ready = false
     end
     car.is_drifitng = false
+    car.drift_time = 0
+  end
+
+  if car.boost_time_remaining > 0 then
+    car.boost_time_remaining = car.boost_time_remaining - dt
   end
 
   if is_drifitng then
@@ -237,7 +309,12 @@ function _update(dt)
 end
 
 function _draw(dt)
-  gfx.clear(gfx.COLOR_INDIGO)
+  for row = 0, map_height - 1 do
+    for col = 0, map_width - 1 do
+      local tile = map_layer[row * map_width + col + 1]
+      gfx.rect_fill(col * tile_size, row * tile_size, tile_size, tile_size, tile_colors[tile] or gfx.COLOR_INDIGO)
+    end
+  end
   for _, mark in ipairs(skid_marks) do
     gfx.line(mark.lx1, mark.ly1, mark.lx2, mark.ly2, gfx.COLOR_BLACK)
     gfx.line(mark.rx1, mark.ry1, mark.rx2, mark.ry2, gfx.COLOR_BLACK)
@@ -250,5 +327,9 @@ function _draw(dt)
     end
   end
 
-  gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, gfx.COLOR_WHITE, 1)
+  local car_tint = gfx.COLOR_WHITE
+  if car.boost_ready then
+    car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
+  end
+  gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end

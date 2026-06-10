@@ -13,12 +13,13 @@
             "scale": 1.5,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 307.99999999999994,
-                "y": 189.33333333333334
+                "x": 303,
+                "y": 184
             }
         },
         "basic.tmx#tiles": {
-            "scaleInDock": 1
+            "scaleInDock": 1,
+            "scaleInEditor": 1
         },
         "basic.tsx": {
             "dynamicWrapping": true,
@@ -31,7 +32,7 @@
             "scaleInEditor": 1
         }
     },
-    "last.exportedFilePath": "/Users/aj.ruf/projects/usagi-test",
+    "last.exportedFilePath": "/Users/aj.ruf/projects/usagi-test/tile-map",
     "last.imagePath": "/Users/aj.ruf/projects/usagi-test",
     "map.height": 18,
     "map.lastUsedExportFilter": "Lua files (*.lua)",
@@ -40,13 +41,12 @@
     "map.tileWidth": 20,
     "map.width": 32,
     "openFiles": [
-        "basic.tmx",
-        "tiles.tsx"
+        "basic.tmx"
     ],
     "project": "map.tiled-project",
     "recentFiles": [
-        "tiles.tsx",
         "basic.tmx",
+        "tiles.tsx",
         "basic.tsx",
         "Basic.tsx"
     ],
