@@ -1,4 +1,6 @@
 local basic_map = require "tile-map.basic"
+local ui = require "ui"
+local dim = require "dim"
 
 local game_width = 640
 local game_height = 352
@@ -75,13 +77,14 @@ local RUN_DURATION = 100
 local GHOST_ALPHA = 0.4
 
 local run = {
-  active = false,
+  active = true,
   time = 0,
   samples = {}
 }
 
 local ghost = nil
 local ghost_time = 0
+local countdown_time = 0
 
 ---Normalize an angle to be between 0 and 2 * PI
 ---@param angle number
@@ -156,14 +159,20 @@ local function reset_run()
   skid_marks = {}
   skid_prev = nil
 
-  run.active = true
+  countdown_time = 3
+  run.active = false
   run.time = 0
   run.samples = {}
 end
 
 function _update(dt)
-  if input.pressed(input.BTN3) then
-    reset_run()
+  if countdown_time > 0 then
+    countdown_time = countdown_time - dt
+    if countdown_time <= 0 then
+      countdown_time = 0
+      run.active = true
+    end
+    return
   end
 
   if not run.active then return end
@@ -332,4 +341,17 @@ function _draw(dt)
     car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
   end
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
+
+  if ui.button("Restart", 8, 8) then reset_run() end
+
+  if countdown_time > 0 then
+    dim.draw(game_width, game_height)
+    local text = tostring(math.ceil(countdown_time))
+    local scale = 12
+    local tw, th = usagi.measure_text(text)
+    local x = math.floor((game_width - tw * scale) / 2)
+    local y = math.floor((game_height - th * scale) / 2)
+    gfx.text_ex(text, x + 2, y + 2, scale, 0, gfx.COLOR_BLACK, 0.8)
+    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_WHITE, 1)
+  end
 end
