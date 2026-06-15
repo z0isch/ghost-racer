@@ -47,8 +47,7 @@ local CHECKPOINT_PAY = 25 -- $ credited live as each checkpoint is hit
 local ACCEL_BASE, ACCEL_STEP = 50, 15
 local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
 
-local PER_GHOST_RATE = 8 -- $/min per ghost at efficiency level 0
-local EFF_STEP = 0.5     -- efficiency multiplier = 1 + level * EFF_STEP
+local PER_GHOST_RATE = 8
 
 -- A faster best lap makes ghosts complete the loop quicker, scaling passive
 -- income by RATE_PAR_TIME / best_time.
@@ -57,10 +56,9 @@ local RATE_PAR_TIME = 1000
 -- Geometric cost curve per upgrade: cost(level) = base_cost * growth^level,
 -- capped at `max`. The ghost upgrade overrides level 0 -> 1 to be FREE.
 local UPGRADES = {
-  ghosts     = { max = 8, base_cost = 75, growth = 1.55 },
-  efficiency = { max = 5, base_cost = 120, growth = 1.8 },
-  accel      = { max = 5, base_cost = 90, growth = 1.7 },
-  top_speed  = { max = 5, base_cost = 90, growth = 1.7 },
+  ghosts    = { max = 8, base_cost = 75, growth = 1.55 },
+  accel     = { max = 5, base_cost = 90, growth = 1.7 },
+  top_speed = { max = 5, base_cost = 90, growth = 1.7 },
 }
 
 local CHECKPOINTS = {
@@ -132,7 +130,7 @@ local function default_state()
   return {
     mode = "buy",
     money = 0,
-    upgrades = { ghosts = 0, efficiency = 0, accel = 0, top_speed = 0 },
+    upgrades = { ghosts = 0, accel = 0, top_speed = 0 },
     ghost_line = nil,
     best_time = nil,
     race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0 },
@@ -161,7 +159,6 @@ function _init()
     State.money = loaded.money or 0
     if loaded.upgrades then
       State.upgrades.ghosts = loaded.upgrades.ghosts or 0
-      State.upgrades.efficiency = loaded.upgrades.efficiency or 0
       State.upgrades.accel = loaded.upgrades.accel or 0
       State.upgrades.top_speed = loaded.upgrades.top_speed or 0
     end
@@ -197,8 +194,7 @@ end
 
 ---Passive income rate in $/min from currently owned ghosts.
 local function passive_rate_per_min()
-  local eff = 1 + State.upgrades.efficiency * EFF_STEP
-  return State.upgrades.ghosts * PER_GHOST_RATE * eff * rate_speed_factor()
+  return State.upgrades.ghosts * PER_GHOST_RATE * rate_speed_factor()
 end
 
 -- ---------------------------------------------------------------------------
@@ -600,7 +596,7 @@ local function draw_buy_ghosts()
   end
 end
 
-local SHOP_COST_W = 90 -- width of the cost button on the right of each row
+local SHOP_COST_W = 50 -- width of the cost button on the right of each row
 
 ---Draw one shop row: a "Name (lvl/max)" label on the left and a cost button on
 ---the right. Returns true when the cost button is clicked (handled by caller).
@@ -611,8 +607,6 @@ local SHOP_COST_W = 90 -- width of the cost button on the right of each row
 ---@param w number
 ---@return boolean clicked, number height
 local function shop_button(kind, label, x, y, w)
-  local lvl = State.upgrades[kind]
-  local max = UPGRADES[kind].max
   local cost = upgrade_cost(kind)
 
   local cost_text
@@ -631,9 +625,7 @@ local function shop_button(kind, label, x, y, w)
   local _, th = usagi.measure_text(label)
   local bh = th * 2 + 4
 
-  -- Label sits vertically centered against the button height.
-  local label_text = string.format("%s (%d/%d)", label, lvl, max)
-  ui.label(label_text, x, y + math.floor((bh - th * 2) / 2))
+  ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
   local bx = x + w - SHOP_COST_W
   local clicked = ui.button(cost_text, bx, y, { w = SHOP_COST_W, disabled = not affordable })
@@ -653,14 +645,13 @@ end
 
 local function draw_buy_shop()
   local x, y = 8, 80
-  local w = 290
+  local w = 200
   local gap = 6
 
   local items = {
-    { kind = "ghosts",     label = "Ghost" },
-    { kind = "efficiency", label = "Ghost Efficiency" },
-    { kind = "accel",      label = "Accel" },
-    { kind = "top_speed",  label = "Top Speed" },
+    { kind = "ghosts",    label = "Ghost" },
+    { kind = "accel",     label = "Accel" },
+    { kind = "top_speed", label = "Top Speed" },
   }
   for _, item in ipairs(items) do
     local clicked, bh = shop_button(item.kind, item.label, x, y, w)
