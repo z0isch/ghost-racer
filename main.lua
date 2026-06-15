@@ -88,6 +88,11 @@ end
 local skid_marks = {}
 local skid_prev = nil
 
+-- Floating "+$N" popups spawned over the car when a checkpoint is banked.
+local cash_pops = {}
+local CASH_POP_LIFE = 1.0 -- seconds each popup lives
+local CASH_POP_RISE = 24  -- pixels it floats up over its life
+
 local car = {
   x = SPAWN_TILE.col * tile_size,
   y = SPAWN_TILE.row * tile_size,
@@ -265,6 +270,7 @@ local function reset_car()
   car.boost_time_remaining = 0
   skid_marks = {}
   skid_prev = nil
+  cash_pops = {}
 end
 
 ---Advance the player car one frame and append a sample to run_samples.
@@ -484,10 +490,27 @@ local function update_race(dt)
     if util.rect_overlap(car_rect, cp) then
       State.money = State.money + CHECKPOINT_PAY
       race.earned = race.earned + CHECKPOINT_PAY
+      cash_pops[#cash_pops + 1] = {
+        amount = CHECKPOINT_PAY,
+        x = car.x + CAR_SIZE / 2,
+        y = car.y,
+        age = 0,
+      }
       race.next_checkpoint = race.next_checkpoint + 1
       if race.next_checkpoint > #CHECKPOINTS then
         finish_race()
       end
+    end
+  end
+
+  -- Age and retire cash popups.
+  local i = 1
+  while i <= #cash_pops do
+    cash_pops[i].age = cash_pops[i].age + dt
+    if cash_pops[i].age > CASH_POP_LIFE then
+      table.remove(cash_pops, i)
+    else
+      i = i + 1
     end
   end
 end
@@ -674,6 +697,21 @@ local function draw_race_ghost()
   end
 end
 
+---Draw the floating "+$N" popups rising and fading over the car.
+local function draw_cash_pops()
+  local scale = 2
+  for _, p in ipairs(cash_pops) do
+    local t = p.age / CASH_POP_LIFE
+    local alpha = 1 - t
+    local y = p.y - t * CASH_POP_RISE
+    local text = "+$" .. p.amount
+    local tw = usagi.measure_text(text) * scale
+    local x = math.floor(p.x - tw / 2)
+    gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 0.8 * alpha)
+    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_GREEN, alpha)
+  end
+end
+
 local function draw_active_checkpoint()
   local race = State.race
   local cp = CHECKPOINTS[race.next_checkpoint]
@@ -723,6 +761,7 @@ local function draw_race()
   draw_skid_marks()
   draw_race_ghost()
   draw_car()
+  draw_cash_pops()
   draw_money()
 
   -- Show the live ghost passive rate, since ghosts keep paying mid-race.
