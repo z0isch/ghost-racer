@@ -41,17 +41,16 @@ end
 -- Economy / upgrade tuning
 -- ---------------------------------------------------------------------------
 
-local CHECKPOINT_PAY = 25 -- $ credited live as each checkpoint is hit
+local CHECKPOINT_PAY = 25 -- $ credited live as each checkpoint the player hits
+
+-- $ a single ghost banks each time it crosses a checkpoint. Idle income is
+-- emergent: a faster best lap shortens the ghost loop, so checkpoints (and
+-- payouts) come around more often. No separate rate formula needed.
+local GHOST_CHECKPOINT_PAY = 8
 
 -- Car stats derive from upgrade levels at race start: base + level * step.
 local ACCEL_BASE, ACCEL_STEP = 50, 15
 local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
-
-local PER_GHOST_RATE = 8
-
--- A faster best lap makes ghosts complete the loop quicker, scaling passive
--- income by RATE_PAR_TIME / best_time.
-local RATE_PAR_TIME = 1000
 
 -- Geometric cost curve per upgrade: cost(level) = base_cost * growth^level,
 -- capped at `max`. The ghost upgrade overrides level 0 -> 1 to be FREE.
@@ -67,6 +66,10 @@ local CHECKPOINTS = {
 }
 
 local GHOST_ALPHA = 0.4
+
+-- Seconds a ghost holds at the end of its recorded lap before looping back to
+-- the start -- a small breather so the loop point reads as a lap, not a jump.
+local GHOST_LAP_PAUSE = 0.6
 
 -- ---------------------------------------------------------------------------
 -- Engine entrypoints
@@ -120,7 +123,52 @@ local car = {
 local run_samples = {}
 
 local countdown_time = 0
-local buy_ghost_time = 0 -- shared replay clock for buy-mode ghosts
+
+-- Simulation clock for the idle ghost loop. Advances in buy mode so the
+-- staggered ghosts keep looping (and earning) between races.
+local sim_time = 0
+
+-- Per-ghost previous loop-phase, for edge-detected checkpoint crossings.
+-- Reset on mode switch / ghost purchase / new ghost_line.
+local ghost_prev_phase = {}
+
+-- Precomputed checkpoint crossings along ghost_line: one {t, x, y} per
+-- checkpoint, the time/position of the lap-completing pass into each zone.
+local ghost_cp_crossings = nil
+
+---Scan a recorded line for the time/position of the lap-completing pass into
+---each checkpoint zone (rising edge), aligned with CHECKPOINTS. A completed lap
+---provably passes through every checkpoint, so each one gets a real crossing.
+local function compute_cp_crossings(line)
+  if not line or #line == 0 then return nil end
+  local crossings = {}
+  for ci, cp in ipairs(CHECKPOINTS) do
+    -- Seed from the first sample so a car that SPAWNS inside a zone (e.g. the
+    -- start/finish checkpoint) doesn't bank a bogus crossing on frame 1 -- only
+    -- a genuine re-entry counts, which lands at the end of the lap.
+    local inside_prev = util.rect_overlap(
+      { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }, cp)
+    for _, s in ipairs(line) do
+      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, cp)
+      if inside and not inside_prev then
+        crossings[ci] = { t = s.t, x = s.x + CAR_SIZE / 2, y = s.y }
+        break
+      end
+      inside_prev = inside
+    end
+    -- Fallback (shouldn't trigger for a completed lap): anchor at zone center.
+    if not crossings[ci] then
+      crossings[ci] = { t = 0, x = cp.x + cp.w / 2, y = cp.y + cp.h / 2 }
+    end
+  end
+  return crossings
+end
+
+---Rebuild ghost replay state derived from the current ghost_line.
+local function rebuild_ghost_sim()
+  ghost_cp_crossings = compute_cp_crossings(State.ghost_line)
+  ghost_prev_phase = {}
+end
 
 -- ---------------------------------------------------------------------------
 -- Persistence
@@ -168,6 +216,7 @@ function _init()
   -- mode always resets to buy on load; car stats re-derive from upgrades.
   State.mode = "buy"
   apply_car_upgrades()
+  rebuild_ghost_sim()
 end
 
 -- ---------------------------------------------------------------------------
@@ -183,18 +232,6 @@ local function upgrade_cost(kind)
   if lvl >= u.max then return nil end
   if kind == "ghosts" and lvl == 0 then return 0 end -- first ghost is free
   return math.floor(u.base_cost * (u.growth ^ lvl))
-end
-
----Speed bonus to passive income from the best lap time (see RATE_PAR_TIME).
-local function rate_speed_factor()
-  local bt = State.best_time
-  if not bt or bt <= 0 then return 1 end
-  return RATE_PAR_TIME / bt
-end
-
----Passive income rate in $/min from currently owned ghosts.
-local function passive_rate_per_min()
-  return State.upgrades.ghosts * PER_GHOST_RATE * rate_speed_factor()
 end
 
 -- ---------------------------------------------------------------------------
@@ -248,6 +285,15 @@ local function ghost_line_duration()
   local line = State.ghost_line
   if not line or #line == 0 then return 0 end
   return line[#line].t
+end
+
+---Full ghost loop period: the recorded lap plus the end-of-lap pause. While
+---phase sits in the trailing pause window, the ghost holds at its finish
+---position (sample_line_at clamps to the last recorded sample).
+local function ghost_loop_period()
+  local duration = ghost_line_duration()
+  if duration <= 0 then return 0 end
+  return duration + GHOST_LAP_PAUSE
 end
 
 -- ---------------------------------------------------------------------------
@@ -420,6 +466,7 @@ end
 
 local function return_to_buy()
   State.mode = "buy"
+  ghost_prev_phase = {}
   save_game()
 end
 
@@ -429,15 +476,14 @@ local function finish_race()
   race.phase = "result"
 
   local prev_best = State.best_time
-  local prev_rate = passive_rate_per_min()
   if prev_best == nil or race.time < prev_best then
     State.ghost_line = run_samples
     State.best_time = race.time
     race.improved = true
     -- time_delta only exists when there was a prior best to beat.
     race.time_delta = prev_best and (prev_best - race.time) or nil
-    -- rate_delta: how much the faster lap raised passive income.
-    race.rate_delta = passive_rate_per_min() - prev_rate
+    -- New best lap -> shorter ghost loop -> ghosts now earn faster.
+    rebuild_ghost_sim()
   end
 
   save_game()
@@ -447,59 +493,50 @@ end
 -- Update
 -- ---------------------------------------------------------------------------
 
----Accrue ghost passive income for this frame. Active in both modes so ghosts
----keep paying out while you race.
-local function accrue_passive(dt)
-  local rate = passive_rate_per_min()
-  if rate > 0 then
-    State.money = State.money + rate * dt / 60
-  end
-end
+---Advance the ghost economy one frame. Every owned ghost loops the recorded
+---line and banks GHOST_CHECKPOINT_PAY each time it crosses a checkpoint,
+---spawning a dim "+$N" pop at the recorded crossing spot. Only runs in buy
+---mode -- ghosts are idle income the player collects between races.
+local function update_ghost_earnings()
+  local count = State.upgrades.ghosts
+  local line = State.ghost_line
+  if count <= 0 or not line or not ghost_cp_crossings then return end
+  local period = ghost_loop_period()
+  if period <= 0 then return end
 
-local function update_buy(dt)
-  buy_ghost_time = buy_ghost_time + dt
-  accrue_passive(dt)
-end
+  for i = 1, count do
+    local offset = (i - 1) / count * period
+    local phase = (sim_time + offset) % period
 
-local function update_race(dt)
-  local race = State.race
-
-  accrue_passive(dt)
-
-  if race.phase == "countdown" then
-    countdown_time = countdown_time - dt
-    if countdown_time <= 0 then
-      countdown_time = 0
-      race.phase = "racing"
-    end
-    return
-  end
-
-  if race.phase ~= "racing" then return end
-
-  update_car(dt)
-
-  -- Live per-checkpoint crediting against the single active checkpoint.
-  local cp = CHECKPOINTS[race.next_checkpoint]
-  if cp then
-    local car_rect = { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
-    if util.rect_overlap(car_rect, cp) then
-      State.money = State.money + CHECKPOINT_PAY
-      race.earned = race.earned + CHECKPOINT_PAY
-      cash_pops[#cash_pops + 1] = {
-        amount = CHECKPOINT_PAY,
-        x = car.x + CAR_SIZE / 2,
-        y = car.y,
-        age = 0,
-      }
-      race.next_checkpoint = race.next_checkpoint + 1
-      if race.next_checkpoint > #CHECKPOINTS then
-        finish_race()
+    local prev = ghost_prev_phase[i]
+    if prev then
+      for _, c in ipairs(ghost_cp_crossings) do
+        local crossed
+        if phase >= prev then
+          crossed = c.t > prev and c.t <= phase
+        else
+          -- Looped past the end of the line this frame.
+          crossed = c.t > prev or c.t <= phase
+        end
+        if crossed then
+          State.money = State.money + GHOST_CHECKPOINT_PAY
+          cash_pops[#cash_pops + 1] = {
+            amount = GHOST_CHECKPOINT_PAY,
+            x = c.x,
+            y = c.y,
+            age = 0,
+            ghost = true,
+          }
+        end
       end
     end
-  end
 
-  -- Age and retire cash popups.
+    ghost_prev_phase[i] = phase
+  end
+end
+
+---Age and retire floating cash popups.
+local function age_cash_pops(dt)
   local i = 1
   while i <= #cash_pops do
     cash_pops[i].age = cash_pops[i].age + dt
@@ -509,6 +546,48 @@ local function update_race(dt)
       i = i + 1
     end
   end
+end
+
+local function update_buy(dt)
+  sim_time = sim_time + dt
+  update_ghost_earnings()
+  age_cash_pops(dt)
+end
+
+local function update_race(dt)
+  local race = State.race
+
+  if race.phase == "countdown" then
+    countdown_time = countdown_time - dt
+    if countdown_time <= 0 then
+      countdown_time = 0
+      race.phase = "racing"
+    end
+  elseif race.phase == "racing" then
+    update_car(dt)
+
+    -- Live per-checkpoint crediting against the single active checkpoint.
+    local cp = CHECKPOINTS[race.next_checkpoint]
+    if cp then
+      local car_rect = { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
+      if util.rect_overlap(car_rect, cp) then
+        State.money = State.money + CHECKPOINT_PAY
+        race.earned = race.earned + CHECKPOINT_PAY
+        cash_pops[#cash_pops + 1] = {
+          amount = CHECKPOINT_PAY,
+          x = car.x + CAR_SIZE / 2,
+          y = car.y,
+          age = 0,
+        }
+        race.next_checkpoint = race.next_checkpoint + 1
+        if race.next_checkpoint > #CHECKPOINTS then
+          finish_race()
+        end
+      end
+    end
+  end
+
+  age_cash_pops(dt)
 end
 
 function _update(dt)
@@ -557,13 +636,21 @@ local function draw_money()
   gfx.text_ex(text, x, 6, scale, 0, gfx.COLOR_WHITE, 1)
 end
 
----Draw the ghost passive rate centered under the money readout, in both modes.
-local function draw_rate()
-  local text = string.format("%.2f $/sec", passive_rate_per_min() / 60)
-  local scale = 2
-  local tw = usagi.measure_text(text) * scale
-  local x = math.floor((game_width - tw) / 2)
-  gfx.text_ex(text, x, 34, scale, 0, gfx.COLOR_WHITE, 1)
+---Draw the floating "+$N" popups rising and fading. Player pops are bold
+---(green, scale 2); ghost pops are dim and small so idle income never drowns
+---out the player's own checkpoint rewards.
+local function draw_cash_pops()
+  for _, p in ipairs(cash_pops) do
+    local t = p.age / CASH_POP_LIFE
+    local scale = p.ghost and 1 or 2
+    local alpha = (1 - t) * (p.ghost and 0.6 or 1)
+    local y = p.y - t * CASH_POP_RISE
+    local text = "+$" .. p.amount
+    local tw = usagi.measure_text(text) * scale
+    local x = math.floor(p.x - tw / 2)
+    gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 0.8 * alpha)
+    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_GREEN, alpha)
+  end
 end
 
 local function draw_countdown()
@@ -583,12 +670,12 @@ local function draw_buy_ghosts()
   local count = State.upgrades.ghosts
   local line = State.ghost_line
   if count <= 0 or not line then return end
-  local duration = ghost_line_duration()
-  if duration <= 0 then return end
+  local period = ghost_loop_period()
+  if period <= 0 then return end
 
   for i = 1, count do
-    local offset = (i - 1) / count * duration
-    local t = (buy_ghost_time + offset) % duration
+    local offset = (i - 1) / count * period
+    local t = (sim_time + offset) % period
     local g = sample_line_at(line, t)
     if g then
       gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, GHOST_ALPHA)
@@ -639,6 +726,9 @@ local function try_buy(kind)
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
   State.upgrades[kind] = State.upgrades[kind] + 1
+  -- Buying a ghost changes N, so the staggered offsets shift: reset phase
+  -- tracking to avoid spurious crossings the frame the count changes.
+  if kind == "ghosts" then ghost_prev_phase = {} end
   apply_car_upgrades()
   save_game()
 end
@@ -670,8 +760,8 @@ local function draw_buy()
   draw_track()
   dim.draw(game_width, game_height)
   draw_buy_ghosts()
+  draw_cash_pops()
   draw_money()
-  draw_rate()
   draw_buy_shop()
 end
 
@@ -685,21 +775,6 @@ local function draw_race_ghost()
   local g = sample_line_at(State.ghost_line, State.race.time)
   if g then
     gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, GHOST_ALPHA)
-  end
-end
-
----Draw the floating "+$N" popups rising and fading over the car.
-local function draw_cash_pops()
-  local scale = 2
-  for _, p in ipairs(cash_pops) do
-    local t = p.age / CASH_POP_LIFE
-    local alpha = 1 - t
-    local y = p.y - t * CASH_POP_RISE
-    local text = "+$" .. p.amount
-    local tw = usagi.measure_text(text) * scale
-    local x = math.floor(p.x - tw / 2)
-    gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 0.8 * alpha)
-    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_GREEN, alpha)
   end
 end
 
@@ -730,10 +805,6 @@ local function draw_race_result()
   end
   centered("Earned: $" .. race.earned, y, 3); y = y + 30
   centered(string.format("Best: %.2fs", State.best_time or race.time), y, 3); y = y + 30
-  if race.improved and race.rate_delta and race.rate_delta / 60 >= 0.01 then
-    centered(string.format("+%.2f $/sec", race.rate_delta / 60), y, 3, gfx.COLOR_GREEN)
-    y = y + 30
-  end
 
   local bw = 200
   if ui.button("CONTINUE", math.floor((game_width - bw) / 2), y + 10, { w = bw, scale = 3 }) then
@@ -754,11 +825,6 @@ local function draw_race()
   draw_car()
   draw_cash_pops()
   draw_money()
-
-  -- Show the live ghost passive rate, since ghosts keep paying mid-race.
-  if race.phase ~= "result" then
-    draw_rate()
-  end
 
   if race.phase == "countdown" then
     draw_countdown()
