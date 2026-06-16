@@ -92,7 +92,7 @@ local skid_prev = nil
 -- Floating "+$N" popups spawned over the car when a checkpoint is banked.
 local cash_pops = {}
 local CASH_POP_LIFE = 1.5 -- seconds each popup lives
-local CASH_POP_RISE = 24  -- pixels it floats up over its life
+local CASH_POP_RISE = 50  -- pixels it floats up over its life
 
 local car = {
   x = SPAWN_TILE.col * tile_size,
@@ -500,7 +500,11 @@ end
 local function update_ghost_earnings()
   local count = State.upgrades.ghosts
   local line = State.ghost_line
-  if count <= 0 or not line or not ghost_cp_crossings then return end
+  if count <= 0 or not line then return end
+  -- A hot reload re-binds this file-scope local back to nil without re-running
+  -- _init, so rebuild the derived crossings from the persisted line on demand.
+  if not ghost_cp_crossings then rebuild_ghost_sim() end
+  if not ghost_cp_crossings then return end
   local period = ghost_loop_period()
   if period <= 0 then return end
 
