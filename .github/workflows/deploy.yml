@@ -28,19 +28,37 @@ jobs:
           curl -fsSL https://usagiengine.com/install.sh | sh
           echo "$HOME/.usagi/bin" >> "$GITHUB_PATH"
 
+      - name: Verify Usagi install
+        run: |
+          which usagi
+          usagi --version || usagi version || true
+
       - name: Export web build
-        run: usagi export --target web
+        run: |
+          usagi export --target web
+          echo "=== Files produced (zips) ==="
+          find . -path ./.git -prune -o -name '*.zip' -print
+          echo "=== export/ tree ==="
+          ls -laR export 2>/dev/null || echo "(no export/ dir)"
 
       - name: Stage site
         run: |
-          zip=$(ls export/*-web.zip | head -n1)
+          # Locate the web export zip wherever usagi put it.
+          zip=$(find . -path ./.git -prune -o -name '*-web.zip' -print | head -n1)
+          if [ -z "$zip" ]; then
+            echo "ERROR: no *-web.zip found after export." >&2
+            exit 1
+          fi
           echo "Unzipping $zip"
           mkdir -p _site
           unzip -o "$zip" -d _site
           # If the zip nested everything under a folder, lift it to the root.
           if [ ! -f _site/index.html ]; then
-            nested=$(dirname "$(find _site -name index.html | head -n1)")
-            mv "$nested"/* _site/
+            idx=$(find _site -name index.html | head -n1)
+            if [ -n "$idx" ]; then
+              nested=$(dirname "$idx")
+              mv "$nested"/* _site/
+            fi
           fi
           ls -la _site
 
