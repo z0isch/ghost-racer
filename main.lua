@@ -27,7 +27,7 @@ end
 
 local CAR_SIZE = 16
 local CAR_MARGIN = 3
-local SPAWN_TILE = { col = 0, row = 10 }
+local SPAWN_TILE = { col = 0, row = 9 }
 
 local function car_on_road(x, y)
   local inner = CAR_SIZE - CAR_MARGIN - 1
@@ -807,9 +807,30 @@ local function draw_buy_shop()
   end
 end
 
+local CHECKPOINT_LABEL_SCALE = 2
+
+local function draw_checkpoint(cp, n, faded)
+  local outline_color = gfx.COLOR_DARK_GREEN
+  if not faded then
+    outline_color = gfx.COLOR_DARK_GRAY
+    gfx.rect_fill(cp.x, cp.y, cp.w, cp.h, gfx.COLOR_DARK_GREEN)
+  end
+  gfx.rect(cp.x, cp.y, cp.w, cp.h, outline_color)
+
+  local label = tostring(n)
+  local tw, th = usagi.measure_text(label)
+  local tx = math.floor(cp.x + (cp.w - tw * CHECKPOINT_LABEL_SCALE) / 2)
+  local ty = math.floor(cp.y + (cp.h - th * CHECKPOINT_LABEL_SCALE) / 2)
+  local alpha = faded and GHOST_ALPHA or 1
+  gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK, alpha)
+end
+
 local function draw_buy()
   draw_track()
   dim.draw(game_width, game_height)
+  for i, cp in ipairs(CHECKPOINTS) do
+    draw_checkpoint(cp, i, true)
+  end
   draw_sim_ghosts(GHOST_ALPHA)
   draw_cash_pops()
   draw_money()
@@ -829,11 +850,14 @@ local function draw_race_ghost()
   end
 end
 
-local function draw_active_checkpoint()
-  local race = State.race
-  local cp = CHECKPOINTS[race.next_checkpoint]
-  gfx.rect_fill(cp.x, cp.y, cp.w, cp.h, gfx.COLOR_DARK_GREEN)
-  gfx.rect(cp.x, cp.y, cp.w, cp.h, gfx.COLOR_WHITE)
+---Draw the checkpoints still ahead this lap: the active one solid, future ones
+---faded. Already-hit checkpoints are skipped so the player only sees what's
+---left to chase.
+local function draw_checkpoints()
+  local active = State.race.next_checkpoint
+  for i = active, #CHECKPOINTS do
+    draw_checkpoint(CHECKPOINTS[i], i, i ~= active)
+  end
 end
 
 local function draw_race_result()
@@ -866,7 +890,7 @@ local function draw_race()
 
   local race = State.race
   if race.phase ~= "result" then
-    draw_active_checkpoint()
+    draw_checkpoints()
   end
 
   draw_skid_marks()
