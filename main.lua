@@ -668,14 +668,14 @@ end
 ---Draw the money readout centered along the top, visible in both modes, with
 ---the ghost-economy $/sec rate just below it.
 local function draw_money()
-  local text = "$" .. math.floor(State.money)
+  local text = string.format("$%.0f", State.money)
   local scale = 3
   local tw, th = usagi.measure_text(text)
   local x = math.floor((game_width - tw * scale) / 2)
   gfx.text_ex(text, x + 2, 6 + 2, scale, 0, gfx.COLOR_BLACK, 0.8)
   gfx.text_ex(text, x, 6, scale, 0, gfx.COLOR_WHITE, 1)
 
-  local rate_text = string.format("$%.1f/sec", ghost_income_rate())
+  local rate_text = string.format("$%.2f/sec", ghost_income_rate())
   local rscale = 1
   local rtw = usagi.measure_text(rate_text) * rscale
   local rx = math.floor((game_width - rtw) / 2)
@@ -846,7 +846,7 @@ local function draw_race_result()
     gfx.text_ex(text, x, y, scale, 0, color or gfx.COLOR_WHITE, 1)
   end
 
-  if race.improved then
+  if race.improved and race.time_delta and race.rate_delta then
     local y = 100
     centered(string.format("-%.2fs", race.time_delta), y, 3, gfx.COLOR_GREEN)
     y = y + 30
