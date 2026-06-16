@@ -91,7 +91,7 @@ local skid_prev = nil
 
 -- Floating "+$N" popups spawned over the car when a checkpoint is banked.
 local cash_pops = {}
-local CASH_POP_LIFE = 1.0 -- seconds each popup lives
+local CASH_POP_LIFE = 1.5 -- seconds each popup lives
 local CASH_POP_RISE = 24  -- pixels it floats up over its life
 
 local car = {
@@ -831,7 +831,6 @@ local function draw_race()
   elseif race.phase == "result" then
     draw_race_result()
   else
-    -- Active racing: allow quitting early (banked checkpoints are kept).
     if ui.button("QUIT", 8, 40, { w = 120 }) then
       return_to_buy()
     end
