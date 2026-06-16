@@ -65,7 +65,10 @@ local CHECKPOINTS = {
   { x = 0,   y = 96, w = 80, h = 176 },
 }
 
-local GHOST_ALPHA = 0.4
+local GHOST_ALPHA = 0.6
+-- Economy ghosts stay on screen during a race but fade way back so they don't
+-- fight the player car or the synced rival ghost for attention.
+local GHOST_RACE_ALPHA = 0.04
 
 -- Seconds a ghost holds at the end of its recorded lap before looping back to
 -- the start -- a small breather so the loop point reads as a lap, not a jump.
@@ -296,6 +299,24 @@ local function ghost_loop_period()
   return duration + GHOST_LAP_PAUSE
 end
 
+---Per-ghost income rate ($/sec) for a recorded lap. Each ghost crosses every
+---checkpoint once per loop, so income/loop is fixed; a shorter loop period
+---(shorter lap) brings the payouts around more often, raising $/sec.
+---@param line table|nil  array of {t,x,y,angle,drift}
+---@return number
+local function lap_income_rate(line)
+  if not line or #line == 0 then return 0 end
+  local period = line[#line].t + GHOST_LAP_PAUSE
+  if period <= 0 then return 0 end
+  return #CHECKPOINTS * GHOST_CHECKPOINT_PAY / period
+end
+
+---Total idle $/sec from the ghost economy: per-ghost rate of the stored best
+---line scaled by the number of owned ghosts.
+local function ghost_income_rate()
+  return State.upgrades.ghosts * lap_income_rate(State.ghost_line)
+end
+
 -- ---------------------------------------------------------------------------
 -- Car physics + recording (shared by race mode)
 -- ---------------------------------------------------------------------------
@@ -476,7 +497,9 @@ local function finish_race()
   race.phase = "result"
 
   local prev_best = State.best_time
-  if prev_best == nil or race.time < prev_best then
+  local prev_rate = ghost_income_rate()
+  if State.ghost_line == nil
+      or lap_income_rate(run_samples) > lap_income_rate(State.ghost_line) then
     State.ghost_line = run_samples
     State.best_time = race.time
     race.improved = true
@@ -485,6 +508,10 @@ local function finish_race()
     -- New best lap -> shorter ghost loop -> ghosts now earn faster.
     rebuild_ghost_sim()
   end
+
+  -- $/sec readout for the result screen, plus the change vs. before the race.
+  race.rate = ghost_income_rate()
+  race.rate_delta = race.rate - prev_rate
 
   save_game()
 end
@@ -495,8 +522,9 @@ end
 
 ---Advance the ghost economy one frame. Every owned ghost loops the recorded
 ---line and banks GHOST_CHECKPOINT_PAY each time it crosses a checkpoint,
----spawning a dim "+$N" pop at the recorded crossing spot. Only runs in buy
----mode -- ghosts are idle income the player collects between races.
+---spawning a dim "+$N" pop at the recorded crossing spot. Runs in both modes so
+---idle income never stalls; in race mode the pop fades way back to match the
+---faded ghosts.
 local function update_ghost_earnings()
   local count = State.upgrades.ghosts
   local line = State.ghost_line
@@ -530,6 +558,8 @@ local function update_ghost_earnings()
             y = c.y,
             age = 0,
             ghost = true,
+            -- Fade race-mode ghost pops to sit alongside the faded ghosts.
+            alpha_mul = State.mode == "race" and 0.1 or 1,
           }
         end
       end
@@ -560,6 +590,11 @@ end
 
 local function update_race(dt)
   local race = State.race
+
+  -- Ghosts keep simulating all through the race -- countdown included -- so
+  -- their checkpoint payouts bank just as they do in the buy screen.
+  sim_time = sim_time + dt
+  update_ghost_earnings()
 
   if race.phase == "countdown" then
     countdown_time = countdown_time - dt
@@ -630,14 +665,23 @@ local function draw_car()
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end
 
----Draw the money readout centered along the top, visible in both modes.
+---Draw the money readout centered along the top, visible in both modes, with
+---the ghost-economy $/sec rate just below it.
 local function draw_money()
   local text = "$" .. math.floor(State.money)
   local scale = 3
-  local tw = usagi.measure_text(text) * scale
-  local x = math.floor((game_width - tw) / 2)
+  local tw, th = usagi.measure_text(text)
+  local x = math.floor((game_width - tw * scale) / 2)
   gfx.text_ex(text, x + 2, 6 + 2, scale, 0, gfx.COLOR_BLACK, 0.8)
   gfx.text_ex(text, x, 6, scale, 0, gfx.COLOR_WHITE, 1)
+
+  local rate_text = string.format("$%.1f/sec", ghost_income_rate())
+  local rscale = 1
+  local rtw = usagi.measure_text(rate_text) * rscale
+  local rx = math.floor((game_width - rtw) / 2)
+  local ry = 6 + th * scale + 3
+  gfx.text_ex(rate_text, rx + 1, ry + 1, rscale, 0, gfx.COLOR_BLACK, 0.8)
+  gfx.text_ex(rate_text, rx, ry, rscale, 0, gfx.COLOR_YELLOW, 1)
 end
 
 ---Draw the floating "+$N" popups rising and fading. Player pops are bold
@@ -647,7 +691,7 @@ local function draw_cash_pops()
   for _, p in ipairs(cash_pops) do
     local t = p.age / CASH_POP_LIFE
     local scale = p.ghost and 2 or 3
-    local alpha = (1 - t) * (p.ghost and 0.6 or 1)
+    local alpha = (1 - t) * (p.ghost and 0.6 or 1) * (p.alpha_mul or 1)
     local y = p.y - t * CASH_POP_RISE
     local text = "$" .. p.amount
     local tw = usagi.measure_text(text) * scale
@@ -668,9 +712,10 @@ local function draw_countdown()
   gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_WHITE, 1)
 end
 
--- Buy mode ------------------------------------------------------------------
-
-local function draw_buy_ghosts()
+---Draw the staggered economy ghosts looping on sim_time. Shared by both modes:
+---buy uses GHOST_ALPHA, race passes a fainter alpha so they stay legible behind
+---the action.
+local function draw_sim_ghosts(alpha)
   local count = State.upgrades.ghosts
   local line = State.ghost_line
   if count <= 0 or not line then return end
@@ -682,10 +727,12 @@ local function draw_buy_ghosts()
     local t = (sim_time + offset) % period
     local g = sample_line_at(line, t)
     if g then
-      gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, GHOST_ALPHA)
+      gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, alpha)
     end
   end
 end
+
+-- Buy mode ------------------------------------------------------------------
 
 local SHOP_COST_W = 50 -- width of the cost button on the right of each row
 
@@ -763,7 +810,7 @@ end
 local function draw_buy()
   draw_track()
   dim.draw(game_width, game_height)
-  draw_buy_ghosts()
+  draw_sim_ghosts(GHOST_ALPHA)
   draw_cash_pops()
   draw_money()
   draw_buy_shop()
@@ -799,19 +846,17 @@ local function draw_race_result()
     gfx.text_ex(text, x, y, scale, 0, color or gfx.COLOR_WHITE, 1)
   end
 
-  centered("FINISH", 60, 6)
-
-  local y = 140
-  centered(string.format("Time: %.2fs", race.time), y, 3); y = y + 30
-  if race.improved and race.time_delta then
-    centered(string.format("-%.2fs faster!", race.time_delta), y, 3, gfx.COLOR_GREEN)
+  if race.improved then
+    local y = 100
+    centered(string.format("-%.2fs", race.time_delta), y, 3, gfx.COLOR_GREEN)
     y = y + 30
-  end
-  centered("Earned: $" .. race.earned, y, 3); y = y + 30
-  centered(string.format("Best: %.2fs", State.best_time or race.time), y, 3); y = y + 30
-
-  local bw = 200
-  if ui.button("CONTINUE", math.floor((game_width - bw) / 2), y + 10, { w = bw, scale = 3 }) then
+    centered(string.format("+$%.2f/sec", race.rate_delta), y, 3, gfx.COLOR_GREEN)
+    y = y + 50
+    local bw = 200
+    if ui.button("CONTINUE", math.floor((game_width - bw) / 2), y + 10, { w = bw, scale = 3 }) then
+      return_to_buy()
+    end
+  else
     return_to_buy()
   end
 end
@@ -825,6 +870,7 @@ local function draw_race()
   end
 
   draw_skid_marks()
+  draw_sim_ghosts(GHOST_RACE_ALPHA)
   draw_race_ghost()
   draw_car()
   draw_cash_pops()
