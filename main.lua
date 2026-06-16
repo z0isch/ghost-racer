@@ -642,10 +642,10 @@ end
 local function draw_cash_pops()
   for _, p in ipairs(cash_pops) do
     local t = p.age / CASH_POP_LIFE
-    local scale = p.ghost and 1 or 2
+    local scale = p.ghost and 2 or 3
     local alpha = (1 - t) * (p.ghost and 0.6 or 1)
     local y = p.y - t * CASH_POP_RISE
-    local text = "+$" .. p.amount
+    local text = "$" .. p.amount
     local tw = usagi.measure_text(text) * scale
     local x = math.floor(p.x - tw / 2)
     gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 0.8 * alpha)
