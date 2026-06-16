@@ -68,7 +68,7 @@ local CHECKPOINTS = {
 local GHOST_ALPHA = 0.6
 -- Economy ghosts stay on screen during a race but fade way back so they don't
 -- fight the player car or the synced rival ghost for attention.
-local GHOST_RACE_ALPHA = 0.04
+local GHOST_RACE_ALPHA = 0.03
 
 -- Seconds a ghost holds at the end of its recorded lap before looping back to
 -- the start -- a small breather so the loop point reads as a lap, not a jump.
