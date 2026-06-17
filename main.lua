@@ -48,6 +48,15 @@ local CHECKPOINT_PAY = 25 -- $ credited live as each checkpoint the player hits
 -- payouts) come around more often. No separate rate formula needed.
 local GHOST_CHECKPOINT_PAY = 8
 
+-- Coins are single-tile pickups sprinkled on the track. Like checkpoints they
+-- pay the player more live than a ghost banks idle, and they respawn every lap
+-- / ghost loop. COIN_SPRITE is the 1-based sprite-sheet index.
+local COIN_PAY = 10      -- $ credited live when the player drives over a coin
+local GHOST_COIN_PAY = 3 -- $ a ghost banks each time its loop crosses a coin
+local COIN_SPRITE = 4
+local COIN_BOB_AMP = .6  -- pixels of vertical sine bob (visual only)
+local COIN_BOB_HZ = 1.5  -- bob cycles per second
+
 -- Car stats derive from upgrade levels at race start: base + level * step.
 local ACCEL_BASE, ACCEL_STEP = 50, 15
 local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
@@ -58,12 +67,38 @@ local UPGRADES = {
   ghosts    = { max = 8, base_cost = 75, growth = 1.55 },
   accel     = { max = 5, base_cost = 90, growth = 1.7 },
   top_speed = { max = 5, base_cost = 90, growth = 1.7 },
+  -- `coins` activates one more coin from the COINS table per level (max set
+  -- below to the table length). The map starts with zero coins.
+  coins     = { max = 0, base_cost = 60, growth = 1.6 },
 }
 
 local CHECKPOINTS = {
   { x = 560, y = 96, w = 80, h = 176 },
   { x = 0,   y = 96, w = 80, h = 176 },
 }
+
+-- Coins, in tile coords. Each occupies one tile; pixel rect is derived. The
+-- `coins` upgrade activates these in order, so position [1] is the first coin a
+-- player can buy, [2] the second, and so on.
+local COINS = {
+  { col = 18, row = 7 },
+  { col = 34, row = 12 },
+  { col = 10, row = 16 }
+}
+
+-- The coins upgrade caps at the number of authored coin positions.
+UPGRADES.coins.max = #COINS
+
+---Pixel-space hit rect for a coin tile.
+local function coin_rect(coin)
+  return { x = coin.col * tile_size, y = coin.row * tile_size, w = tile_size, h = tile_size }
+end
+
+---How many coins are live on the map: the coins upgrade level. Coins activate
+---in COINS order, so this is also the count of leading entries that are active.
+local function active_coin_count()
+  return State.upgrades.coins or 0
+end
 
 local GHOST_ALPHA = 0.6
 -- Economy ghosts stay on screen during a race but fade way back so they don't
@@ -139,6 +174,11 @@ local ghost_prev_phase = {}
 -- checkpoint, the time/position of the lap-completing pass into each zone.
 local ghost_cp_crossings = nil
 
+-- Precomputed coin pickups along ghost_line: one {t, x, y} per coin the lap
+-- actually drove over (first overlap, rising edge). Coins the lap never touched
+-- are absent, so the ghost replays exactly the coins the player grabbed.
+local ghost_coin_pickups = nil
+
 ---Scan a recorded line for the time/position of the lap-completing pass into
 ---each checkpoint zone (rising edge), aligned with CHECKPOINTS. A completed lap
 ---provably passes through every checkpoint, so each one gets a real crossing.
@@ -167,9 +207,33 @@ local function compute_cp_crossings(line)
   return crossings
 end
 
+---Scan a recorded line for the first pass over each coin (rising-edge overlap),
+---returning a {t, x, y} pickup per coin the lap actually touched. Coins the lap
+---never overlaps are omitted. Same rect_overlap test as the live player pickup,
+---so the ghost's pickups match what the player grabbed on the recorded lap.
+local function compute_coin_pickups(line)
+  if not line or #line == 0 then return nil end
+  local pickups = {}
+  for ci = 1, active_coin_count() do
+    local rect = coin_rect(COINS[ci])
+    local inside_prev = util.rect_overlap(
+      { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }, rect)
+    for _, s in ipairs(line) do
+      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
+      if inside and not inside_prev then
+        pickups[#pickups + 1] = { t = s.t, x = rect.x + tile_size / 2, y = rect.y }
+        break
+      end
+      inside_prev = inside
+    end
+  end
+  return pickups
+end
+
 ---Rebuild ghost replay state derived from the current ghost_line.
 local function rebuild_ghost_sim()
   ghost_cp_crossings = compute_cp_crossings(State.ghost_line)
+  ghost_coin_pickups = compute_coin_pickups(State.ghost_line)
   ghost_prev_phase = {}
 end
 
@@ -181,10 +245,10 @@ local function default_state()
   return {
     mode = "buy",
     money = 0,
-    upgrades = { ghosts = 0, accel = 0, top_speed = 0 },
+    upgrades = { ghosts = 0, accel = 0, top_speed = 0, coins = 0 },
     ghost_line = nil,
     best_time = nil,
-    race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0 },
+    race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_collected = {} },
   }
 end
 
@@ -212,6 +276,8 @@ function _init()
       State.upgrades.ghosts = loaded.upgrades.ghosts or 0
       State.upgrades.accel = loaded.upgrades.accel or 0
       State.upgrades.top_speed = loaded.upgrades.top_speed or 0
+      -- Clamp to the authored coin count in case the table shrank since saving.
+      State.upgrades.coins = math.min(loaded.upgrades.coins or 0, #COINS)
     end
     State.ghost_line = loaded.ghost_line
     State.best_time = loaded.best_time
@@ -300,15 +366,20 @@ local function ghost_loop_period()
 end
 
 ---Per-ghost income rate ($/sec) for a recorded lap. Each ghost crosses every
----checkpoint once per loop, so income/loop is fixed; a shorter loop period
----(shorter lap) brings the payouts around more often, raising $/sec.
+---checkpoint once per loop and grabs every coin its path touched once per loop,
+---so income/loop is fixed; a shorter loop period (shorter lap) brings the
+---payouts around more often, raising $/sec. Coins make a coin-richer lap a
+---better earner even if it's marginally slower.
 ---@param line table|nil  array of {t,x,y,angle,drift}
 ---@return number
 local function lap_income_rate(line)
   if not line or #line == 0 then return 0 end
   local period = line[#line].t + GHOST_LAP_PAUSE
   if period <= 0 then return 0 end
-  return #CHECKPOINTS * GHOST_CHECKPOINT_PAY / period
+  local coins = compute_coin_pickups(line)
+  local coin_count = coins and #coins or 0
+  local per_loop = #CHECKPOINTS * GHOST_CHECKPOINT_PAY + coin_count * GHOST_COIN_PAY
+  return per_loop / period
 end
 
 ---Total idle $/sec from the ghost economy: per-ghost rate of the stored best
@@ -477,7 +548,7 @@ end
 
 local function start_race()
   State.mode = "race"
-  State.race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0 }
+  State.race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_collected = {} }
   run_samples = {}
   apply_car_upgrades()
   reset_car()
@@ -520,11 +591,38 @@ end
 -- Update
 -- ---------------------------------------------------------------------------
 
+---Bank any events (checkpoints or coins) whose recorded time falls in the loop
+---window (prev, phase], paying `pay` each and spawning a dim ghost pop. Handles
+---the wrap when the ghost loops past the end of the line this frame.
+local function bank_ghost_events(events, pay, prev, phase)
+  for _, e in ipairs(events) do
+    local crossed
+    if phase >= prev then
+      crossed = e.t > prev and e.t <= phase
+    else
+      -- Looped past the end of the line this frame.
+      crossed = e.t > prev or e.t <= phase
+    end
+    if crossed then
+      State.money = State.money + pay
+      cash_pops[#cash_pops + 1] = {
+        amount = pay,
+        x = e.x,
+        y = e.y,
+        age = 0,
+        ghost = true,
+        -- Fade race-mode ghost pops to sit alongside the faded ghosts.
+        alpha_mul = State.mode == "race" and 0.1 or 1,
+      }
+    end
+  end
+end
+
 ---Advance the ghost economy one frame. Every owned ghost loops the recorded
----line and banks GHOST_CHECKPOINT_PAY each time it crosses a checkpoint,
----spawning a dim "+$N" pop at the recorded crossing spot. Runs in both modes so
----idle income never stalls; in race mode the pop fades way back to match the
----faded ghosts.
+---line and banks GHOST_CHECKPOINT_PAY per checkpoint crossing and GHOST_COIN_PAY
+---per coin pickup, spawning a dim "+$N" pop at each recorded spot. Runs in both
+---modes so idle income never stalls; in race mode the pop fades way back to
+---match the faded ghosts.
 local function update_ghost_earnings()
   local count = State.upgrades.ghosts
   local line = State.ghost_line
@@ -542,26 +640,9 @@ local function update_ghost_earnings()
 
     local prev = ghost_prev_phase[i]
     if prev then
-      for _, c in ipairs(ghost_cp_crossings) do
-        local crossed
-        if phase >= prev then
-          crossed = c.t > prev and c.t <= phase
-        else
-          -- Looped past the end of the line this frame.
-          crossed = c.t > prev or c.t <= phase
-        end
-        if crossed then
-          State.money = State.money + GHOST_CHECKPOINT_PAY
-          cash_pops[#cash_pops + 1] = {
-            amount = GHOST_CHECKPOINT_PAY,
-            x = c.x,
-            y = c.y,
-            age = 0,
-            ghost = true,
-            -- Fade race-mode ghost pops to sit alongside the faded ghosts.
-            alpha_mul = State.mode == "race" and 0.1 or 1,
-          }
-        end
+      bank_ghost_events(ghost_cp_crossings, GHOST_CHECKPOINT_PAY, prev, phase)
+      if ghost_coin_pickups then
+        bank_ghost_events(ghost_coin_pickups, GHOST_COIN_PAY, prev, phase)
       end
     end
 
@@ -605,10 +686,28 @@ local function update_race(dt)
   elseif race.phase == "racing" then
     update_car(dt)
 
+    -- Live coin pickups: each coin pays once per lap. Collected coins are
+    -- tracked per-race and reset next lap (coins respawn each loop).
+    local car_rect = { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
+    for ci = 1, active_coin_count() do
+      local coin = COINS[ci]
+      if not race.coins_collected[ci] and util.rect_overlap(car_rect, coin_rect(coin)) then
+        race.coins_collected[ci] = true
+        State.money = State.money + COIN_PAY
+        race.earned = race.earned + COIN_PAY
+        sfx.play("coin")
+        cash_pops[#cash_pops + 1] = {
+          amount = COIN_PAY,
+          x = coin.col * tile_size + tile_size / 2,
+          y = coin.row * tile_size,
+          age = 0,
+        }
+      end
+    end
+
     -- Live per-checkpoint crediting against the single active checkpoint.
     local cp = CHECKPOINTS[race.next_checkpoint]
     if cp then
-      local car_rect = { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
       if util.rect_overlap(car_rect, cp) then
         State.money = State.money + CHECKPOINT_PAY
         race.earned = race.earned + CHECKPOINT_PAY
@@ -646,6 +745,20 @@ local function draw_track()
     for col = 0, map_width - 1 do
       local tile = map_layer[row * map_width + col + 1]
       gfx.rect_fill(col * tile_size, row * tile_size, tile_size, tile_size, tile_colors[tile] or gfx.COLOR_INDIGO)
+    end
+  end
+end
+
+---Draw the coins as bobbing sprites. `collected`, when given (race mode), hides
+---coins the player already grabbed this lap; in buy mode all coins draw since
+---they're the live income layer. The bob is purely visual -- pickup uses the
+---fixed tile rect.
+local function draw_coins(collected)
+  local bob = math.sin(usagi.elapsed * COIN_BOB_HZ * 2 * math.pi) * COIN_BOB_AMP
+  for ci = 1, active_coin_count() do
+    if not (collected and collected[ci]) then
+      local coin = COINS[ci]
+      gfx.spr(COIN_SPRITE, coin.col * tile_size, coin.row * tile_size + bob)
     end
   end
 end
@@ -690,7 +803,7 @@ end
 local function draw_cash_pops()
   for _, p in ipairs(cash_pops) do
     local t = p.age / CASH_POP_LIFE
-    local scale = p.ghost and 2 or 3
+    local scale = p.ghost and 1 or 2
     local alpha = (1 - t) * (p.ghost and 0.6 or 1) * (p.alpha_mul or 1)
     local y = p.y - t * CASH_POP_RISE
     local text = "$" .. p.amount
@@ -780,6 +893,9 @@ local function try_buy(kind)
   -- Buying a ghost changes N, so the staggered offsets shift: reset phase
   -- tracking to avoid spurious crossings the frame the count changes.
   if kind == "ghosts" then ghost_prev_phase = {} end
+  -- Buying a coin activates another COINS entry, so the ghost's recorded coin
+  -- pickups (and the $/sec readout) need recomputing against the new set.
+  if kind == "coins" then rebuild_ghost_sim() end
   apply_car_upgrades()
   save_game()
 end
@@ -793,6 +909,7 @@ local function draw_buy_shop()
     { kind = "ghosts",    label = "Ghost" },
     { kind = "accel",     label = "Accel" },
     { kind = "top_speed", label = "Top Speed" },
+    { kind = "coins",     label = "Coin" },
   }
   for _, item in ipairs(items) do
     local clicked, bh = shop_button(item.kind, item.label, x, y, w)
@@ -831,6 +948,7 @@ local function draw_buy()
   for i, cp in ipairs(CHECKPOINTS) do
     draw_checkpoint(cp, i, true)
   end
+  draw_coins()
   draw_sim_ghosts(GHOST_ALPHA)
   draw_cash_pops()
   draw_money()
@@ -872,8 +990,13 @@ local function draw_race_result()
 
   if race.improved and race.time_delta and race.rate_delta then
     local y = 100
-    centered(string.format("-%.2fs", race.time_delta), y, 3, gfx.COLOR_GREEN)
-    y = y + 30
+    -- Promotion is income-based, so a coin-richer lap can win while being a hair
+    -- slower. Only show the time line when it's a genuine speed improvement;
+    -- the $/sec gain is the headline either way.
+    if race.time_delta > 0 then
+      centered(string.format("-%.2fs", race.time_delta), y, 3, gfx.COLOR_GREEN)
+      y = y + 30
+    end
     centered(string.format("+$%.2f/sec", race.rate_delta), y, 3, gfx.COLOR_GREEN)
     y = y + 50
     local bw = 200
@@ -893,6 +1016,7 @@ local function draw_race()
     draw_checkpoints()
   end
 
+  draw_coins(race.coins_collected)
   draw_skid_marks()
   draw_sim_ghosts(GHOST_RACE_ALPHA)
   draw_race_ghost()
