@@ -54,8 +54,11 @@ local GHOST_CHECKPOINT_PAY = 8
 local COIN_PAY = 10      -- $ credited live when the player drives over a coin
 local GHOST_COIN_PAY = 3 -- $ a ghost banks each time its loop crosses a coin
 local COIN_SPRITE = 4
-local COIN_BOB_AMP = .6  -- pixels of vertical sine bob (visual only)
-local COIN_BOB_HZ = 1.5  -- bob cycles per second
+local COIN_ICON = "©"
+-- Coins have no in-text glyph: UI conveys "this is coins" by drawing the number
+-- in COLOR_YELLOW (cash uses COLOR_DARK_GREEN). The world pickups draw COIN_SPRITE.
+local COIN_BOB_AMP = .6 -- pixels of vertical sine bob (visual only)
+local COIN_BOB_HZ = 1.5 -- bob cycles per second
 
 -- Car stats derive from upgrade levels at race start: base + level * step.
 local ACCEL_BASE, ACCEL_STEP = 50, 15
@@ -64,12 +67,12 @@ local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
 -- Geometric cost curve per upgrade: cost(level) = base_cost * growth^level,
 -- capped at `max`. The ghost upgrade overrides level 0 -> 1 to be FREE.
 local UPGRADES = {
-  ghosts    = { max = 8, base_cost = 75, growth = 1.55 },
-  accel     = { max = 5, base_cost = 90, growth = 1.7 },
-  top_speed = { max = 5, base_cost = 90, growth = 1.7 },
+  ghosts    = { max = 8, base_cost = 75, growth = 1.55, currency = "cash" },
+  accel     = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
+  top_speed = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
   -- `coins` activates one more coin from the COINS table per level (max set
   -- below to the table length). The map starts with zero coins.
-  coins     = { max = 0, base_cost = 60, growth = 1.6 },
+  coins     = { max = 0, base_cost = 60, growth = 1.6, currency = "cash" },
 }
 
 local CHECKPOINTS = {
@@ -108,6 +111,9 @@ local GHOST_RACE_ALPHA = 0.03
 -- Seconds a ghost holds at the end of its recorded lap before looping back to
 -- the start -- a small breather so the loop point reads as a lap, not a jump.
 local GHOST_LAP_PAUSE = 0.6
+
+local PAR_TIME = 10.0  -- designer par lap in seconds; 1.0× break-even (tune from playtests)
+local SPEED_MULT_P = 2 -- punchiness exponent
 
 -- ---------------------------------------------------------------------------
 -- Engine entrypoints
@@ -245,10 +251,11 @@ local function default_state()
   return {
     mode = "buy",
     money = 0,
+    coins = 0,
     upgrades = { ghosts = 0, accel = 0, top_speed = 0, coins = 0 },
     ghost_line = nil,
     best_time = nil,
-    race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_collected = {} },
+    race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_earned = 0, coins_collected = {} },
   }
 end
 
@@ -261,6 +268,7 @@ end
 local function save_game()
   usagi.save({
     money = State.money,
+    coins = State.coins,
     upgrades = State.upgrades,
     ghost_line = State.ghost_line,
     best_time = State.best_time,
@@ -272,6 +280,7 @@ function _init()
   State = default_state()
   if loaded then
     State.money = loaded.money or 0
+    State.coins = loaded.coins or 0
     if loaded.upgrades then
       State.upgrades.ghosts = loaded.upgrades.ghosts or 0
       State.upgrades.accel = loaded.upgrades.accel or 0
@@ -365,27 +374,47 @@ local function ghost_loop_period()
   return duration + GHOST_LAP_PAUSE
 end
 
----Per-ghost income rate ($/sec) for a recorded lap. Each ghost crosses every
----checkpoint once per loop and grabs every coin its path touched once per loop,
----so income/loop is fixed; a shorter loop period (shorter lap) brings the
----payouts around more often, raising $/sec. Coins make a coin-richer lap a
----better earner even if it's marginally slower.
----@param line table|nil  array of {t,x,y,angle,drift}
+---Ghost cash ($/sec) for a recorded lap: checkpoints only.
+---@param line table|nil
 ---@return number
-local function lap_income_rate(line)
+local function lap_cash_rate(line)
   if not line or #line == 0 then return 0 end
   local period = line[#line].t + GHOST_LAP_PAUSE
   if period <= 0 then return 0 end
-  local coins = compute_coin_pickups(line)
-  local coin_count = coins and #coins or 0
-  local per_loop = #CHECKPOINTS * GHOST_CHECKPOINT_PAY + coin_count * GHOST_COIN_PAY
-  return per_loop / period
+  return #CHECKPOINTS * GHOST_CHECKPOINT_PAY / period
 end
 
----Total idle $/sec from the ghost economy: per-ghost rate of the stored best
----line scaled by the number of owned ghosts.
-local function ghost_income_rate()
-  return State.upgrades.ghosts * lap_income_rate(State.ghost_line)
+---Ghost coin (coins/sec) for a recorded lap: coin pickups only.
+---@param line table|nil
+---@return number
+local function lap_coin_rate(line)
+  if not line or #line == 0 then return 0 end
+  local period = line[#line].t + GHOST_LAP_PAUSE
+  if period <= 0 then return 0 end
+  local pickups = compute_coin_pickups(line)
+  local coin_count = pickups and #pickups or 0
+  return coin_count * GHOST_COIN_PAY / period
+end
+
+---Speed multiplier for a given lap time: (PAR_TIME/t)^P, clamped to [1, inf).
+local function speed_mult_from_time(t)
+  if not t or t <= 0 then return 1.0 end
+  return math.max(1.0, (PAR_TIME / t) ^ SPEED_MULT_P)
+end
+
+---Speed multiplier for the current promoted best lap.
+local function speed_mult()
+  return speed_mult_from_time(State.best_time)
+end
+
+---Total idle $/sec from the ghost economy.
+local function ghost_cash_rate()
+  return State.upgrades.ghosts * lap_cash_rate(State.ghost_line) * speed_mult()
+end
+
+---Total idle coins/sec from the ghost economy.
+local function ghost_coin_rate()
+  return State.upgrades.ghosts * lap_coin_rate(State.ghost_line) * speed_mult()
 end
 
 -- ---------------------------------------------------------------------------
@@ -548,7 +577,7 @@ end
 
 local function start_race()
   State.mode = "race"
-  State.race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_collected = {} }
+  State.race = { next_checkpoint = 1, time = 0, phase = "countdown", earned = 0, coins_earned = 0, coins_collected = {} }
   run_samples = {}
   apply_car_upgrades()
   reset_car()
@@ -562,29 +591,39 @@ local function return_to_buy()
   save_game()
 end
 
----Finalize a fully completed race: maybe promote its line as the new best.
-local function finish_race()
-  local race = State.race
-  race.phase = "result"
-
-  local prev_best = State.best_time
-  local prev_rate = ghost_income_rate()
-  if State.ghost_line == nil
-      or lap_income_rate(run_samples) > lap_income_rate(State.ghost_line) then
-    State.ghost_line = run_samples
-    State.best_time = race.time
-    race.improved = true
-    -- time_delta only exists when there was a prior best to beat.
-    race.time_delta = prev_best and (prev_best - race.time) or nil
-    -- New best lap -> shorter ghost loop -> ghosts now earn faster.
-    rebuild_ghost_sim()
-  end
-
-  -- $/sec readout for the result screen, plus the change vs. before the race.
-  race.rate = ghost_income_rate()
-  race.rate_delta = race.rate - prev_rate
-
+---Promote the current run as the new ghost line and best time.
+local function promote_run()
+  State.ghost_line = run_samples
+  State.best_time = State.race.run_time
+  rebuild_ghost_sim()
   save_game()
+end
+
+---Finalize a completed race: stash comparison data for the result screen.
+---Promotion is now the player's choice — no auto-promote here.
+local function finish_race()
+  local race                 = State.race
+  race.phase                 = "result"
+  race.run_time              = race.time
+
+  local has_baseline         = State.ghost_line ~= nil
+  race.has_baseline          = has_baseline
+  race.run_cash_rate         = lap_cash_rate(run_samples)
+  race.run_coin_rate         = lap_coin_rate(run_samples)
+  race.run_mult              = speed_mult_from_time(race.run_time)
+  race.ghost_mult            = speed_mult()
+  race.result_start_time     = usagi.elapsed
+  local ghosts               = State.upgrades.ghosts
+  race.run_total_rate        = ghosts * race.run_cash_rate * race.run_mult
+  race.ghost_total_rate      = ghost_cash_rate()
+  race.run_total_coin_rate   = ghosts * race.run_coin_rate * race.run_mult
+  race.ghost_total_coin_rate = ghost_coin_rate()
+
+  if has_baseline then
+    race.time_delta      = State.best_time - race.time
+    race.cash_rate_delta = race.run_total_rate - race.ghost_total_rate
+    race.coin_rate_delta = race.run_total_coin_rate - race.ghost_total_coin_rate
+  end
 end
 
 -- ---------------------------------------------------------------------------
@@ -594,7 +633,7 @@ end
 ---Bank any events (checkpoints or coins) whose recorded time falls in the loop
 ---window (prev, phase], paying `pay` each and spawning a dim ghost pop. Handles
 ---the wrap when the ghost loops past the end of the line this frame.
-local function bank_ghost_events(events, pay, prev, phase)
+local function bank_ghost_events(events, pay, currency, prev, phase)
   for _, e in ipairs(events) do
     local crossed
     if phase >= prev then
@@ -604,9 +643,14 @@ local function bank_ghost_events(events, pay, prev, phase)
       crossed = e.t > prev or e.t <= phase
     end
     if crossed then
-      State.money = State.money + pay
+      if currency == "coin" then
+        State.coins = State.coins + pay
+      else
+        State.money = State.money + pay
+      end
       cash_pops[#cash_pops + 1] = {
         amount = pay,
+        currency = currency,
         x = e.x,
         y = e.y,
         age = 0,
@@ -640,9 +684,10 @@ local function update_ghost_earnings()
 
     local prev = ghost_prev_phase[i]
     if prev then
-      bank_ghost_events(ghost_cp_crossings, GHOST_CHECKPOINT_PAY, prev, phase)
+      local mult = speed_mult()
+      bank_ghost_events(ghost_cp_crossings, GHOST_CHECKPOINT_PAY * mult, "cash", prev, phase)
       if ghost_coin_pickups then
-        bank_ghost_events(ghost_coin_pickups, GHOST_COIN_PAY, prev, phase)
+        bank_ghost_events(ghost_coin_pickups, GHOST_COIN_PAY * mult, "coin", prev, phase)
       end
     end
 
@@ -678,7 +723,7 @@ local function update_race(dt)
   update_ghost_earnings()
 
   if race.phase == "countdown" then
-    countdown_time = countdown_time - dt
+    countdown_time = countdown_time - (dt * 2)
     if countdown_time <= 0 then
       countdown_time = 0
       race.phase = "racing"
@@ -693,11 +738,12 @@ local function update_race(dt)
       local coin = COINS[ci]
       if not race.coins_collected[ci] and util.rect_overlap(car_rect, coin_rect(coin)) then
         race.coins_collected[ci] = true
-        State.money = State.money + COIN_PAY
-        race.earned = race.earned + COIN_PAY
+        State.coins = State.coins + COIN_PAY
+        race.coins_earned = race.coins_earned + COIN_PAY
         sfx.play("coin")
         cash_pops[#cash_pops + 1] = {
           amount = COIN_PAY,
+          currency = "coin",
           x = coin.col * tile_size + tile_size / 2,
           y = coin.row * tile_size,
           age = 0,
@@ -713,6 +759,7 @@ local function update_race(dt)
         race.earned = race.earned + CHECKPOINT_PAY
         cash_pops[#cash_pops + 1] = {
           amount = CHECKPOINT_PAY,
+          currency = "cash",
           x = car.x + CAR_SIZE / 2,
           y = car.y,
           age = 0,
@@ -778,39 +825,56 @@ local function draw_car()
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end
 
----Draw the money readout centered along the top, visible in both modes, with
----the ghost-economy $/sec rate just below it.
-local function draw_money()
-  local text = string.format("$%.0f", State.money)
-  local scale = 3
-  local tw, th = usagi.measure_text(text)
-  local x = math.floor((game_width - tw * scale) / 2)
-  gfx.text_ex(text, x + 2, 6 + 2, scale, 0, gfx.COLOR_BLACK, 0.8)
-  gfx.text_ex(text, x, 6, scale, 0, gfx.COLOR_WHITE, 1)
+---Draw the HUD currency readouts: cash ($/bal + $/sec) left-aligned,
+---coins (sprite + bal + coins/sec) right-aligned.
+local function draw_hud_currencies()
+  local scale          = 3
+  local _, th          = usagi.measure_text("0")
+  local bal_y          = 6
+  local rate_y         = bal_y + th * scale + 3
+  local gap            = 24 -- pixels between the two centered currency columns
 
-  local rate_text = string.format("$%.2f/sec", ghost_income_rate())
-  local rscale = 1
-  local rtw = usagi.measure_text(rate_text) * rscale
-  local rx = math.floor((game_width - rtw) / 2)
-  local ry = 6 + th * scale + 3
-  gfx.text_ex(rate_text, rx + 1, ry + 1, rscale, 0, gfx.COLOR_BLACK, 0.8)
-  gfx.text_ex(rate_text, rx, ry, rscale, 0, gfx.COLOR_YELLOW, 1)
+  -- Cash column (blue): balance + rate.
+  local money_text     = string.format("$%.0f", State.money)
+  local cash_rate_text = string.format("%.2f $/sec", ghost_cash_rate())
+  local cash_w         = math.max(usagi.measure_text(money_text) * scale,
+    usagi.measure_text(cash_rate_text))
+
+  -- Coin column (yellow): balance + rate.
+  local coin_text      = string.format(COIN_ICON .. "%.0f", State.coins)
+  local coin_rate_text = string.format("%.2f " .. COIN_ICON .. "/sec", ghost_coin_rate())
+  local coin_w         = math.max(usagi.measure_text(coin_text) * scale,
+    usagi.measure_text(coin_rate_text))
+
+  -- Center the two columns side by side around the screen midpoint.
+  local cash_x         = (game_width - (cash_w + gap + coin_w)) / 2
+  local coin_x         = cash_x + cash_w + gap
+
+  gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_DARK_GREEN, 1)
+  gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_DARK_GREEN, 1)
+
+  gfx.text_ex(coin_text, coin_x, bal_y, scale, 0, gfx.COLOR_YELLOW, 1)
+  gfx.text_ex(coin_rate_text, coin_x, rate_y, 1, 0, gfx.COLOR_YELLOW, 1)
 end
 
----Draw the floating "+$N" popups rising and fading. Player pops are bold
----(green, scale 2); ghost pops are dim and small so idle income never drowns
----out the player's own checkpoint rewards.
+---Draw the floating popups rising and fading. Currency is shown by color, not a
+---glyph: cash pops blue, coin pops yellow. Player pops bold (scale 2); ghost
+---pops dim/small.
 local function draw_cash_pops()
   for _, p in ipairs(cash_pops) do
-    local t = p.age / CASH_POP_LIFE
+    local t     = p.age / CASH_POP_LIFE
     local scale = p.ghost and 1 or 2
     local alpha = (1 - t) * (p.ghost and 0.6 or 1) * (p.alpha_mul or 1)
-    local y = p.y - t * CASH_POP_RISE
-    local text = "$" .. p.amount
-    local tw = usagi.measure_text(text) * scale
-    local x = math.floor(p.x - tw / 2)
-    gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 0.8 * alpha)
-    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_GREEN, alpha)
+    local py    = p.y - t * CASH_POP_RISE
+
+    local color = gfx.COLOR_DARK_GREEN
+    if p.currency == "coin" then
+      color = gfx.COLOR_YELLOW
+    end
+    local text = string.format("%.0f", p.amount)
+    local tw   = usagi.measure_text(text) * scale
+    local px   = math.floor(p.x - tw / 2)
+    gfx.text_ex(text, px, py, scale, 0, color, alpha)
   end
 end
 
@@ -821,7 +885,6 @@ local function draw_countdown()
   local tw, th = usagi.measure_text(text)
   local x = math.floor((game_width - tw * scale) / 2)
   local y = math.floor((game_height - th * scale) / 2)
-  gfx.text_ex(text, x + 2, y + 2, scale, 0, gfx.COLOR_BLACK, 0.8)
   gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_WHITE, 1)
 end
 
@@ -859,18 +922,24 @@ local SHOP_COST_W = 50 -- width of the cost button on the right of each row
 ---@return boolean clicked, number height
 local function shop_button(kind, label, x, y, w)
   local cost = upgrade_cost(kind)
+  local currency = UPGRADES[kind].currency
 
   local cost_text
+  local cost_color -- nil for MAX/FREE -> button uses its default text color
   if cost == nil then
     cost_text = "MAX"
   elseif cost == 0 then
     cost_text = "FREE"
+  elseif currency == "coin" then
+    cost_text = COIN_ICON .. tostring(cost)
+    cost_color = gfx.COLOR_WHITE
   else
-    cost_text = "$" .. cost
+    cost_text = "$" .. tostring(cost)
+    cost_color = gfx.COLOR_WHITE
   end
 
-  -- Ghosts also gated on having a recorded line to drive.
-  local affordable = cost ~= nil and (cost == 0 or State.money >= cost)
+  local balance = currency == "coin" and State.coins or State.money
+  local affordable = cost ~= nil and (cost == 0 or balance >= cost)
   if kind == "ghosts" and not State.ghost_line then affordable = false end
 
   local _, th = usagi.measure_text(label)
@@ -878,8 +947,10 @@ local function shop_button(kind, label, x, y, w)
 
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
+  -- Currency is conveyed by the cost color (blue = cash, yellow = coin) rather
+  -- than a glyph; MAX/FREE leave cost_color nil so the button uses its default.
   local bx = x + w - SHOP_COST_W
-  local clicked = ui.button(cost_text, bx, y, { w = SHOP_COST_W, disabled = not affordable })
+  local clicked = ui.button(cost_text, bx, y, { w = SHOP_COST_W, disabled = not affordable, text = cost_color })
   return clicked, bh
 end
 
@@ -887,8 +958,14 @@ local function try_buy(kind)
   local cost = upgrade_cost(kind)
   if cost == nil then return end
   if kind == "ghosts" and not State.ghost_line then return end
-  if cost > 0 and State.money < cost then return end
-  State.money = State.money - cost
+  local currency = UPGRADES[kind].currency
+  local balance = currency == "coin" and State.coins or State.money
+  if cost > 0 and balance < cost then return end
+  if currency == "coin" then
+    State.coins = State.coins - cost
+  else
+    State.money = State.money - cost
+  end
   State.upgrades[kind] = State.upgrades[kind] + 1
   -- Buying a ghost changes N, so the staggered offsets shift: reset phase
   -- tracking to avoid spurious crossings the frame the count changes.
@@ -951,7 +1028,7 @@ local function draw_buy()
   draw_coins()
   draw_sim_ghosts(GHOST_ALPHA)
   draw_cash_pops()
-  draw_money()
+  draw_hud_currencies()
   draw_buy_shop()
 end
 
@@ -982,29 +1059,80 @@ local function draw_race_result()
   dim.draw(game_width, game_height)
   local race = State.race
 
-  local function centered(text, y, scale, color)
+  local function centered_text(text, y, scale, color)
     local tw = usagi.measure_text(text) * scale
-    local x = math.floor((game_width - tw) / 2)
+    local x  = math.floor((game_width - tw) / 2)
     gfx.text_ex(text, x, y, scale, 0, color or gfx.COLOR_WHITE, 1)
   end
 
-  if race.improved and race.time_delta and race.rate_delta then
-    local y = 100
-    -- Promotion is income-based, so a coin-richer lap can win while being a hair
-    -- slower. Only show the time line when it's a genuine speed improvement;
-    -- the $/sec gain is the headline either way.
-    if race.time_delta > 0 then
-      centered(string.format("-%.2fs", race.time_delta), y, 3, gfx.COLOR_GREEN)
-      y = y + 30
+  local function delta_color(v)
+    if v > 0 then
+      return gfx.COLOR_GREEN
+    elseif v < 0 then
+      return gfx.COLOR_RED
+    else
+      return gfx.COLOR_LIGHT_GRAY
     end
-    centered(string.format("+$%.2f/sec", race.rate_delta), y, 3, gfx.COLOR_GREEN)
-    y = y + 50
-    local bw = 200
-    if ui.button("CONTINUE", math.floor((game_width - bw) / 2), y + 10, { w = bw, scale = 3 }) then
+  end
+
+  -- A rate delta line: the value (with +/- sign) in its green/red delta color,
+  -- the "/sec" unit in the currency color (blue = cash, yellow = coin). Both
+  -- segments are measured so the pair lands centered.
+  local function centered_rate_delta(value_text, unit_text, value_color, unit_color, y, scale)
+    local vw = usagi.measure_text(value_text) * scale
+    local uw = usagi.measure_text(unit_text) * scale
+    local x  = math.floor((game_width - (vw + uw)) / 2)
+    gfx.text_ex(value_text, x, y, scale, 0, value_color, 1)
+    gfx.text_ex(unit_text, x + vw, y, scale, 0, unit_color, 1)
+  end
+
+  local y = 80
+
+  if race.has_baseline then
+    local time_col = delta_color(race.time_delta)
+    local sign = "+"
+    if race.time_delta >= 0 then sign = "-" end
+    centered_text(string.format("%s%.2fs", sign, math.abs(race.time_delta)), y, 2, time_col)
+    y               = y + 22
+
+    local cash_col  = delta_color(race.cash_rate_delta)
+    local cash_sign = race.cash_rate_delta >= 0 and "+" or ""
+    centered_rate_delta(string.format("%s%.2f", cash_sign, race.cash_rate_delta), " $/sec", cash_col,
+      gfx.COLOR_DARK_GREEN, y,
+      2)
+    y               = y + 22
+
+    local coin_col  = delta_color(race.coin_rate_delta)
+    local coin_sign = race.coin_rate_delta >= 0 and "+" or ""
+    centered_rate_delta(string.format("%s%.2f", coin_sign, race.coin_rate_delta), " " .. COIN_ICON .. "/sec", coin_col,
+      gfx.COLOR_YELLOW, y,
+      2)
+    y = y + 34
+
+    local bw = 150
+    local gap = 8
+    local lx = math.floor((game_width - bw * 2 - gap) / 2)
+    if ui.button("USE THIS RUN", lx, y, { w = bw, scale = 2 }) then
+      promote_run()
+      return_to_buy()
+    end
+    if ui.button("KEEP CURRENT", lx + bw + gap, y, { w = bw, scale = 2 }) then
       return_to_buy()
     end
   else
-    return_to_buy()
+    -- First run: show mult and absolutes, force promotion.
+    centered_text(string.format("Time %.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
+    y = y + 22
+    centered_text(string.format("%.2f/sec", race.run_cash_rate), y, 2, gfx.COLOR_WHITE)
+    y = y + 22
+    centered_text(string.format("%.2f/sec", race.run_coin_rate), y, 2, gfx.COLOR_WHITE)
+    y = y + 34
+
+    local bw = 180
+    if ui.button("USE THIS RUN", math.floor((game_width - bw) / 2), y, { w = bw, scale = 2 }) then
+      promote_run()
+      return_to_buy()
+    end
   end
 end
 
@@ -1022,7 +1150,7 @@ local function draw_race()
   draw_race_ghost()
   draw_car()
   draw_cash_pops()
-  draw_money()
+  draw_hud_currencies()
 
   if race.phase == "countdown" then
     draw_countdown()
