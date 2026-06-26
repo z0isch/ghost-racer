@@ -39,8 +39,14 @@ main.lua:247-257). Split state into **global** and **per-track**.
 ### Global
 
 - `money`, `coins` — shared wallets.
-- `accel`, `top_speed` — these are the **car**, not the track; they apply on whichever
-  track you race. (Coins/moves are global too — see "Coins" below.)
+- `accel`, `top_speed` — these are the **car**, not the track; the upgrade applies on
+  whichever track you race. Their *effect* is global, but *purchasing* them is
+  track-gated: `accel` is only buyable on Track 1 (`basic`), `top_speed` only on
+  Track 2 (`track2`). Each track declares the items its shop offers — along with
+  each item's cost/scaling (`currency`, `max`, `base_cost`, `growth`) — in its
+  `shop` list in `TRACKS` (`ghosts`/`coins` are repeated per track, so their
+  cost/scaling is duplicated). There is no global upgrade table. (Coins/moves are
+  global too — see "Coins" below.)
 - `unlocked` — which tracks the player owns.
 - `active_track` — the tab currently selected (UI state, see "Navigation").
 

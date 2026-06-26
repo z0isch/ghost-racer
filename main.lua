@@ -36,6 +36,31 @@ local TRACKS = {
     par         = 10.0,
     label       = "Track 1",
     unlock_cost = nil,
+    shop        = {
+      {
+        kind = "ghosts",
+        label = "Ghost",
+        currency = "cash",
+        max = 8,
+        base_cost = 75,
+        growth = 1.55
+      },
+      {
+        kind = "coins",
+        label = "Add a Coin",
+        currency = "cash",
+        base_cost = 60,
+        growth = 1.6
+      },
+      {
+        kind = "accel",
+        label = "Accel",
+        currency = "coin",
+        max = 5,
+        base_cost = 180,
+        growth = 1.7
+      },
+    },
   },
   track2 = {
     map         = basic_map,
@@ -52,10 +77,55 @@ local TRACKS = {
     par         = 10.0,
     label       = "Track 2",
     unlock_cost = 500,
+    shop        = {
+      {
+        kind = "ghosts",
+        label = "Ghost",
+        currency = "cash",
+        max = 8,
+        base_cost = 75,
+        growth = 1.55
+      },
+      {
+        kind = "coins",
+        label = "Add a Coin",
+        currency = "cash",
+        base_cost = 120,
+        growth = 1.6
+      },
+      {
+        kind = "top_speed",
+        label = "Top Speed",
+        currency = "coin",
+        max = 5,
+        base_cost = 180,
+        growth = 1.7
+      },
+    },
   },
 }
 
 local TRACK_ORDER = { "basic", "track2" }
+
+-- The shop config (currency/max/base_cost/growth) for `kind` on a given track,
+-- or nil if that track's shop doesn't offer it.
+local function track_shop_item(track_id, kind)
+  for _, item in ipairs(TRACKS[track_id].shop) do
+    if item.kind == kind then return item end
+  end
+  return nil
+end
+
+-- Max level for `kind`, searched across every track's shop. Used by save
+-- migration to clamp loaded levels (accel/top_speed live in one track's shop;
+-- ghosts in all). Returns nil for kinds with no fixed max (e.g. coins).
+local function kind_max(kind)
+  for _, tid in ipairs(TRACK_ORDER) do
+    local item = track_shop_item(tid, kind)
+    if item then return item.max end
+  end
+  return nil
+end
 
 local function get_track_index(id)
   for i, tid in ipairs(TRACK_ORDER) do
@@ -80,14 +150,11 @@ local COIN_BOB_HZ = 1.5
 local ACCEL_BASE, ACCEL_STEP = 50, 15
 local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
 
--- ghosts/coins are per-track; accel/top_speed are global (the car).
--- coins.max is a sentinel; real cap is #TRACKS[id].coins, checked in upgrade_cost.
-local UPGRADES = {
-  ghosts    = { max = 8, base_cost = 75, growth = 1.55, currency = "cash" },
-  coins     = { max = 99, base_cost = 60, growth = 1.6, currency = "cash" },
-  accel     = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
-  top_speed = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
-}
+-- ghosts/coins are per-track; accel/top_speed upgrade the global car but are
+-- purchase-gated per track (accel in Track 1, top_speed in Track 2). Each item's
+-- cost/scaling (currency, max, base_cost, growth) lives on its TRACKS[id].shop
+-- entry. The `coins` item has no max; its real cap is #TRACKS[id].coins, applied
+-- in upgrade_cost.
 
 local GHOST_ALPHA = 0.6
 local GHOST_RACE_ALPHA = 0.03
@@ -305,8 +372,8 @@ function _init()
     -- Migrate old save format (had nested upgrades table instead of flat accel/top_speed)
     local old_accel     = loaded.upgrades and loaded.upgrades.accel or 0
     local old_top_speed = loaded.upgrades and loaded.upgrades.top_speed or 0
-    State.accel         = math.min(loaded.accel or old_accel, UPGRADES.accel.max)
-    State.top_speed     = math.min(loaded.top_speed or old_top_speed, UPGRADES.top_speed.max)
+    State.accel         = math.min(loaded.accel or old_accel, kind_max("accel"))
+    State.top_speed     = math.min(loaded.top_speed or old_top_speed, kind_max("top_speed"))
 
     if loaded.active_track and TRACKS[loaded.active_track] then
       State.active_track = loaded.active_track
@@ -333,7 +400,7 @@ function _init()
           local tdata   = TRACKS[id]
           ts.ghost_line = lt.ghost_line
           ts.best_time  = lt.best_time
-          ts.ghosts     = math.min(lt.ghosts or 0, UPGRADES.ghosts.max)
+          ts.ghosts     = math.min(lt.ghosts or 0, kind_max("ghosts"))
           ts.coins      = math.min(lt.coins or 0, #tdata.coins)
         end
       end
@@ -344,7 +411,7 @@ function _init()
         State.tracks.basic.best_time  = loaded.best_time
       end
       if loaded.upgrades then
-        State.tracks.basic.ghosts = math.min(loaded.upgrades.ghosts or 0, UPGRADES.ghosts.max)
+        State.tracks.basic.ghosts = math.min(loaded.upgrades.ghosts or 0, kind_max("ghosts"))
         State.tracks.basic.coins  = math.min(loaded.upgrades.coins or 0, #TRACKS.basic.coins)
       end
     end
@@ -361,15 +428,17 @@ end
 -- ---------------------------------------------------------------------------
 
 local function upgrade_cost(kind)
-  local u = UPGRADES[kind]
+  local id = State.active_track
+  local u  = track_shop_item(id, kind)
+  if not u then return nil end
   local lvl
   if kind == "ghosts" or kind == "coins" then
-    lvl = State.tracks[State.active_track][kind]
+    lvl = State.tracks[id][kind]
   else
     lvl = State[kind]
   end
   local max = u.max
-  if kind == "coins" then max = #TRACKS[State.active_track].coins end
+  if kind == "coins" then max = #TRACKS[id].coins end
   if lvl >= max then return nil end
   if kind == "ghosts" and lvl == 0 then return 0 end
   return math.floor(u.base_cost * (u.growth ^ lvl))
@@ -964,9 +1033,11 @@ end
 
 local SHOP_COST_W = 50
 
-local function shop_button(kind, label, x, y, w)
+local function shop_button(item, x, y, w)
+  local kind     = item.kind
+  local label    = item.label
   local cost     = upgrade_cost(kind)
-  local currency = UPGRADES[kind].currency
+  local currency = item.currency
 
   local cost_text, cost_color
   if cost == nil then
@@ -1003,7 +1074,7 @@ local function try_buy(kind)
   local cost = upgrade_cost(kind)
   if cost == nil then return end
   if kind == "ghosts" and not State.tracks[id].ghost_line then return end
-  local currency = UPGRADES[kind].currency
+  local currency = track_shop_item(id, kind).currency
   local balance  = currency == "coin" and State.coins or State.money
   if cost > 0 and balance < cost then return end
   if currency == "coin" then
@@ -1084,14 +1155,10 @@ local function draw_buy_shop()
   -- Shop items
   local shop_y = info_y + th_a + 6
 
-  local items = {
-    { kind = "ghosts",    label = "Ghost" },
-    { kind = "coins",     label = "Add a Coin" },
-    { kind = "accel",     label = "Accel" },
-    { kind = "top_speed", label = "Top Speed" },
-  }
-  for _, item in ipairs(items) do
-    local clicked, bh = shop_button(item.kind, item.label, x, shop_y, w)
+  -- Shop items are declared per-track in TRACKS[id].shop. accel/top_speed still
+  -- upgrade the global car; only their purchase location is track-specific.
+  for _, item in ipairs(tdata.shop) do
+    local clicked, bh = shop_button(item, x, shop_y, w)
     if clicked then try_buy(item.kind) end
     shop_y = shop_y + bh + gap
   end
