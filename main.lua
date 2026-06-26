@@ -68,11 +68,9 @@ local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
 -- capped at `max`. The ghost upgrade overrides level 0 -> 1 to be FREE.
 local UPGRADES = {
   ghosts    = { max = 8, base_cost = 75, growth = 1.55, currency = "cash" },
+  coins     = { max = 0, base_cost = 60, growth = 1.6, currency = "cash" },
   accel     = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
   top_speed = { max = 5, base_cost = 90, growth = 1.7, currency = "coin" },
-  -- `coins` activates one more coin from the COINS table per level (max set
-  -- below to the table length). The map starts with zero coins.
-  coins     = { max = 0, base_cost = 60, growth = 1.6, currency = "cash" },
 }
 
 local CHECKPOINTS = {
@@ -828,7 +826,7 @@ end
 ---Draw the HUD currency readouts: cash ($/bal + $/sec) left-aligned,
 ---coins (sprite + bal + coins/sec) right-aligned.
 local function draw_hud_currencies()
-  local scale          = 3
+  local scale          = 2
   local _, th          = usagi.measure_text("0")
   local bal_y          = 6
   local rate_y         = bal_y + th * scale + 3
@@ -984,9 +982,9 @@ local function draw_buy_shop()
 
   local items = {
     { kind = "ghosts",    label = "Ghost" },
+    { kind = "coins",     label = "Add a Coin" },
     { kind = "accel",     label = "Accel" },
     { kind = "top_speed", label = "Top Speed" },
-    { kind = "coins",     label = "Coin" },
   }
   for _, item in ipairs(items) do
     local clicked, bh = shop_button(item.kind, item.label, x, y, w)
@@ -1157,7 +1155,7 @@ local function draw_race()
   elseif race.phase == "result" then
     draw_race_result()
   else
-    if ui.button("QUIT", 8, 40, { w = 120 }) then
+    if ui.button("QUIT", 5, 5, { w = 50 }) then
       return_to_buy()
     end
   end
