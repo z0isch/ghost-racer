@@ -702,7 +702,7 @@ end
 -- Update
 -- ---------------------------------------------------------------------------
 
-local function bank_ghost_events(events, pay, currency, prev, phase)
+local function bank_ghost_events(events, pay, currency, prev, phase, spawn_pops)
   for _, e in ipairs(events) do
     local crossed
     if phase >= prev then
@@ -716,15 +716,19 @@ local function bank_ghost_events(events, pay, currency, prev, phase)
       else
         State.money = State.money + pay
       end
-      cash_pops[#cash_pops + 1] = {
-        amount    = pay,
-        currency  = currency,
-        x         = e.x,
-        y         = e.y,
-        age       = 0,
-        ghost     = true,
-        alpha_mul = State.mode == "race" and 0.1 or 1,
-      }
+      -- Pops are positioned in the active track's map space, so only spawn
+      -- them for the active track; other tracks still bank earnings silently.
+      if spawn_pops then
+        cash_pops[#cash_pops + 1] = {
+          amount    = pay,
+          currency  = currency,
+          x         = e.x,
+          y         = e.y,
+          age       = 0,
+          ghost     = true,
+          alpha_mul = State.mode == "race" and 0.1 or 1,
+        }
+      end
     end
   end
 end
@@ -740,15 +744,16 @@ local function update_ghost_earnings()
         if not ts.ghost_cp_crossings then rebuild_ghost_sim(id) end
         local period = ghost_loop_period(line)
         if ts.ghost_cp_crossings and period > 0 then
-          local mult = speed_mult_from_time(tstate.best_time)
+          local mult       = speed_mult_from_time(tstate.best_time)
+          local spawn_pops = id == State.active_track
           for i = 1, count do
             local offset = (i - 1) / count * period
             local phase  = (sim_time + offset) % period
             local prev   = ts.ghost_prev_phase[i]
             if prev then
-              bank_ghost_events(ts.ghost_cp_crossings, GHOST_CHECKPOINT_PAY * mult, "cash", prev, phase)
+              bank_ghost_events(ts.ghost_cp_crossings, GHOST_CHECKPOINT_PAY * mult, "cash", prev, phase, spawn_pops)
               if ts.ghost_coin_pickups then
-                bank_ghost_events(ts.ghost_coin_pickups, GHOST_COIN_PAY * mult, "coin", prev, phase)
+                bank_ghost_events(ts.ghost_coin_pickups, GHOST_COIN_PAY * mult, "coin", prev, phase, spawn_pops)
               end
             end
             ts.ghost_prev_phase[i] = phase
@@ -1065,14 +1070,16 @@ local function draw_buy_shop()
   local lbl_w    = usagi.measure_text(lbl_text) * 2
   gfx.text_ex(lbl_text, x + math.floor((w - lbl_w) / 2), nav_y + 2, 2, 0, gfx.COLOR_WHITE, 1)
 
-  -- Speed mult + per-track rate under the nav label
-  local mult      = speed_mult_from_time(tstate.best_time)
+  -- Speed mult + per-track rates under the nav label
   local info_y    = nav_y + th_a * 2 + 6
-  local mult_text = string.format("x%.2f", mult)
-  local rate_text = string.format("%.2f$/s", track_cash_rate(id))
-  local info_text = mult_text .. "  " .. rate_text
-  local info_w    = usagi.measure_text(info_text)
-  gfx.text_ex(info_text, x + math.floor((w - info_w) / 2), info_y, 1, 0, gfx.COLOR_YELLOW, 1)
+  local rate_text = string.format("%.2f $/sec", track_cash_rate(id))
+  local coin_text = string.format("%.2f " .. COIN_ICON .. "/sec", track_coin_rate(id))
+  local rate_w    = usagi.measure_text(rate_text)
+  local coin_w    = usagi.measure_text(coin_text)
+  local info_gap  = 8
+  local info_x    = x + math.floor((w - (rate_w + info_gap + coin_w)) / 2)
+  gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_DARK_GREEN, 1)
+  gfx.text_ex(coin_text, info_x + rate_w + info_gap, info_y, 1, 0, gfx.COLOR_YELLOW, 1)
 
   -- Shop items
   local shop_y = info_y + th_a + 6
