@@ -150,6 +150,15 @@ local COIN_BOB_HZ = 1.5
 local ACCEL_BASE, ACCEL_STEP = 50, 15
 local TOP_VEL_BASE, TOP_VEL_STEP = 200, 30
 
+-- BTN3 overspeed boost: an instant velocity impulse that pushes vel past
+-- top_vel, then gently bleeds back to the cap. Gated by per-race charges
+-- (refilled in reset_car). MAX_BOOSTS is a hardcoded capacity for now; buying
+-- more is a deferred follow-up.
+local MAX_BOOSTS = 10
+local OVERSPEED_IMPULSE = 100
+local OVERSPEED_DECAY = 100
+local BOOST_FLAME_TIME = 0.8
+
 -- ghosts/coins are per-track; accel/top_speed upgrade the global car but are
 -- purchase-gated per track (accel in Track 1, top_speed in Track 2). Each item's
 -- cost/scaling (currency, max, base_cost, growth) lives on its TRACKS[id].shop
@@ -209,6 +218,8 @@ local car            = {
   drift_time = 0,
   boost_ready = false,
   boost_time_remaining = 0,
+  boosts = MAX_BOOSTS,
+  boost_flame_t = 0,
 }
 
 local run_samples    = {}
@@ -570,6 +581,8 @@ local function reset_car()
   car.drift_time           = 0
   car.boost_ready          = false
   car.boost_time_remaining = 0
+  car.boosts               = MAX_BOOSTS
+  car.boost_flame_t        = 0
   skid_marks               = {}
   skid_prev                = nil
   cash_pops                = {}
@@ -615,14 +628,30 @@ local function update_car(dt)
 
   local effective_top_vel = car.top_vel
 
-  if input.held(input.BTN1) then
+  if input.pressed(input.BTN3) and car.boosts > 0 then
+    car.vel = car.vel + OVERSPEED_IMPULSE
+    car.boosts = car.boosts - 1
+    car.boost_flame_t = BOOST_FLAME_TIME
+  end
+
+  if car.vel > effective_top_vel then
+    -- Overspeed (from a BTN3 boost): bleed gently back to the cap regardless of
+    -- accelerate input, rather than hard-clamping the impulse away in one frame.
+    car.vel = math.max(effective_top_vel, car.vel - OVERSPEED_DECAY * dt)
+  elseif input.held(input.BTN1) then
     car.vel = util.clamp(car.vel + car.accel * dt, 0, effective_top_vel)
   else
     car.vel = util.clamp(car.vel - car.deccel * dt, 0, effective_top_vel)
   end
 
   if is_drifitng then
-    car.vel = util.clamp(car.vel - car.drift_deccel * dt, 0, effective_top_vel)
+    -- No upper clamp here so a drift during overspeed bleeds smoothly instead of
+    -- snapping straight to top_vel.
+    car.vel = math.max(0, car.vel - car.drift_deccel * dt)
+  end
+
+  if car.boost_flame_t > 0 then
+    car.boost_flame_t = math.max(0, car.boost_flame_t - dt)
   end
 
   if holding_left or holding_right then
@@ -948,6 +977,34 @@ local function draw_skid_marks()
   for _, mark in ipairs(skid_marks) do
     gfx.line(mark.lx1, mark.ly1, mark.lx2, mark.ly2, gfx.COLOR_BLACK)
     gfx.line(mark.rx1, mark.ry1, mark.rx2, mark.ry2, gfx.COLOR_BLACK)
+  end
+end
+
+-- Flickering exhaust flames out the back of the car during a BTN3 boost.
+-- Driven by car.boost_flame_t so a boost flames for the full burst window even
+-- when fired below top speed. Drawn before draw_car so the car sits on top.
+local function draw_flames()
+  if car.boost_flame_t <= 0 then return end
+  local cx     = car.x + 8
+  local cy     = car.y + 8
+  local back   = car.facing_angle + math.pi
+  -- Flicker the flame length each frame for a lively exhaust.
+  local flick  = 0.6 + 0.4 * math.abs(math.sin(usagi.elapsed * 40))
+  local layers = {
+    { len = 11 * flick, half = 4, color = gfx.COLOR_RED },
+    { len = 8 * flick,  half = 3, color = gfx.COLOR_ORANGE },
+    { len = 5 * flick,  half = 2, color = gfx.COLOR_YELLOW },
+  }
+  local perp   = car.facing_angle + math.pi / 2
+  for _, fl in ipairs(layers) do
+    local tip  = util.vec_from_angle(back, 4 + fl.len)
+    local base = util.vec_from_angle(back, 4)
+    local off  = util.vec_from_angle(perp, fl.half)
+    gfx.tri_fill(
+      cx + tip.x, cy + tip.y,
+      cx + base.x - off.x, cy + base.y - off.y,
+      cx + base.x + off.x, cy + base.y + off.y,
+      fl.color)
   end
 end
 
@@ -1314,6 +1371,7 @@ local function draw_race()
   draw_skid_marks()
   draw_sim_ghosts(GHOST_RACE_ALPHA)
   draw_race_ghost()
+  draw_flames()
   draw_car()
   draw_cash_pops()
   draw_hud_currencies()
