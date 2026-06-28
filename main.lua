@@ -1,4 +1,5 @@
 local basic_map = require "tile-map.basic"
+local track2 = require "tile-map.track2"
 local ui = require "ui"
 local dim = require "dim"
 
@@ -11,6 +12,7 @@ local tile_colors = {
   [0] = gfx.COLOR_DARK_BLUE,
   [1] = gfx.COLOR_INDIGO,
   [2] = gfx.COLOR_BLACK,
+  [3] = gfx.COLOR_WHITE
 }
 
 local CAR_SIZE = 16
@@ -23,10 +25,10 @@ local CAR_MARGIN = 3
 local TRACKS = {
   basic = {
     map         = basic_map,
-    spawn       = { col = 0, row = 9 },
+    spawn       = { col = 1, row = 9 },
     checkpoints = {
-      { x = 560, y = 96, w = 80, h = 176 },
-      { x = 0,   y = 96, w = 80, h = 176 },
+      { col = 35, row = 6, w = 4, h = 11 },
+      { col = 1,  row = 6, w = 4, h = 11 },
     },
     coins       = {
       { col = 18, row = 7 },
@@ -63,11 +65,13 @@ local TRACKS = {
     },
   },
   track2 = {
-    map         = basic_map,
-    spawn       = { col = 0, row = 9 },
+    map         = track2,
+    spawn       = { col = 7, row = 3 },
     checkpoints = {
-      { x = 560, y = 96, w = 80, h = 176 },
-      { x = 0,   y = 96, w = 80, h = 176 },
+      { col = 34, row = 6,  w = 5, h = 4 },
+      { col = 10, row = 14, w = 7, h = 2 },
+      { col = 1,  row = 1,  w = 5, h = 5 },
+
     },
     coins       = {
       { col = 18, row = 7 },
@@ -205,7 +209,7 @@ local car            = {
   turn_speed = 0.03,
   drift_turn_speed = 0.06,
   drift_slide = math.pi / 8,
-  drift_deccel = 180,
+  drift_deccel = 100,
   accel = ACCEL_BASE,
   deccel = 150,
   is_drifitng = false,
@@ -251,16 +255,31 @@ local function get_tile(x, y)
   return layer[row * mw + col + 1]
 end
 
+local function is_drivable(tile)
+  return tile == 1 or tile == 3
+end
+
 local function car_on_road(x, y)
   local inner = CAR_SIZE - CAR_MARGIN - 1
-  return get_tile(x + CAR_MARGIN, y + CAR_MARGIN) == 1
-      and get_tile(x + inner, y + CAR_MARGIN) == 1
-      and get_tile(x + CAR_MARGIN, y + inner) == 1
-      and get_tile(x + inner, y + inner) == 1
+  return is_drivable(get_tile(x + CAR_MARGIN, y + CAR_MARGIN))
+      and is_drivable(get_tile(x + inner, y + CAR_MARGIN))
+      and is_drivable(get_tile(x + CAR_MARGIN, y + inner))
+      and is_drivable(get_tile(x + inner, y + inner))
 end
 
 local function coin_rect(coin)
   return { x = coin.col * tile_size, y = coin.row * tile_size, w = tile_size, h = tile_size }
+end
+
+-- Checkpoints are stored in tile units (col/row/w/h); this expands one to a
+-- pixel-space rect for overlap tests and drawing.
+local function checkpoint_rect(cp)
+  return {
+    x = cp.col * tile_size,
+    y = cp.row * tile_size,
+    w = cp.w * tile_size,
+    h = cp.h * tile_size,
+  }
 end
 
 local function active_coin_count()
@@ -277,10 +296,11 @@ local function compute_cp_crossings(line, checkpoints)
   if not line or #line == 0 then return nil end
   local crossings = {}
   for ci, cp in ipairs(checkpoints) do
+    local rect        = checkpoint_rect(cp)
     local inside_prev = util.rect_overlap(
-      { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }, cp)
+      { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }, rect)
     for _, s in ipairs(line) do
-      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, cp)
+      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
       if inside and not inside_prev then
         crossings[ci] = { t = s.t, x = s.x + CAR_SIZE / 2, y = s.y }
         break
@@ -288,7 +308,7 @@ local function compute_cp_crossings(line, checkpoints)
       inside_prev = inside
     end
     if not crossings[ci] then
-      crossings[ci] = { t = 0, x = cp.x + cp.w / 2, y = cp.y + cp.h / 2 }
+      crossings[ci] = { t = 0, x = rect.x + rect.w / 2, y = rect.y + rect.h / 2 }
     end
   end
   return crossings
@@ -339,8 +359,8 @@ end
 local function default_state()
   return {
     mode         = "buy",
-    money        = 0,
-    coins        = 0,
+    money        = 100000,
+    coins        = 100000,
     accel        = 0,
     top_speed    = 0,
     active_track = "basic",
@@ -916,7 +936,7 @@ local function update_race(dt)
     end
 
     local cp = tdata.checkpoints[race.next_checkpoint]
-    if cp and util.rect_overlap(car_rect, cp) then
+    if cp and util.rect_overlap(car_rect, checkpoint_rect(cp)) then
       State.money               = State.money + CHECKPOINT_PAY
       race.earned               = race.earned + CHECKPOINT_PAY
       cash_pops[#cash_pops + 1] = {
@@ -1036,8 +1056,8 @@ local function draw_hud_currencies()
   local cash_x         = (game_width - (cash_w + gap + coin_w)) / 2
   local coin_x         = cash_x + cash_w + gap
 
-  gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_DARK_GREEN, 1)
-  gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_DARK_GREEN, 1)
+  gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
+  gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_GREEN, 1)
   gfx.text_ex(coin_text, coin_x, bal_y, scale, 0, gfx.COLOR_YELLOW, 1)
   gfx.text_ex(coin_rate_text, coin_x, rate_y, 1, 0, gfx.COLOR_YELLOW, 1)
 end
@@ -1048,7 +1068,7 @@ local function draw_cash_pops()
     local scale = p.ghost and 1 or 2
     local alpha = (1 - t) * (p.ghost and 0.6 or 1) * (p.alpha_mul or 1)
     local py    = p.y - t * CASH_POP_RISE
-    local color = gfx.COLOR_DARK_GREEN
+    local color = gfx.COLOR_GREEN
     if p.currency == "coin" then color = gfx.COLOR_YELLOW end
     local text = string.format("%.0f", p.amount)
     local tw   = usagi.measure_text(text) * scale
@@ -1206,7 +1226,7 @@ local function draw_buy_shop()
   local coin_w    = usagi.measure_text(coin_text)
   local info_gap  = 8
   local info_x    = x + math.floor((w - (rate_w + info_gap + coin_w)) / 2)
-  gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_DARK_GREEN, 1)
+  gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_GREEN, 1)
   gfx.text_ex(coin_text, info_x + rate_w + info_gap, info_y, 1, 0, gfx.COLOR_YELLOW, 1)
 
   -- Shop items
@@ -1241,17 +1261,18 @@ end
 local CHECKPOINT_LABEL_SCALE = 2
 
 local function draw_checkpoint(cp, n, faded)
+  local rect          = checkpoint_rect(cp)
   local outline_color = gfx.COLOR_DARK_GREEN
   if not faded then
     outline_color = gfx.COLOR_DARK_GRAY
-    gfx.rect_fill(cp.x, cp.y, cp.w, cp.h, gfx.COLOR_DARK_GREEN)
+    gfx.rect_fill(rect.x, rect.y, rect.w, rect.h, gfx.COLOR_DARK_GREEN)
   end
-  gfx.rect(cp.x, cp.y, cp.w, cp.h, outline_color)
+  gfx.rect(rect.x, rect.y, rect.w, rect.h, outline_color)
 
   local label = tostring(n)
   local tw, th = usagi.measure_text(label)
-  local tx = math.floor(cp.x + (cp.w - tw * CHECKPOINT_LABEL_SCALE) / 2)
-  local ty = math.floor(cp.y + (cp.h - th * CHECKPOINT_LABEL_SCALE) / 2)
+  local tx = math.floor(rect.x + (rect.w - tw * CHECKPOINT_LABEL_SCALE) / 2)
+  local ty = math.floor(rect.y + (rect.h - th * CHECKPOINT_LABEL_SCALE) / 2)
   gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK, faded and GHOST_ALPHA or 1)
 end
 
