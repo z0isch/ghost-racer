@@ -64,14 +64,16 @@ local function shop_button(item, x, y, w)
 end
 
 function M.draw()
-  road.draw_track()
+  local id    = State.active_track
+  local tdata = track_data.TRACKS[id]
+  road.draw_track(tdata.map)
   dim.draw(usagi.GAME_W, usagi.GAME_H)
 
-  local checkpoints = track_data.TRACKS[State.active_track].checkpoints
+  local checkpoints = tdata.checkpoints
   for i, cp in ipairs(checkpoints) do
     road.draw_checkpoint(cp, i, true)
   end
-  road.draw_coins()
+  road.draw_coins(tdata.coins, State.tracks[id].coins)
   ghost.draw_sim(GHOST_ALPHA)
   popups.draw()
   hud.draw()

@@ -14,11 +14,10 @@ local GHOST_ALPHA            = 0.6
 
 local M                      = {}
 
-local function get_tile(x, y)
-  local m     = track_data.TRACKS[State.active_track].map
-  local layer = m.layers[1].data
-  local mw    = m.width
-  local mh    = m.height
+local function get_tile(map, x, y)
+  local layer = map.layers[1].data
+  local mw    = map.width
+  local mh    = map.height
   local col   = math.floor(x / tile_size)
   local row   = math.floor(y / tile_size)
   if col < 0 or col >= mw or row < 0 or row >= mh then return 0 end
@@ -29,19 +28,18 @@ local function is_drivable(tile)
   return tile == 1 or tile == 3
 end
 
-function M.on_road(x, y, size, margin)
+function M.on_road(map, x, y, size, margin)
   local inner = size - margin - 1
-  return is_drivable(get_tile(x + margin, y + margin))
-      and is_drivable(get_tile(x + inner, y + margin))
-      and is_drivable(get_tile(x + margin, y + inner))
-      and is_drivable(get_tile(x + inner, y + inner))
+  return is_drivable(get_tile(map, x + margin, y + margin))
+      and is_drivable(get_tile(map, x + inner, y + margin))
+      and is_drivable(get_tile(map, x + margin, y + inner))
+      and is_drivable(get_tile(map, x + inner, y + inner))
 end
 
-function M.draw_track()
-  local m     = track_data.TRACKS[State.active_track].map
-  local layer = m.layers[1].data
-  local mw    = m.width
-  local mh    = m.height
+function M.draw_track(map)
+  local layer = map.layers[1].data
+  local mw    = map.width
+  local mh    = map.height
   for row = 0, mh - 1 do
     for col = 0, mw - 1 do
       local tile = layer[row * mw + col + 1]
@@ -67,22 +65,20 @@ function M.draw_checkpoint(cp, n, faded)
   gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK, faded and GHOST_ALPHA or 1)
 end
 
-function M.active_coin_count()
-  local id    = State.active_track
-  local tdata = track_data.TRACKS[id]
-  return math.min(State.tracks[id].coins, #tdata.coins)
+function M.active_coin_count(unlocked, coins)
+  return math.min(unlocked, #coins)
 end
 
 local COIN_SPRITE  = 4
 local COIN_BOB_AMP = 0.6
 local COIN_BOB_HZ  = 1.5
 
-function M.draw_coins(collected)
+function M.draw_coins(coins, unlocked, collected)
   local bob = math.sin(usagi.elapsed * COIN_BOB_HZ * 2 * math.pi) * COIN_BOB_AMP
-  for ci = 1, M.active_coin_count() do
+  for ci = 1, M.active_coin_count(unlocked, coins) do
     if not (collected and collected[ci]) then
-      local coin = track_data.TRACKS[State.active_track].coins[ci]
-      gfx.spr(COIN_SPRITE, coin.col * track_data.tile_size, coin.row * track_data.tile_size + bob)
+      local coin = coins[ci]
+      gfx.spr(COIN_SPRITE, coin.col * tile_size, coin.row * tile_size + bob)
     end
   end
 end

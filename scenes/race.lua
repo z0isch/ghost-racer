@@ -25,8 +25,8 @@ function M.enter()
     coins_collected = {},
   }
   ghost.reset_recording()
-  car.apply_upgrades()
-  car.reset()
+  car.apply_upgrades(State.accel, State.top_speed)
+  car.reset(track_data.TRACKS[State.active_track].spawn)
   popups.clear()
   countdown_time = 3
   persist.save()
@@ -75,15 +75,16 @@ function M.update(dt)
       race.phase = "racing"
     end
   elseif race.phase == "racing" then
-    car.update(dt)
+    local id       = State.active_track
+    local tdata    = track_data.TRACKS[id]
+
+    car.update(dt, tdata.map)
     race.time = race.time + dt
     ghost.record(race.time, car.pose())
 
-    local id       = State.active_track
-    local tdata    = track_data.TRACKS[id]
     local car_rect = car.rect()
 
-    for ci = 1, road.active_coin_count() do
+    for ci = 1, road.active_coin_count(State.tracks[id].coins, tdata.coins) do
       local coin = tdata.coins[ci]
       if not race.coins_collected[ci]
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
@@ -209,16 +210,18 @@ local function draw_race_result()
 end
 
 function M.draw()
-  road.draw_track()
+  local id    = State.active_track
+  local tdata = track_data.TRACKS[id]
+  road.draw_track(tdata.map)
   local race = State.race
   if race.phase ~= "result" then
-    local checkpoints = track_data.TRACKS[State.active_track].checkpoints
+    local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
     for i = active, #checkpoints do
       road.draw_checkpoint(checkpoints[i], i, i ~= active)
     end
   end
-  road.draw_coins(race.coins_collected)
+  road.draw_coins(tdata.coins, State.tracks[id].coins, race.coins_collected)
   car.draw_skid_marks()
   ghost.draw_sim(GHOST_RACE_ALPHA)
   ghost.draw_race_ghost()

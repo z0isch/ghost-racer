@@ -48,8 +48,7 @@ local car = {
   boost_flame_t      = 0,
 }
 
-function M.reset()
-  local spawn          = track_data.TRACKS[State.active_track].spawn
+function M.reset(spawn)
   local ts             = track_data.tile_size
   car.x                    = spawn.col * ts
   car.y                    = spawn.row * ts
@@ -66,9 +65,9 @@ function M.reset()
   skid_prev                = nil
 end
 
-function M.apply_upgrades()
-  car.accel   = ACCEL_BASE + State.accel * ACCEL_STEP
-  car.top_vel = TOP_VEL_BASE + State.top_speed * TOP_VEL_STEP
+function M.apply_upgrades(accel_lvl, top_speed_lvl)
+  car.accel   = ACCEL_BASE + accel_lvl * ACCEL_STEP
+  car.top_vel = TOP_VEL_BASE + top_speed_lvl * TOP_VEL_STEP
 end
 
 function M.pose()
@@ -79,7 +78,7 @@ function M.rect()
   return { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
 end
 
-function M.update(dt)
+function M.update(dt, map)
   local holding_left  = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
   local is_drifitng   = false
@@ -102,13 +101,13 @@ function M.update(dt)
   local new_x        = util.clamp(car.x + vel_vec.x, 0, usagi.GAME_W - CAR_SIZE)
   local new_y        = util.clamp(car.y + vel_vec.y, 0, usagi.GAME_H - CAR_SIZE)
 
-  if road.on_road(new_x, new_y, CAR_SIZE, CAR_MARGIN) then
+  if road.on_road(map, new_x, new_y, CAR_SIZE, CAR_MARGIN) then
     car.x = new_x
     car.y = new_y
-  elseif road.on_road(new_x, car.y, CAR_SIZE, CAR_MARGIN) then
+  elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
     car.x = new_x
     car.vel = car.vel * 0.5
-  elseif road.on_road(car.x, new_y, CAR_SIZE, CAR_MARGIN) then
+  elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
     car.y = new_y
     car.vel = car.vel * 0.5
   else

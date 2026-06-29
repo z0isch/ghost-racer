@@ -115,7 +115,7 @@ function M.try_buy(kind)
   else
     State[kind] = State[kind] + 1
   end
-  car.apply_upgrades()
+  car.apply_upgrades(State.accel, State.top_speed)
   persist.save()
 end
 

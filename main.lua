@@ -24,7 +24,7 @@ end
 
 function _init()
   persist.load()
-  car.apply_upgrades()
+  car.apply_upgrades(State.accel, State.top_speed)
   for id, _ in pairs(State.unlocked) do
     ghost.rebuild_sim(id)
   end
