@@ -1,8 +1,8 @@
-local ghost      = require "ghost"
-local track_data = require "track_data"
-local popups     = require "popups"
-local car        = require "car"
-local persist    = require "persist"
+local ghost                = require "ghost"
+local track_data           = require "track_data"
+local popups               = require "popups"
+local car                  = require "car"
+local persist              = require "persist"
 
 local CHECKPOINT_PAY       = 25
 local GHOST_CHECKPOINT_PAY = 8
@@ -11,11 +11,11 @@ local GHOST_COIN_PAY       = 3
 local PAR_TIME             = 10.0
 local SPEED_MULT_P         = 2
 
-local M = {}
+local M                    = {}
 
-M.COIN_PAY       = COIN_PAY
-M.CHECKPOINT_PAY = CHECKPOINT_PAY
-M.COIN_ICON      = "©"
+M.COIN_PAY                 = COIN_PAY
+M.CHECKPOINT_PAY           = CHECKPOINT_PAY
+M.COIN_ICON                = "©"
 
 function M.speed_mult(t)
   if not t or t <= 0 then return 1.0 end
@@ -111,7 +111,7 @@ function M.try_buy(kind)
   if kind == "ghosts" or kind == "coins" then
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if kind == "ghosts" then ghost.reset_track_phases(id) end
-    if kind == "coins"  then ghost.rebuild_sim(id) end
+    if kind == "coins" then ghost.rebuild_sim(id) end
   else
     State[kind] = State[kind] + 1
   end

@@ -4,7 +4,7 @@ local ghost   = require "ghost"
 local buy     = require "scenes.buy"
 local race    = require "scenes.race"
 
-local scenes = { buy = buy, race = race }
+local scenes  = { buy = buy, race = race }
 
 function SceneGoto(mode)
   local prev = State.mode

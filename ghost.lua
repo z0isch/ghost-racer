@@ -1,17 +1,17 @@
-local angle      = require "angle"
-local track_data = require "track_data"
+local angle          = require "angle"
+local track_data     = require "track_data"
 
-local CAR_SIZE    = 16
-local GHOST_ALPHA = 0.6
-local LAP_PAUSE   = 0.6
+local CAR_SIZE       = 16
+local GHOST_ALPHA    = 0.6
+local LAP_PAUSE      = 0.6
 
-local M = {}
+local M              = {}
 
-M.LAP_PAUSE = LAP_PAUSE
+M.LAP_PAUSE          = LAP_PAUSE
 
-local sim_time      = 0
-local track_sim     = {}
-local run_samples   = {}
+local sim_time       = 0
+local track_sim      = {}
+local run_samples    = {}
 local pending_events = {}
 
 local function get_track_sim(id)
@@ -27,8 +27,8 @@ local function compute_cp_crossings(line, checkpoints)
   if not line or #line == 0 then return nil end
   local crossings = {}
   for ci, cp in ipairs(checkpoints) do
-    local rect       = track_data.checkpoint_rect(cp)
-    local car_box    = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
+    local rect        = track_data.checkpoint_rect(cp)
+    local car_box     = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
     local inside_prev = util.rect_overlap(car_box, rect)
     for _, s in ipairs(line) do
       local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
@@ -47,11 +47,11 @@ end
 
 local function compute_coin_pickups(line, coins, coin_count)
   if not line or #line == 0 then return nil end
-  local pickups    = {}
-  local ts         = track_data.tile_size
+  local pickups = {}
+  local ts      = track_data.tile_size
   for ci = 1, coin_count do
-    local rect       = track_data.coin_rect(coins[ci])
-    local car_box    = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
+    local rect        = track_data.coin_rect(coins[ci])
+    local car_box     = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
     local inside_prev = util.rect_overlap(car_box, rect)
     for _, s in ipairs(line) do
       local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
@@ -97,8 +97,8 @@ function M.sample_at(line, time)
   local last = line[#line]
   if time >= last.t then return last end
   for i = 1, #line - 1 do
-    local a    = line[i]
-    local b    = line[i + 1]
+    local a = line[i]
+    local b = line[i + 1]
     if time >= a.t and time <= b.t then
       local span = b.t - a.t
       local t    = span > 0 and (time - a.t) / span or 0
@@ -176,7 +176,7 @@ function M.update(dt)
 end
 
 function M.collect_crossings()
-  local events  = pending_events
+  local events   = pending_events
   pending_events = {}
   return events
 end
@@ -212,8 +212,8 @@ function M.draw_sim(alpha)
   local id     = State.active_track
   local tstate = State.tracks[id]
   if not tstate then return end
-  local count  = tstate.ghosts
-  local line   = tstate.ghost_line
+  local count = tstate.ghosts
+  local line  = tstate.ghost_line
   if count <= 0 or not line then return end
   local period = M.loop_period(line)
   if period <= 0 then return end

@@ -75,8 +75,8 @@ function M.update(dt)
       race.phase = "racing"
     end
   elseif race.phase == "racing" then
-    local id       = State.active_track
-    local tdata    = track_data.TRACKS[id]
+    local id    = State.active_track
+    local tdata = track_data.TRACKS[id]
 
     car.update(dt, tdata.map)
     race.time = race.time + dt
