@@ -91,7 +91,6 @@ function M.upgrade_cost(kind)
   local max = u.max
   if kind == "coins" then max = #track_data.TRACKS[id].coins end
   if lvl >= max then return nil end
-  if kind == "ghosts" and lvl == 0 then return 0 end
   return math.floor(u.base_cost * (u.growth ^ lvl))
 end
 

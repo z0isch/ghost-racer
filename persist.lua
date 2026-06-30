@@ -5,8 +5,8 @@ local M = {}
 local function default_state()
   return {
     mode         = "buy",
-    money        = 100000,
-    coins        = 100000,
+    money        = 0,
+    coins        = 0,
     accel        = 0,
     top_speed    = 0,
     active_track = "basic",

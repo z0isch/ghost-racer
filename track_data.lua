@@ -27,12 +27,12 @@ M.TRACKS        = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 75,
+        base_cost = 50,
         growth    = 1.55
       },
       {
         kind      = "coins",
-        label     = "Add a Coin",
+        label     = "Coin",
         currency  = "cash",
         base_cost = 60,
         growth    = 1.6
@@ -74,7 +74,7 @@ M.TRACKS        = {
       },
       {
         kind      = "coins",
-        label     = "Add a Coin",
+        label     = "Coin",
         currency  = "cash",
         base_cost = 120,
         growth    = 1.6
