@@ -4,15 +4,16 @@ local M = {}
 
 local function default_state()
   return {
-    mode         = "buy",
-    money        = 0,
-    coins        = 0,
-    accel        = 0,
-    top_speed    = 0,
-    active_track = "basic",
-    unlocked     = { basic = true },
-    tracks       = { basic = track_data.default_track_state("basic") },
-    race         = {
+    mode            = "buy",
+    money           = 500,
+    coins           = 0,
+    coins_collected = false,
+    accel           = 0,
+    top_speed       = 0,
+    active_track    = "basic",
+    unlocked        = { basic = true },
+    tracks          = { basic = track_data.default_track_state("basic") },
+    race            = {
       next_checkpoint = 1,
       time            = 0,
       phase           = "countdown",
@@ -25,13 +26,14 @@ end
 
 function M.save()
   usagi.save({
-    money        = State.money,
-    coins        = State.coins,
-    accel        = State.accel,
-    top_speed    = State.top_speed,
-    active_track = State.active_track,
-    unlocked     = State.unlocked,
-    tracks       = State.tracks,
+    money           = State.money,
+    coins           = State.coins,
+    coins_collected = State.coins_collected,
+    accel           = State.accel,
+    top_speed       = State.top_speed,
+    active_track    = State.active_track,
+    unlocked        = State.unlocked,
+    tracks          = State.tracks,
   })
 end
 
@@ -39,11 +41,12 @@ function M.load()
   local loaded = usagi.load()
   State = default_state()
   if loaded then
-    State.money     = loaded.money or 0
-    State.coins     = loaded.coins or 0
+    State.money           = loaded.money or 0
+    State.coins           = loaded.coins or 0
+    State.coins_collected = loaded.coins_collected or false
 
-    State.accel     = math.min(loaded.accel, track_data.kind_max("accel"))
-    State.top_speed = math.min(loaded.top_speed, track_data.kind_max("top_speed"))
+    State.accel           = math.min(loaded.accel, track_data.kind_max("accel"))
+    State.top_speed       = math.min(loaded.top_speed, track_data.kind_max("top_speed"))
 
     if loaded.active_track and track_data.TRACKS[loaded.active_track] then
       State.active_track = loaded.active_track
@@ -81,7 +84,7 @@ function M.load()
       end
     end
   end
-  State.mode = "buy"
+  State.mode = loaded and "buy" or "intro"
 end
 
 return M

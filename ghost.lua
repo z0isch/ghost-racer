@@ -230,7 +230,7 @@ end
 function M.draw_race_ghost()
   local id     = State.active_track
   local tstate = State.tracks[id]
-  if tstate.ghosts <= 0 then return end
+  if not tstate.ghost_line then return end
   local g = M.sample_at(tstate.ghost_line, State.race.time)
   if g then
     gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, GHOST_ALPHA)

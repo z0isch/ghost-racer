@@ -23,10 +23,19 @@ function M.draw()
   local cash_x         = (usagi.GAME_W - (cash_w + gap + coin_w)) / 2
   local coin_x         = cash_x + cash_w + gap
 
+  local show_rates = economy.owns_any_ghost()
+  local show_coins = State.coins_collected
+
   gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
-  gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_GREEN, 1)
-  gfx.text_ex(coin_text, coin_x, bal_y, scale, 0, gfx.COLOR_YELLOW, 1)
-  gfx.text_ex(coin_rate_text, coin_x, rate_y, 1, 0, gfx.COLOR_YELLOW, 1)
+  if show_rates then
+    gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_GREEN, 1)
+  end
+  if show_coins then
+    gfx.text_ex(coin_text, coin_x, bal_y, scale, 0, gfx.COLOR_YELLOW, 1)
+  end
+  if show_rates and show_coins then
+    gfx.text_ex(coin_rate_text, coin_x, rate_y, 1, 0, gfx.COLOR_YELLOW, 1)
+  end
 end
 
 return M

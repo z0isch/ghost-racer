@@ -17,6 +17,13 @@ M.COIN_PAY                 = COIN_PAY
 M.CHECKPOINT_PAY           = CHECKPOINT_PAY
 M.COIN_ICON                = "©"
 
+function M.owns_any_ghost()
+  for _, tstate in pairs(State.tracks) do
+    if tstate.ghosts and tstate.ghosts >= 1 then return true end
+  end
+  return false
+end
+
 function M.speed_mult(t)
   if not t or t <= 0 then return 1.0 end
   return math.max(1.0, (PAR_TIME / t) ^ SPEED_MULT_P)
@@ -128,6 +135,7 @@ function M.try_unlock_track(id)
   end
   ghost.rebuild_sim(id)
   persist.save()
+  return true
 end
 
 function M.bank(event)
@@ -143,7 +151,8 @@ function M.bank(event)
     currency = "coin"
   end
   if currency == "coin" then
-    State.coins = State.coins + pay
+    State.coins           = State.coins + pay
+    State.coins_collected = true
   else
     State.money = State.money + pay
   end

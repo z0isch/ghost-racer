@@ -114,8 +114,13 @@ function M.draw_shop()
   local coin_w    = usagi.measure_text(coin_text)
   local info_gap  = 8
   local info_x    = x + math.floor((w - (rate_w + info_gap + coin_w)) / 2)
-  gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_GREEN, 1)
-  gfx.text_ex(coin_text, info_x + rate_w + info_gap, info_y, 1, 0, gfx.COLOR_YELLOW, 1)
+  local show_rates = economy.owns_any_ghost()
+  if show_rates then
+    gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_GREEN, 1)
+  end
+  if show_rates and State.coins_collected then
+    gfx.text_ex(coin_text, info_x + rate_w + info_gap, info_y, 1, 0, gfx.COLOR_YELLOW, 1)
+  end
 
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(tdata.shop) do
@@ -142,7 +147,9 @@ function M.draw_shop()
     local btn_text = string.format("Buy %s - $%d", ntdata.label, cost)
     if ui.button(btn_text, math.floor((usagi.GAME_W - w) / 2), usagi.GAME_H - 42,
           { w = w, disabled = not can_buy }) then
-      economy.try_unlock_track(next_track)
+      if economy.try_unlock_track(next_track) then
+        State.active_track = next_track
+      end
     end
   end
 end

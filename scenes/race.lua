@@ -90,6 +90,7 @@ function M.update(dt)
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
         State.coins              = State.coins + economy.COIN_PAY
+        State.coins_collected    = true
         race.coins_earned        = race.coins_earned + economy.COIN_PAY
         sfx.play("coin")
         popups.spawn({
@@ -160,48 +161,71 @@ local function draw_race_result()
     gfx.text_ex(unit_text, cx + vw, y, scale, 0, unit_color, 1)
   end
 
+  local owns_ghost = economy.owns_any_ghost()
+  local show_rates = owns_ghost
+  local show_coins = State.coins_collected
+
   local y = 80
 
   if race.has_baseline then
     local time_col  = delta_color(race.time_delta)
     local time_sign = race.time_delta >= 0 and "-" or "+"
     centered_text(string.format("%s%.2fs", time_sign, math.abs(race.time_delta)), y, 2, time_col)
-    y               = y + 22
+    y = y + 22
 
-    local cash_col  = delta_color(race.cash_rate_delta)
-    local cash_sign = race.cash_rate_delta >= 0 and "+" or ""
-    centered_rate_delta(string.format("%s%.2f", cash_sign, race.cash_rate_delta),
-      " $/sec", cash_col, gfx.COLOR_DARK_GREEN, y, 2)
-    y               = y + 22
-
-    local coin_col  = delta_color(race.coin_rate_delta)
-    local coin_sign = race.coin_rate_delta >= 0 and "+" or ""
-    centered_rate_delta(string.format("%s%.2f", coin_sign, race.coin_rate_delta),
-      " " .. coin_icon .. "/sec", coin_col, gfx.COLOR_YELLOW, y, 2)
-    y          = y + 34
-
-    local bw   = 150
-    local btnm = 8
-    local lx   = math.floor((usagi.GAME_W - bw * 2 - btnm) / 2)
-    if ui.button("USE THIS RUN", lx, y, { w = bw, scale = 2 }) then
-      ghost.promote()
-      persist.save()
-      SceneGoto("buy")
+    if show_rates then
+      local cash_col  = delta_color(race.cash_rate_delta)
+      local cash_sign = race.cash_rate_delta >= 0 and "+" or ""
+      centered_rate_delta(string.format("%s%.2f", cash_sign, race.cash_rate_delta),
+        " $/sec", cash_col, gfx.COLOR_GREEN, y, 2)
+      y = y + 22
     end
-    if ui.button("KEEP CURRENT", lx + bw + btnm, y, { w = bw, scale = 2 }) then
-      persist.save()
-      SceneGoto("buy")
+
+    if show_rates and show_coins then
+      local coin_col  = delta_color(race.coin_rate_delta)
+      local coin_sign = race.coin_rate_delta >= 0 and "+" or ""
+      centered_rate_delta(string.format("%s%.2f", coin_sign, race.coin_rate_delta),
+        " " .. coin_icon .. "/sec", coin_col, gfx.COLOR_YELLOW, y, 2)
+      y = y + 22
+    end
+    y = y + 12
+
+    if owns_ghost then
+      local bw   = 150
+      local btnm = 8
+      local lx   = math.floor((usagi.GAME_W - bw * 2 - btnm) / 2)
+      if ui.button("USE THIS RUN", lx, y, { w = bw, scale = 2 }) then
+        ghost.promote()
+        persist.save()
+        SceneGoto("buy")
+      end
+      if ui.button("KEEP CURRENT", lx + bw + btnm, y, { w = bw, scale = 2 }) then
+        persist.save()
+        SceneGoto("buy")
+      end
+    else
+      local bw = 180
+      if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
+        ghost.promote()
+        persist.save()
+        SceneGoto("buy")
+      end
     end
   else
     centered_text(string.format("Time %.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
     y = y + 22
-    centered_text(string.format("%.2f/sec", race.run_cash_rate), y, 2, gfx.COLOR_WHITE)
-    y = y + 22
-    centered_text(string.format("%.2f/sec", race.run_coin_rate), y, 2, gfx.COLOR_WHITE)
-    y = y + 34
+    if show_rates then
+      centered_text(string.format("%.2f/sec", race.run_cash_rate), y, 2, gfx.COLOR_WHITE)
+      y = y + 22
+    end
+    if show_rates and show_coins then
+      centered_text(string.format("%.2f/sec", race.run_coin_rate), y, 2, gfx.COLOR_WHITE)
+      y = y + 22
+    end
+    y = y + 12
 
     local bw = 180
-    if ui.button("USE THIS RUN", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
+    if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
       ghost.promote()
       persist.save()
       SceneGoto("buy")
