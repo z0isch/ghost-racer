@@ -1,55 +1,56 @@
-local road       = require "road"
-local angle      = require "angle"
-local track_data = require "track_data"
+local road              = require "road"
+local angle             = require "angle"
+local track_data        = require "track_data"
 
-local CAR_SIZE         = 16
-local CAR_MARGIN       = 3
-local ACCEL_BASE       = 50
-local ACCEL_STEP       = 15
-local TOP_VEL_BASE     = 200
-local TOP_VEL_STEP     = 30
-local MAX_BOOSTS       = 10
+local CAR_SIZE          = 16
+local CAR_MARGIN        = 3
+local ACCEL_BASE        = 50
+local ACCEL_STEP        = 15
+local TOP_VEL_BASE      = 200
+local TOP_VEL_STEP      = 30
+local MAX_BOOSTS        = 10
 local OVERSPEED_IMPULSE = 100
-local OVERSPEED_DECAY  = 100
-local BOOST_FLAME_TIME = 0.8
+local OVERSPEED_DECAY   = 100
+local BOOST_FLAME_TIME  = 0.8
 
-local M = {}
+local M                 = {}
 
-M.SIZE   = CAR_SIZE
-M.MARGIN = CAR_MARGIN
+M.SIZE                  = CAR_SIZE
+M.MARGIN                = CAR_MARGIN
 
-local skid_marks = {}
-local skid_prev  = nil
+local skid_marks        = {}
+local skid_prev         = nil
 
-local car = {
-  x                  = 0,
-  y                  = 0,
-  vel                = 0,
-  top_vel            = TOP_VEL_BASE,
-  facing_angle       = 0,
-  vel_angle          = 0,
-  turn_speed         = 0.03,
-  drift_turn_speed   = 0.06,
-  drift_slide        = math.pi / 8,
-  drift_deccel       = 100,
-  accel              = ACCEL_BASE,
-  deccel             = 150,
-  is_drifitng        = false,
-  turn_speed_factor  = 0.0001,
-  skid_max_age       = 2.5,
-  skid_max_count     = 200,
-  boost_value        = 120,
-  boost_length       = 1.2,
-  drift_threshold    = 0.6,
-  drift_time         = 0,
-  boost_ready        = false,
+local car               = {
+  x                    = 0,
+  y                    = 0,
+  vel                  = 0,
+  top_vel              = TOP_VEL_BASE,
+  facing_angle         = 0,
+  vel_angle            = 0,
+  turn_rate_slow       = 2.0,
+  turn_rate_fast       = 1.0,
+  turn_ref_speed       = TOP_VEL_BASE,
+  drift_turn_rate      = 3.6,
+  drift_slide          = math.pi / 8,
+  drift_deccel         = 125,
+  accel                = ACCEL_BASE,
+  deccel               = 150,
+  is_drifitng          = false,
+  skid_max_age         = 2.5,
+  skid_max_count       = 200,
+  boost_value          = 120,
+  boost_length         = 1.2,
+  drift_threshold      = 0.6,
+  drift_time           = 0,
+  boost_ready          = false,
   boost_time_remaining = 0,
-  boosts             = MAX_BOOSTS,
-  boost_flame_t      = 0,
+  boosts               = MAX_BOOSTS,
+  boost_flame_t        = 0,
 }
 
 function M.reset(spawn)
-  local ts             = track_data.tile_size
+  local ts                 = track_data.tile_size
   car.x                    = spawn.col * ts
   car.y                    = spawn.row * ts
   car.vel                  = 0
@@ -139,10 +140,15 @@ function M.update(dt, map)
   end
 
   if holding_left or holding_right then
-    local turn_speed = is_drifitng and car.drift_turn_speed or car.turn_speed
-    local dir        = holding_left and -1 or 1
-    car.facing_angle = angle.normalize(
-      car.facing_angle + (dir * turn_speed / (1 + car.vel * car.turn_speed_factor)))
+    local dir = holding_left and -1 or 1
+    local rate
+    if is_drifitng then
+      rate = car.drift_turn_rate
+    else
+      local t = util.clamp(car.vel / car.turn_ref_speed, 0, 1)
+      rate = car.turn_rate_slow + (car.turn_rate_fast - car.turn_rate_slow) * t
+    end
+    car.facing_angle = angle.normalize(car.facing_angle + dir * rate * dt)
   end
 
   if is_drifitng then
@@ -176,10 +182,14 @@ function M.update(dt, map)
     local ry   = cy + back.y + perp.y
     if skid_prev then
       skid_marks[#skid_marks + 1] = {
-        lx1 = skid_prev.lx, ly1 = skid_prev.ly,
-        lx2 = lx,           ly2 = ly,
-        rx1 = skid_prev.rx, ry1 = skid_prev.ry,
-        rx2 = rx,           ry2 = ry,
+        lx1 = skid_prev.lx,
+        ly1 = skid_prev.ly,
+        lx2 = lx,
+        ly2 = ly,
+        rx1 = skid_prev.rx,
+        ry1 = skid_prev.ry,
+        rx2 = rx,
+        ry2 = ry,
         age = 0,
       }
       if #skid_marks > car.skid_max_count then table.remove(skid_marks, 1) end
@@ -216,16 +226,16 @@ function M.draw_flames()
   local flick  = 0.6 + 0.4 * math.abs(math.sin(usagi.elapsed * 40))
   local layers = {
     { len = 11 * flick, half = 4, color = gfx.COLOR_RED },
-    { len = 8  * flick, half = 3, color = gfx.COLOR_ORANGE },
-    { len = 5  * flick, half = 2, color = gfx.COLOR_YELLOW },
+    { len = 8 * flick,  half = 3, color = gfx.COLOR_ORANGE },
+    { len = 5 * flick,  half = 2, color = gfx.COLOR_YELLOW },
   }
-  local perp = car.facing_angle + math.pi / 2
+  local perp   = car.facing_angle + math.pi / 2
   for _, fl in ipairs(layers) do
     local tip  = util.vec_from_angle(back, 4 + fl.len)
     local base = util.vec_from_angle(back, 4)
     local off  = util.vec_from_angle(perp, fl.half)
     gfx.tri_fill(
-      cx + tip.x,          cy + tip.y,
+      cx + tip.x, cy + tip.y,
       cx + base.x - off.x, cy + base.y - off.y,
       cx + base.x + off.x, cy + base.y + off.y,
       fl.color)
