@@ -115,8 +115,13 @@ function M.try_buy(kind)
     State.money = State.money - cost
   end
   if kind == "ghosts" or kind == "coins" then
+    local was_first_ghost = kind == "ghosts" and State.tracks[id][kind] == 0
     State.tracks[id][kind] = State.tracks[id][kind] + 1
-    if kind == "ghosts" then ghost.reset_track_phases(id) end
+    if was_first_ghost then
+      ghost.restart_schedule(id)
+    elseif kind == "ghosts" then
+      ghost.reset_track_phases(id)
+    end
     if kind == "coins" then ghost.rebuild_sim(id) end
   else
     State[kind] = State[kind] + 1

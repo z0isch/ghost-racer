@@ -16,12 +16,20 @@ local pending_events = {}
 
 local function get_track_sim(id)
   if not track_sim[id] then
-    track_sim[id] = { ghost_prev_phase = {}, ghost_cp_crossings = nil, ghost_coin_pickups = nil }
+    track_sim[id] = { ghost_prev_phase = {}, ghost_cp_crossings = nil, ghost_coin_pickups = nil, ghost_base = 0 }
   end
   return track_sim[id]
 end
 
 M.get_track_sim = get_track_sim
+
+-- Re-anchor a track's ghost schedule so phase 0 lines up with right now.
+-- Used when the first ghost is bought so it starts at the beginning of the line.
+function M.restart_schedule(id)
+  local ts = get_track_sim(id)
+  ts.ghost_base       = sim_time
+  ts.ghost_prev_phase = {}
+end
 
 local function compute_cp_crossings(line, checkpoints)
   if not line or #line == 0 then return nil end
@@ -129,7 +137,7 @@ function M.update(dt)
         if ts.ghost_cp_crossings and period > 0 then
           for i = 1, count do
             local offset = (i - 1) / count * period
-            local phase  = (sim_time + offset) % period
+            local phase  = (sim_time - ts.ghost_base + offset) % period
             local prev   = ts.ghost_prev_phase[i]
             if prev then
               for _, ev in ipairs(ts.ghost_cp_crossings) do
@@ -217,9 +225,10 @@ function M.draw_sim(alpha)
   if count <= 0 or not line then return end
   local period = M.loop_period(line)
   if period <= 0 then return end
+  local ts = get_track_sim(id)
   for i = 1, count do
     local offset = (i - 1) / count * period
-    local t      = (sim_time + offset) % period
+    local t      = (sim_time - ts.ghost_base + offset) % period
     local g      = M.sample_at(line, t)
     if g then
       gfx.spr_ex(2, g.x, g.y, false, false, g.angle - math.pi / 2, gfx.COLOR_WHITE, alpha)
