@@ -84,14 +84,6 @@ M.TRACKS        = {
         base_cost = 60,
         growth    = 1.6
       },
-      {
-        kind      = "accel",
-        label     = "Accel",
-        currency  = "coin",
-        max       = 5,
-        base_cost = 180,
-        growth    = 1.7
-      },
     },
   },
   track2 = {
@@ -125,14 +117,6 @@ M.TRACKS        = {
         currency  = "cash",
         base_cost = 120,
         growth    = 1.6
-      },
-      {
-        kind      = "top_speed",
-        label     = "Top Speed",
-        currency  = "coin",
-        max       = 5,
-        base_cost = 180,
-        growth    = 1.7
       },
     },
   },
