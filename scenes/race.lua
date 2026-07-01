@@ -19,10 +19,11 @@ function M.enter()
   State.race = {
     next_checkpoint = 1,
     time            = 0,
-    phase           = "countdown",
+    phase           = State.seen_help and "countdown" or "help",
     earned          = 0,
     coins_earned    = 0,
     coins_collected = {},
+    first_race      = not State.seen_help,
   }
   ghost.reset_recording()
   car.apply_upgrades(State.accel, State.top_speed)
@@ -33,6 +34,13 @@ function M.enter()
 end
 
 function M.exit()
+end
+
+local function dismiss_help()
+  State.seen_help  = true
+  State.race.phase = "countdown"
+  countdown_time   = 3
+  persist.save()
 end
 
 local function finish_race()
@@ -68,7 +76,11 @@ function M.update(dt)
     economy.bank(ev)
   end
 
-  if race.phase == "countdown" then
+  if race.phase == "help" then
+    if input.pressed(input.BTN1) then
+      dismiss_help()
+    end
+  elseif race.phase == "countdown" then
     countdown_time = countdown_time - (dt * 2)
     if countdown_time <= 0 then
       countdown_time = 0
@@ -120,6 +132,43 @@ function M.update(dt)
   end
 
   popups.update(dt)
+end
+
+local function draw_help()
+  dim.draw(usagi.GAME_W, usagi.GAME_H)
+
+  local title       = "How To Race"
+  local title_scale = 3
+  local tw          = usagi.measure_text(title) * title_scale
+  local ty          = 70
+
+  local btn_label   = input.mapping_for(input.BTN1) or "BTN1"
+  local body        = "Hold " .. btn_label .. " to accelerate"
+  local body_scale  = 2
+  local bw          = usagi.measure_text(body) * body_scale
+  local by          = ty + 50
+
+  local btn_w       = 180
+  local btn_y       = by + 40
+
+  local panel_pad   = 16
+  local panel_w     = math.max(tw, bw, btn_w) + panel_pad * 2
+  local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
+  local panel_y     = ty - panel_pad
+  local panel_h     = (btn_y + 32 + panel_pad) - panel_y
+  gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
+  gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
+
+  local tx = math.floor((usagi.GAME_W - tw) / 2)
+  gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
+
+  local bx = math.floor((usagi.GAME_W - bw) / 2)
+  gfx.text_ex(body, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+
+  local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
+  if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
+    dismiss_help()
+  end
 end
 
 local function draw_countdown()
@@ -242,7 +291,7 @@ function M.draw()
     local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
     for i = active, #checkpoints do
-      road.draw_checkpoint(checkpoints[i], i, i ~= active)
+      road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints)
     end
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins, race.coins_collected)
@@ -254,14 +303,25 @@ function M.draw()
   popups.draw()
   hud.draw()
 
-  if race.phase == "countdown" then
+  if race.phase == "help" then
+    draw_help()
+  elseif race.phase == "countdown" then
     draw_countdown()
   elseif race.phase == "result" then
     draw_race_result()
   else
-    if ui.button("QUIT", 5, 5, { w = 50 }) then
-      persist.save()
-      SceneGoto("buy")
+    if not race.first_race then
+      if ui.button("QUIT", 5, 5, { w = 50 }) then
+        persist.save()
+        SceneGoto("buy")
+      end
+    end
+    if race.first_race then
+      local btn_label = input.mapping_for(input.BTN1) or "BTN1"
+      local hint       = "Hold " .. btn_label .. " to accelerate"
+      local hw         = usagi.measure_text(hint)
+      local hx         = math.floor((usagi.GAME_W - hw) / 2)
+      gfx.text_ex(hint, hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
     end
   end
 end

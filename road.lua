@@ -49,7 +49,7 @@ function M.draw_track(map)
   end
 end
 
-function M.draw_checkpoint(cp, n, faded)
+function M.draw_checkpoint(cp, n, faded, total)
   local rect          = track_data.checkpoint_rect(cp)
   local outline_color = gfx.COLOR_DARK_GREEN
   if not faded then
@@ -57,6 +57,8 @@ function M.draw_checkpoint(cp, n, faded)
     gfx.rect_fill(rect.x, rect.y, rect.w, rect.h, gfx.COLOR_DARK_GREEN)
   end
   gfx.rect(rect.x, rect.y, rect.w, rect.h, outline_color)
+
+  if total and total <= 1 then return end
 
   local label  = tostring(n)
   local tw, th = usagi.measure_text(label)

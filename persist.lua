@@ -8,6 +8,7 @@ local function default_state()
     money           = 500,
     coins           = 0,
     coins_collected = false,
+    seen_help       = false,
     accel           = 0,
     top_speed       = 0,
     active_track    = "track1",
@@ -29,6 +30,7 @@ function M.save()
     money           = State.money,
     coins           = State.coins,
     coins_collected = State.coins_collected,
+    seen_help       = State.seen_help,
     accel           = State.accel,
     top_speed       = State.top_speed,
     active_track    = State.active_track,
@@ -44,6 +46,7 @@ function M.load()
     State.money           = loaded.money or 0
     State.coins           = loaded.coins or 0
     State.coins_collected = loaded.coins_collected or false
+    State.seen_help       = loaded.seen_help or false
 
     State.accel           = math.min(loaded.accel, track_data.kind_max("accel"))
     State.top_speed       = math.min(loaded.top_speed, track_data.kind_max("top_speed"))

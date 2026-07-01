@@ -71,7 +71,7 @@ function M.draw()
 
   local checkpoints = tdata.checkpoints
   for i, cp in ipairs(checkpoints) do
-    road.draw_checkpoint(cp, i, true)
+    road.draw_checkpoint(cp, i, true, #checkpoints)
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins)
   ghost.draw_sim(GHOST_ALPHA)
