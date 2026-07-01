@@ -14,7 +14,7 @@ M.TRACKS        = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
     coins       = {
-      { col = 18, row = 7 },
+      { col = 18, row = 8 },
     },
     par         = 10.0,
     label       = "Track 1",
