@@ -10,9 +10,9 @@ local function default_state()
     coins_collected = false,
     accel           = 0,
     top_speed       = 0,
-    active_track    = "basic",
-    unlocked        = { basic = true },
-    tracks          = { basic = track_data.default_track_state("basic") },
+    active_track    = "track1",
+    unlocked        = { track1 = true },
+    tracks          = { track1 = track_data.default_track_state("track1") },
     race            = {
       next_checkpoint = 1,
       time            = 0,

@@ -1,11 +1,58 @@
 local basic_map = require "tile-map.basic"
+local track1    = require "tile-map.track1"
 local track2    = require "tile-map.track2"
 
 local M         = {}
 
-M.tile_size     = basic_map.tilewidth
+M.tile_size     = track1.tilewidth
 
 M.TRACKS        = {
+  track1 = {
+    map         = track1,
+    spawn       = { col = 5, row = 11 },
+    checkpoints = {
+      { col = 31, row = 8, w = 4, h = 7 },
+    },
+    coins       = {
+      { col = 18, row = 7 },
+    },
+    par         = 10.0,
+    label       = "Track 1",
+    unlock_cost = nil,
+    shop        = {
+      {
+        kind      = "ghosts",
+        label     = "Ghost",
+        currency  = "cash",
+        max       = 8,
+        base_cost = 50,
+        growth    = 1.55
+      },
+      {
+        kind      = "coins",
+        label     = "Coin",
+        currency  = "cash",
+        base_cost = 60,
+        growth    = 1.6
+      },
+      {
+        kind      = "accel",
+        label     = "Acceleration",
+        currency  = "coin",
+        max       = 5,
+        base_cost = 180,
+        growth    = 1.7
+      },
+      {
+        kind      = "top_speed",
+        label     = "Top Speed",
+        currency  = "coin",
+        max       = 5,
+        base_cost = 180,
+        growth    = 1.7
+      },
+    },
+  },
   basic = {
     map         = basic_map,
     spawn       = { col = 1, row = 9 },
@@ -19,8 +66,8 @@ M.TRACKS        = {
       { col = 10, row = 16 },
     },
     par         = 10.0,
-    label       = "Track 1",
-    unlock_cost = nil,
+    label       = "Track 2",
+    unlock_cost = 500,
     shop        = {
       {
         kind      = "ghosts",
@@ -61,7 +108,7 @@ M.TRACKS        = {
       { col = 10, row = 16 },
     },
     par         = 10.0,
-    label       = "Track 2",
+    label       = "Track 3",
     unlock_cost = 500,
     shop        = {
       {
@@ -91,7 +138,7 @@ M.TRACKS        = {
   },
 }
 
-M.TRACK_ORDER   = { "basic", "track2" }
+M.TRACK_ORDER   = { "track1", "basic", "track2" }
 
 function M.track_shop_item(track_id, kind)
   for _, item in ipairs(M.TRACKS[track_id].shop) do
