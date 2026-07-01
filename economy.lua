@@ -8,7 +8,6 @@ local CHECKPOINT_PAY       = 5
 local GHOST_CHECKPOINT_PAY = 1
 local COIN_PAY             = 5
 local GHOST_COIN_PAY       = 1
-local PAR_TIME             = 10.0
 local SPEED_MULT_P         = 2
 
 local M                    = {}
@@ -24,9 +23,9 @@ function M.owns_any_ghost()
   return false
 end
 
-function M.speed_mult(t)
+function M.speed_mult(t, par)
   if not t or t <= 0 then return 1.0 end
-  return math.max(1.0, (PAR_TIME / t) ^ SPEED_MULT_P)
+  return math.max(1.0, (par / t) ^ SPEED_MULT_P)
 end
 
 function M.track_cash_rate(id)
@@ -37,7 +36,7 @@ function M.track_cash_rate(id)
   local tdata = track_data.TRACKS[id]
   return tstate.ghosts
       * (#tdata.checkpoints * GHOST_CHECKPOINT_PAY / period)
-      * M.speed_mult(tstate.best_time)
+      * M.speed_mult(tstate.best_time, tdata.par)
 end
 
 function M.track_coin_rate(id)
@@ -45,11 +44,12 @@ function M.track_coin_rate(id)
   if not tstate or not tstate.ghost_line then return 0 end
   local period = ghost.loop_period(tstate.ghost_line)
   if period <= 0 then return 0 end
+  local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
   local count   = pickups and #pickups or 0
   return tstate.ghosts
       * (count * GHOST_COIN_PAY / period)
-      * M.speed_mult(tstate.best_time)
+      * M.speed_mult(tstate.best_time, tdata.par)
 end
 
 function M.ghost_cash_rate()
@@ -141,7 +141,8 @@ end
 function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
-  local mult   = M.speed_mult(tstate.best_time)
+  local tdata  = track_data.TRACKS[id]
+  local mult   = M.speed_mult(tstate.best_time, tdata.par)
   local pay, currency
   if event.kind == "checkpoint" then
     pay      = GHOST_CHECKPOINT_PAY * mult

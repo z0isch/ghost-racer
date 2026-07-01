@@ -69,8 +69,9 @@ local function finish_race()
   race.has_baseline          = has_baseline
   race.run_cash_rate         = economy.lap_cash_rate(recording)
   race.run_coin_rate         = economy.lap_coin_rate(recording)
-  race.run_mult              = economy.speed_mult(race.run_time)
-  race.ghost_mult            = economy.speed_mult(tstate.best_time)
+  local par                  = track_data.TRACKS[id].par
+  race.run_mult              = economy.speed_mult(race.run_time, par)
+  race.ghost_mult            = economy.speed_mult(tstate.best_time, par)
   race.result_start_time     = usagi.elapsed
   local ghosts               = tstate.ghosts
   race.run_total_rate        = ghosts * race.run_cash_rate * race.run_mult
