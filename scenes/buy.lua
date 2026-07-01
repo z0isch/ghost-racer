@@ -28,10 +28,16 @@ function M.update(dt)
 end
 
 local function shop_button(item, x, y, w)
-  local kind     = item.kind
-  local label    = item.label
-  local cost     = economy.upgrade_cost(kind)
-  local currency = item.currency
+  local kind       = item.kind
+  local label      = item.label
+  local cost       = economy.upgrade_cost(kind)
+  local currency   = item.currency
+
+  local balance    = currency == "coin" and State.coins or State.money
+  local affordable = cost ~= nil and (cost == 0 or balance >= cost)
+  if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
+    affordable = false
+  end
 
   local cost_text, cost_color
   if cost == nil then
@@ -40,16 +46,10 @@ local function shop_button(item, x, y, w)
     cost_text = "FREE"
   elseif currency == "coin" then
     cost_text  = economy.COIN_ICON .. tostring(cost)
-    cost_color = gfx.COLOR_WHITE
+    cost_color = affordable and gfx.COLOR_YELLOW or gfx.COLOR_LIGHT_GRAY
   else
     cost_text  = "$" .. tostring(cost)
-    cost_color = gfx.COLOR_WHITE
-  end
-
-  local balance    = currency == "coin" and State.coins or State.money
-  local affordable = cost ~= nil and (cost == 0 or balance >= cost)
-  if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
-    affordable = false
+    cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
   end
 
   local _, th = usagi.measure_text(label)
@@ -57,9 +57,12 @@ local function shop_button(item, x, y, w)
 
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
-  local bx      = x + w - SHOP_COST_W
-  local clicked = ui.button(cost_text, bx, y,
-    { w = SHOP_COST_W, disabled = not affordable, text = cost_color })
+  local bx       = x + w - SHOP_COST_W
+  local btn_opts = { w = SHOP_COST_W, disabled = not affordable, text = cost_color }
+  if currency == "coin" or currency == "cash" then
+    btn_opts.dim_text = cost_color
+  end
+  local clicked = ui.button(cost_text, bx, y, btn_opts)
   return clicked, bh
 end
 
@@ -107,13 +110,13 @@ function M.draw_shop()
   local lbl_w    = usagi.measure_text(lbl_text) * 2
   gfx.text_ex(lbl_text, x + math.floor((w - lbl_w) / 2), nav_y + 2, 2, 0, gfx.COLOR_WHITE, 1)
 
-  local info_y    = nav_y + th_a * 2 + 6
-  local rate_text = string.format("%.2f $/sec", economy.track_cash_rate(id))
-  local coin_text = string.format("%.2f " .. economy.COIN_ICON .. "/sec", economy.track_coin_rate(id))
-  local rate_w    = usagi.measure_text(rate_text)
-  local coin_w    = usagi.measure_text(coin_text)
-  local info_gap  = 8
-  local info_x    = x + math.floor((w - (rate_w + info_gap + coin_w)) / 2)
+  local info_y     = nav_y + th_a * 2 + 6
+  local rate_text  = string.format("%.2f $/sec", economy.track_cash_rate(id))
+  local coin_text  = string.format("%.2f " .. economy.COIN_ICON .. "/sec", economy.track_coin_rate(id))
+  local rate_w     = usagi.measure_text(rate_text)
+  local coin_w     = usagi.measure_text(coin_text)
+  local info_gap   = 8
+  local info_x     = x + math.floor((w - (rate_w + info_gap + coin_w)) / 2)
   local show_rates = economy.owns_any_ghost()
   if show_rates then
     gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_GREEN, 1)
@@ -124,9 +127,11 @@ function M.draw_shop()
 
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(tdata.shop) do
-    local clicked, bh = shop_button(item, x, shop_y, w)
-    if clicked then economy.try_buy(item.kind) end
-    shop_y = shop_y + bh + gap
+    if item.currency ~= "coin" or State.coins_collected then
+      local clicked, bh = shop_button(item, x, shop_y, w)
+      if clicked then economy.try_buy(item.kind) end
+      shop_y = shop_y + bh + gap
+    end
   end
 
   local race_x = math.floor((usagi.GAME_W - w) / 2)

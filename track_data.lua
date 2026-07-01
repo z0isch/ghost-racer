@@ -26,13 +26,13 @@ M.TRACKS        = {
         currency  = "cash",
         max       = 8,
         base_cost = 5,
-        growth    = 1.55
+        growth    = 1.6
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 60,
+        base_cost = 30,
         growth    = 1.6
       },
       {
@@ -40,16 +40,16 @@ M.TRACKS        = {
         label     = "Acceleration",
         currency  = "coin",
         max       = 5,
-        base_cost = 180,
-        growth    = 1.7
+        base_cost = 5,
+        growth    = 2
       },
       {
         kind      = "top_speed",
         label     = "Top Speed",
         currency  = "coin",
         max       = 5,
-        base_cost = 180,
-        growth    = 1.7
+        base_cost = 5,
+        growth    = 2
       },
     },
   },
@@ -67,7 +67,7 @@ M.TRACKS        = {
     },
     par         = 10.0,
     label       = "Track 2",
-    unlock_cost = 500,
+    unlock_cost = 250,
     shop        = {
       {
         kind      = "ghosts",

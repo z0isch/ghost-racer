@@ -51,11 +51,11 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race                 = State.race
-  local id                   = State.active_track
-  local tstate               = State.tracks[id]
-  local recording            = ghost.get_recording()
-  race.run_time              = race.time
+  local race      = State.race
+  local id        = State.active_track
+  local tstate    = State.tracks[id]
+  local recording = ghost.get_recording()
+  race.run_time   = race.time
 
   if not State.coins_collected then
     ghost.promote()
@@ -258,12 +258,12 @@ local function draw_race_result()
       local bw   = 150
       local btnm = 8
       local lx   = math.floor((usagi.GAME_W - bw * 2 - btnm) / 2)
-      if ui.button("USE THIS RUN", lx, y, { w = bw, scale = 2 }) then
+      if ui.button("ACCEPT RUN", lx, y, { w = bw, scale = 2 }) then
         ghost.promote()
         persist.save()
         SceneGoto("buy")
       end
-      if ui.button("KEEP CURRENT", lx + bw + btnm, y, { w = bw, scale = 2 }) then
+      if ui.button("USE PREVIOUS", lx + bw + btnm, y, { w = bw, scale = 2 }) then
         persist.save()
         SceneGoto("buy")
       end
