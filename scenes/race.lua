@@ -15,10 +15,12 @@ local countdown_time   = 0
 
 local M                = {}
 
-local accel_hint       = input.mapping_for(input.BTN1) .. " to accelerate\n"
-local right_hint       = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
-local left_hint        = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
-local hints            = accel_hint .. right_hint .. left_hint
+function get_hints()
+  local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
+  local right_hint = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
+  local left_hint  = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
+  return accel_hint .. right_hint .. left_hint
+end
 
 function M.enter()
   State.race = {
@@ -53,8 +55,16 @@ local function finish_race()
   local id                   = State.active_track
   local tstate               = State.tracks[id]
   local recording            = ghost.get_recording()
-  race.phase                 = "result"
   race.run_time              = race.time
+
+  if not State.coins_collected then
+    ghost.promote()
+    persist.save()
+    SceneGoto("buy")
+    return
+  end
+
+  race.phase                 = "result"
   local has_baseline         = tstate.ghost_line ~= nil
   race.has_baseline          = has_baseline
   race.run_cash_rate         = economy.lap_cash_rate(recording)
@@ -149,7 +159,7 @@ local function draw_help()
 
 
   local body_scale = 2
-  local bw         = usagi.measure_text(hints) * body_scale
+  local bw         = usagi.measure_text(get_hints()) * body_scale
   local by         = ty + 50
 
   local btn_w      = 180
@@ -167,7 +177,7 @@ local function draw_help()
   gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
 
   local bx = math.floor((usagi.GAME_W - bw) / 2)
-  gfx.text_ex(hints, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  gfx.text_ex(get_hints(), bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
 
   local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
   if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
@@ -321,9 +331,9 @@ function M.draw()
       end
     end
     if race.first_race then
-      local hw = usagi.measure_text(hints)
+      local hw = usagi.measure_text(get_hints())
       local hx = math.floor((usagi.GAME_W - hw) / 2)
-      gfx.text_ex(hints, hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+      gfx.text_ex(get_hints(), hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
     end
   end
 end

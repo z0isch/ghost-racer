@@ -16,7 +16,7 @@ M.TRACKS        = {
     coins       = {
       { col = 18, row = 8 },
     },
-    par         = 10.0,
+    par         = 2.0,
     label       = "Track 1",
     unlock_cost = nil,
     shop        = {
@@ -25,7 +25,7 @@ M.TRACKS        = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 50,
+        base_cost = 5,
         growth    = 1.55
       },
       {

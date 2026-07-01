@@ -4,10 +4,10 @@ local popups               = require "popups"
 local car                  = require "car"
 local persist              = require "persist"
 
-local CHECKPOINT_PAY       = 25
-local GHOST_CHECKPOINT_PAY = 8
-local COIN_PAY             = 10
-local GHOST_COIN_PAY       = 3
+local CHECKPOINT_PAY       = 5
+local GHOST_CHECKPOINT_PAY = 1
+local COIN_PAY             = 5
+local GHOST_COIN_PAY       = 1
 local PAR_TIME             = 10.0
 local SPEED_MULT_P         = 2
 
