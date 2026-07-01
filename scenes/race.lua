@@ -15,6 +15,11 @@ local countdown_time   = 0
 
 local M                = {}
 
+local accel_hint       = input.mapping_for(input.BTN1) .. " to accelerate\n"
+local right_hint       = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
+local left_hint        = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
+local hints            = accel_hint .. right_hint .. left_hint
+
 function M.enter()
   State.race = {
     next_checkpoint = 1,
@@ -142,20 +147,19 @@ local function draw_help()
   local tw          = usagi.measure_text(title) * title_scale
   local ty          = 70
 
-  local btn_label   = input.mapping_for(input.BTN1) or "BTN1"
-  local body        = "Hold " .. btn_label .. " to accelerate"
-  local body_scale  = 2
-  local bw          = usagi.measure_text(body) * body_scale
-  local by          = ty + 50
 
-  local btn_w       = 180
-  local btn_y       = by + 40
+  local body_scale = 2
+  local bw         = usagi.measure_text(hints) * body_scale
+  local by         = ty + 50
 
-  local panel_pad   = 16
-  local panel_w     = math.max(tw, bw, btn_w) + panel_pad * 2
-  local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
-  local panel_y     = ty - panel_pad
-  local panel_h     = (btn_y + 32 + panel_pad) - panel_y
+  local btn_w      = 180
+  local btn_y      = by + 90
+
+  local panel_pad  = 16
+  local panel_w    = math.max(tw, bw, btn_w) + panel_pad * 2
+  local panel_x    = math.floor((usagi.GAME_W - panel_w) / 2)
+  local panel_y    = ty - panel_pad
+  local panel_h    = (btn_y + 32 + panel_pad) - panel_y
   gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
   gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
 
@@ -163,7 +167,7 @@ local function draw_help()
   gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
 
   local bx = math.floor((usagi.GAME_W - bw) / 2)
-  gfx.text_ex(body, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  gfx.text_ex(hints, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
 
   local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
   if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
@@ -317,11 +321,9 @@ function M.draw()
       end
     end
     if race.first_race then
-      local btn_label = input.mapping_for(input.BTN1) or "BTN1"
-      local hint       = "Hold " .. btn_label .. " to accelerate"
-      local hw         = usagi.measure_text(hint)
-      local hx         = math.floor((usagi.GAME_W - hw) / 2)
-      gfx.text_ex(hint, hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+      local hw = usagi.measure_text(hints)
+      local hx = math.floor((usagi.GAME_W - hw) / 2)
+      gfx.text_ex(hints, hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
     end
   end
 end
