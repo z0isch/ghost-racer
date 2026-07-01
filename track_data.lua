@@ -16,7 +16,7 @@ M.TRACKS        = {
     coins       = {
       { col = 18, row = 8 },
     },
-    par         = 2.0,
+    par         = 4.0,
     label       = "Track 1",
     unlock_cost = nil,
     shop        = {
@@ -41,15 +41,7 @@ M.TRACKS        = {
         currency  = "coin",
         max       = 5,
         base_cost = 5,
-        growth    = 2
-      },
-      {
-        kind      = "top_speed",
-        label     = "Top Speed",
-        currency  = "coin",
-        max       = 5,
-        base_cost = 5,
-        growth    = 2
+        growth    = 1.6
       },
     },
   },

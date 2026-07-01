@@ -4,10 +4,10 @@ local track_data        = require "track_data"
 
 local CAR_SIZE          = 16
 local CAR_MARGIN        = 3
-local ACCEL_BASE        = 50
-local ACCEL_STEP        = 15
+local ACCEL_BASE        = 30
+local ACCEL_STEP        = 10
 local TOP_VEL_BASE      = 200
-local TOP_VEL_STEP      = 30
+local TOP_VEL_STEP      = 15
 local MAX_BOOSTS        = 10
 local OVERSPEED_IMPULSE = 100
 local OVERSPEED_DECAY   = 100

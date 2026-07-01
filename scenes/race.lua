@@ -225,6 +225,10 @@ local function draw_race_result()
     gfx.text_ex(unit_text, cx + vw, y, scale, 0, unit_color, 1)
   end
 
+  local function is_zero_delta(v)
+    return tonumber(string.format("%.2f", v)) == 0
+  end
+
   local owns_ghost = economy.owns_any_ghost()
   local show_rates = owns_ghost
   local show_coins = State.coins_collected
@@ -237,7 +241,7 @@ local function draw_race_result()
     centered_text(string.format("%s%.2fs", time_sign, math.abs(race.time_delta)), y, 2, time_col)
     y = y + 22
 
-    if show_rates then
+    if show_rates and not is_zero_delta(race.cash_rate_delta) then
       local cash_col  = delta_color(race.cash_rate_delta)
       local cash_sign = race.cash_rate_delta >= 0 and "+" or ""
       centered_rate_delta(string.format("%s%.2f", cash_sign, race.cash_rate_delta),
@@ -245,7 +249,7 @@ local function draw_race_result()
       y = y + 22
     end
 
-    if show_rates and show_coins then
+    if show_rates and show_coins and not is_zero_delta(race.coin_rate_delta) then
       local coin_col  = delta_color(race.coin_rate_delta)
       local coin_sign = race.coin_rate_delta >= 0 and "+" or ""
       centered_rate_delta(string.format("%s%.2f", coin_sign, race.coin_rate_delta),
