@@ -4,8 +4,7 @@ local popups         = require "popups"
 local car            = require "car"
 local persist        = require "persist"
 
-local CHECKPOINT_PAY = 5
-local COIN_PAY       = 5
+local PAY            = 5
 
 -- Rank multipliers, tuning knobs only - change freely.
 local RANK_MULTS     = {
@@ -20,8 +19,7 @@ local RANK_LETTERS   = { "C", "B", "A", "S" }
 
 local M              = {}
 
-M.COIN_PAY           = COIN_PAY
-M.CHECKPOINT_PAY     = CHECKPOINT_PAY
+M.PAY                = PAY
 M.RANK_MULTS         = RANK_MULTS
 
 function M.owns_any_ghost()
@@ -61,7 +59,7 @@ function M.track_raw_cash_rate(id)
   if period <= 0 then return 0 end
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
-  local pay     = #tdata.checkpoints * CHECKPOINT_PAY + (pickups and #pickups or 0) * COIN_PAY
+  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * PAY
   return tstate.ghosts * (pay / period)
 end
 
@@ -85,7 +83,7 @@ function M.lap_cash_rate(line)
   local tdata   = track_data.TRACKS[State.active_track]
   local tstate  = State.tracks[State.active_track]
   local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins)
-  local pay     = #tdata.checkpoints * CHECKPOINT_PAY + (pickups and #pickups or 0) * COIN_PAY
+  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * PAY
   return pay / period
 end
 
@@ -145,8 +143,7 @@ function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
   local mult   = M.rank_mult(id, tstate.cash_per_sec)
-  local base   = event.kind == "coin" and COIN_PAY or CHECKPOINT_PAY
-  local pay    = base * mult
+  local pay    = PAY * mult
   State.money  = State.money + pay
   if id == State.active_track then
     popups.spawn({

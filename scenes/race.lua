@@ -111,11 +111,11 @@ function M.update(dt)
       if not race.coins_collected[ci]
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
-        State.money              = State.money + economy.COIN_PAY
-        race.earned              = race.earned + economy.COIN_PAY
+        State.money              = State.money + economy.PAY
+        race.earned              = race.earned + economy.PAY
         sfx.play("coin")
         popups.spawn({
-          amount = economy.COIN_PAY,
+          amount = economy.PAY,
           x      = coin.col * track_data.tile_size + track_data.tile_size / 2,
           y      = coin.row * track_data.tile_size,
         })
@@ -124,10 +124,10 @@ function M.update(dt)
 
     local cp = tdata.checkpoints[race.next_checkpoint]
     if cp and util.rect_overlap(car_rect, track_data.checkpoint_rect(cp)) then
-      State.money = State.money + economy.CHECKPOINT_PAY
-      race.earned = race.earned + economy.CHECKPOINT_PAY
+      State.money = State.money + economy.PAY
+      race.earned = race.earned + economy.PAY
       popups.spawn({
-        amount = economy.CHECKPOINT_PAY,
+        amount = economy.PAY,
         x      = car_rect.x + car.SIZE / 2,
         y      = car_rect.y,
       })
@@ -217,10 +217,10 @@ local function draw_race_result()
   end
   y                          = y + 44
 
-  local ghost_cp, ghost_coin = economy.CHECKPOINT_PAY * race.ghost_mult, economy.COIN_PAY * race.ghost_mult
-  local run_cp, run_coin     = economy.CHECKPOINT_PAY * race.run_mult, economy.COIN_PAY * race.run_mult
+  local ghost_pay = economy.PAY * race.ghost_mult
+  local run_pay   = economy.PAY * race.run_mult
   if race.has_baseline then
-    centered_text("Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", run_coin), y, 2, gfx.COLOR_WHITE)
+    centered_text("Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", run_pay), y, 2, gfx.COLOR_WHITE)
     y = y + 25
   else
   end
