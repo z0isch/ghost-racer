@@ -41,8 +41,8 @@ function M.load()
     State.money     = loaded.money or 0
     State.seen_help = loaded.seen_help or false
 
-    State.accel     = math.min(loaded.accel or 0, track_data.kind_max("accel"))
-    State.top_speed = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed"))
+    State.accel     = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
+    State.top_speed = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed") or 0)
 
     if loaded.active_track and track_data.TRACKS[loaded.active_track] then
       State.active_track = loaded.active_track

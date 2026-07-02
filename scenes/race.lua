@@ -219,11 +219,11 @@ local function draw_race_result()
 
   if race.has_baseline then
     local mult_col = delta_color(race.run_mult - race.ghost_mult)
-    centered_text(string.format("x%.1f -> x%.1f", race.ghost_mult, race.run_mult), y, 1, mult_col)
+    centered_text(string.format("x%.1f -> x%.1f", race.ghost_mult, race.run_mult), y, 2, mult_col)
   else
-    centered_text(string.format("x%.1f", race.run_mult), y, 1, gfx.COLOR_LIGHT_GRAY)
+    centered_text(string.format("x%.1f", race.run_mult), y, 2, gfx.COLOR_LIGHT_GRAY)
   end
-  y = y + 16
+  y = y + 25
 
   if race.has_baseline then
     local time_col = delta_color(race.time_delta)

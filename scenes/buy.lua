@@ -102,9 +102,12 @@ function M.draw_shop()
   local lbl_w    = usagi.measure_text(lbl_text) * 2
   gfx.text_ex(lbl_text, x + math.floor((w - lbl_w) / 2), nav_y + 2, 2, 0, gfx.COLOR_WHITE, 1)
 
-  local info_y     = nav_y + th_a * 2 + 6
+  local info_y    = nav_y + th_a * 2
+  local rank_mult = economy.RANK_MULTS[economy.track_rank(id)]
+  local rank_text = string.format("%s RANK", economy.track_rank(id))
+  gfx.text_ex(rank_text, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  info_y           = info_y + 10
   local raw_rate   = economy.track_raw_cash_rate(id)
-  local rank_mult  = economy.RANK_MULTS[economy.track_rank(id)]
   local rate_text  = string.format("%.2f x %.1d = %.2f $/sec",
     raw_rate, rank_mult, raw_rate * rank_mult)
   local rate_w     = usagi.measure_text(rate_text)
