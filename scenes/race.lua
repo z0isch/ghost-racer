@@ -215,24 +215,18 @@ local function draw_race_result()
   else
     centered_text(race.run_rank .. " RANK", y, 4, gfx.COLOR_WHITE)
   end
-  y = y + 44
+  y                          = y + 44
 
+  local ghost_cp, ghost_coin = economy.CHECKPOINT_PAY * race.ghost_mult, economy.COIN_PAY * race.ghost_mult
+  local run_cp, run_coin     = economy.CHECKPOINT_PAY * race.run_mult, economy.COIN_PAY * race.run_mult
   if race.has_baseline then
-    local mult_col = delta_color(race.run_mult - race.ghost_mult)
-    centered_text(string.format("x%.1f -> x%.1f", race.ghost_mult, race.run_mult), y, 2, mult_col)
+    centered_text("Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", run_coin), y, 2, gfx.COLOR_WHITE)
+    y = y + 25
   else
-    centered_text(string.format("x%.1f", race.run_mult), y, 2, gfx.COLOR_LIGHT_GRAY)
   end
-  y = y + 25
+
 
   if race.has_baseline then
-    local time_col = delta_color(race.time_delta)
-    centered_text(string.format("%.2fs -> %.2fs", race.prev_time, race.run_time), y, 2, time_col)
-    y = y + 25
-    local earned_col = delta_color(race.earned_delta)
-    centered_text(string.format("$%.0f -> $%.0f", race.prev_earned, race.earned), y, 2, earned_col)
-    y = y + 25
-
     local bw = 180
     if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
       ghost.promote()
@@ -240,9 +234,6 @@ local function draw_race_result()
       SceneGoto("buy")
     end
   else
-    centered_text(string.format("%.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
-    y = y + 25
-    centered_text(string.format("$%.2f", math.abs(race.earned)), y, 2, gfx.COLOR_WHITE)
     y = y + 25
     local bw = 180
     if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then

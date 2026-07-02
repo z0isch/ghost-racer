@@ -15,12 +15,7 @@ function M.draw()
 
   local cash_x         = (usagi.GAME_W - cash_w) / 2
 
-  local show_rates     = economy.owns_any_ghost()
-
   gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
-  if show_rates then
-    --gfx.text_ex(cash_rate_text, cash_x, rate_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
-  end
 end
 
 return M

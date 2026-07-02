@@ -1,23 +1,28 @@
-local ghost                = require "ghost"
-local track_data           = require "track_data"
-local popups               = require "popups"
-local car                  = require "car"
-local persist              = require "persist"
+local ghost          = require "ghost"
+local track_data     = require "track_data"
+local popups         = require "popups"
+local car            = require "car"
+local persist        = require "persist"
 
-local CHECKPOINT_PAY       = 5
-local GHOST_CHECKPOINT_PAY = 1
-local COIN_PAY             = 5
+local CHECKPOINT_PAY = 5
+local COIN_PAY       = 5
 
 -- Rank multipliers, tuning knobs only - change freely.
-local RANK_MULTS           = { D = 1.0, C = 1.5, B = 2.0, A = 3.0, S = 5.0 }
+local RANK_MULTS     = {
+  D = 0.2,
+  C = 0.4,
+  B = 0.6,
+  A = 1.0,
+  S = 2.0
+}
 -- Ascending order of ranks above the D floor, checked against track_data.TRACKS[id].ranks.
-local RANK_LETTERS         = { "C", "B", "A", "S" }
+local RANK_LETTERS   = { "C", "B", "A", "S" }
 
-local M                    = {}
+local M              = {}
 
-M.COIN_PAY                 = COIN_PAY
-M.CHECKPOINT_PAY           = CHECKPOINT_PAY
-M.RANK_MULTS               = RANK_MULTS
+M.COIN_PAY           = COIN_PAY
+M.CHECKPOINT_PAY     = CHECKPOINT_PAY
+M.RANK_MULTS         = RANK_MULTS
 
 function M.owns_any_ghost()
   for _, tstate in pairs(State.tracks) do
@@ -56,8 +61,8 @@ function M.track_raw_cash_rate(id)
   if period <= 0 then return 0 end
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
-  local count   = #tdata.checkpoints + (pickups and #pickups or 0)
-  return tstate.ghosts * (count * GHOST_CHECKPOINT_PAY / period)
+  local pay     = #tdata.checkpoints * CHECKPOINT_PAY + (pickups and #pickups or 0) * COIN_PAY
+  return tstate.ghosts * (pay / period)
 end
 
 function M.track_cash_rate(id)
@@ -80,8 +85,8 @@ function M.lap_cash_rate(line)
   local tdata   = track_data.TRACKS[State.active_track]
   local tstate  = State.tracks[State.active_track]
   local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins)
-  local count   = #tdata.checkpoints + (pickups and #pickups or 0)
-  return count * GHOST_CHECKPOINT_PAY / period
+  local pay     = #tdata.checkpoints * CHECKPOINT_PAY + (pickups and #pickups or 0) * COIN_PAY
+  return pay / period
 end
 
 function M.upgrade_cost(kind)
@@ -140,7 +145,8 @@ function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
   local mult   = M.rank_mult(id, tstate.cash_per_sec)
-  local pay    = GHOST_CHECKPOINT_PAY * mult
+  local base   = event.kind == "coin" and COIN_PAY or CHECKPOINT_PAY
+  local pay    = base * mult
   State.money  = State.money + pay
   if id == State.active_track then
     popups.spawn({
