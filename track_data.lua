@@ -9,7 +9,7 @@ M.tile_size     = track1.tilewidth
 M.TRACKS        = {
   track1 = {
     map         = track1,
-    spawn       = { col = 5, row = 11 },
+    spawn       = { col = 5, row = 14 },
     checkpoints = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
@@ -38,9 +38,9 @@ M.TRACKS        = {
       {
         kind      = "accel",
         label     = "Acceleration",
-        currency  = "coin",
+        currency  = "cash",
         max       = 5,
-        base_cost = 5,
+        base_cost = 25,
         growth    = 1.6
       },
     },

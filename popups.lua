@@ -31,13 +31,11 @@ function M.draw()
     local t     = p.age / CASH_POP_LIFE
     local scale = p.ghost and 1 or 2
     local alpha = (1 - t) * (p.ghost and 0.6 or 1) * (p.alpha_mul or 1)
-    local py    = p.y - t * CASH_POP_RISE
-    local color = gfx.COLOR_GREEN
-    if p.currency == "coin" then color = gfx.COLOR_YELLOW end
+    local py   = p.y - t * CASH_POP_RISE
     local text = string.format("%.0f", p.amount)
     local tw   = usagi.measure_text(text) * scale
     local px   = math.floor(p.x - tw / 2)
-    gfx.text_ex(text, px, py, scale, 0, color, alpha)
+    gfx.text_ex(text, px, py, scale, 0, gfx.COLOR_GREEN, alpha)
   end
 end
 

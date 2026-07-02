@@ -28,7 +28,6 @@ function M.enter()
     time            = 0,
     phase           = State.seen_help and "countdown" or "help",
     earned          = 0,
-    coins_earned    = 0,
     coins_collected = {},
     first_race      = not State.seen_help,
   }
@@ -57,31 +56,20 @@ local function finish_race()
   local recording = ghost.get_recording()
   race.run_time   = race.time
 
-  if not State.coins_collected then
-    ghost.promote()
-    persist.save()
-    SceneGoto("buy")
-    return
-  end
-
-  race.phase                 = "result"
-  local has_baseline         = tstate.ghost_line ~= nil
-  race.has_baseline          = has_baseline
-  race.run_cash_rate         = economy.lap_cash_rate(recording)
-  race.run_coin_rate         = economy.lap_coin_rate(recording)
-  local par                  = track_data.TRACKS[id].par
-  race.run_mult              = economy.speed_mult(race.run_time, par)
-  race.ghost_mult            = economy.speed_mult(tstate.best_time, par)
-  race.result_start_time     = usagi.elapsed
-  local ghosts               = tstate.ghosts
-  race.run_total_rate        = ghosts * race.run_cash_rate * race.run_mult
-  race.ghost_total_rate      = economy.track_cash_rate(id)
-  race.run_total_coin_rate   = ghosts * race.run_coin_rate * race.run_mult
-  race.ghost_total_coin_rate = economy.track_coin_rate(id)
+  race.phase             = "result"
+  local has_baseline     = tstate.ghost_line ~= nil
+  race.has_baseline      = has_baseline
+  race.run_cash_rate     = economy.lap_cash_rate(recording)
+  local par              = track_data.TRACKS[id].par
+  race.run_mult          = economy.speed_mult(race.run_time, par)
+  race.ghost_mult        = economy.speed_mult(tstate.best_time, par)
+  race.result_start_time = usagi.elapsed
+  local ghosts           = tstate.ghosts
+  race.run_total_rate    = ghosts * race.run_cash_rate * race.run_mult
+  race.ghost_total_rate  = economy.track_cash_rate(id)
   if has_baseline then
     race.time_delta      = tstate.best_time - race.time
     race.cash_rate_delta = race.run_total_rate - race.ghost_total_rate
-    race.coin_rate_delta = race.run_total_coin_rate - race.ghost_total_coin_rate
   end
 end
 
@@ -117,15 +105,13 @@ function M.update(dt)
       if not race.coins_collected[ci]
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
-        State.coins              = State.coins + economy.COIN_PAY
-        State.coins_collected    = true
-        race.coins_earned        = race.coins_earned + economy.COIN_PAY
+        State.money              = State.money + economy.COIN_PAY
+        race.earned              = race.earned + economy.COIN_PAY
         sfx.play("coin")
         popups.spawn({
-          amount   = economy.COIN_PAY,
-          currency = "coin",
-          x        = coin.col * track_data.tile_size + track_data.tile_size / 2,
-          y        = coin.row * track_data.tile_size,
+          amount = economy.COIN_PAY,
+          x      = coin.col * track_data.tile_size + track_data.tile_size / 2,
+          y      = coin.row * track_data.tile_size,
         })
       end
     end
@@ -135,10 +121,9 @@ function M.update(dt)
       State.money = State.money + economy.CHECKPOINT_PAY
       race.earned = race.earned + economy.CHECKPOINT_PAY
       popups.spawn({
-        amount   = economy.CHECKPOINT_PAY,
-        currency = "cash",
-        x        = car_rect.x + car.SIZE / 2,
-        y        = car_rect.y,
+        amount = economy.CHECKPOINT_PAY,
+        x      = car_rect.x + car.SIZE / 2,
+        y      = car_rect.y,
       })
       race.next_checkpoint = race.next_checkpoint + 1
       if race.next_checkpoint > #tdata.checkpoints then
@@ -198,8 +183,7 @@ end
 
 local function draw_race_result()
   dim.draw(usagi.GAME_W, usagi.GAME_H)
-  local race      = State.race
-  local coin_icon = economy.COIN_ICON
+  local race = State.race
 
   local function centered_text(text, y, scale, color)
     local tw = usagi.measure_text(text) * scale
@@ -231,7 +215,6 @@ local function draw_race_result()
 
   local owns_ghost = economy.owns_any_ghost()
   local show_rates = owns_ghost
-  local show_coins = State.coins_collected
 
   local y = 80
 
@@ -249,13 +232,6 @@ local function draw_race_result()
       y = y + 22
     end
 
-    if show_rates and show_coins and not is_zero_delta(race.coin_rate_delta) then
-      local coin_col  = delta_color(race.coin_rate_delta)
-      local coin_sign = race.coin_rate_delta >= 0 and "+" or ""
-      centered_rate_delta(string.format("%s%.2f", coin_sign, race.coin_rate_delta),
-        " " .. coin_icon .. "/sec", coin_col, gfx.COLOR_YELLOW, y, 2)
-      y = y + 22
-    end
     y = y + 12
 
     if owns_ghost then
@@ -284,10 +260,6 @@ local function draw_race_result()
     y = y + 22
     if show_rates then
       centered_text(string.format("%.2f/sec", race.run_cash_rate), y, 2, gfx.COLOR_WHITE)
-      y = y + 22
-    end
-    if show_rates and show_coins then
-      centered_text(string.format("%.2f/sec", race.run_coin_rate), y, 2, gfx.COLOR_WHITE)
       y = y + 22
     end
     y = y + 12

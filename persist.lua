@@ -6,8 +6,6 @@ local function default_state()
   return {
     mode            = "buy",
     money           = 0,
-    coins           = 0,
-    coins_collected = false,
     seen_help       = false,
     accel           = 0,
     top_speed       = 0,
@@ -19,7 +17,6 @@ local function default_state()
       time            = 0,
       phase           = "countdown",
       earned          = 0,
-      coins_earned    = 0,
       coins_collected = {},
     },
   }
@@ -27,15 +24,13 @@ end
 
 function M.save()
   usagi.save({
-    money           = State.money,
-    coins           = State.coins,
-    coins_collected = State.coins_collected,
-    seen_help       = State.seen_help,
-    accel           = State.accel,
-    top_speed       = State.top_speed,
-    active_track    = State.active_track,
-    unlocked        = State.unlocked,
-    tracks          = State.tracks,
+    money        = State.money,
+    seen_help    = State.seen_help,
+    accel        = State.accel,
+    top_speed    = State.top_speed,
+    active_track = State.active_track,
+    unlocked     = State.unlocked,
+    tracks       = State.tracks,
   })
 end
 
@@ -43,10 +38,8 @@ function M.load()
   local loaded = usagi.load()
   State = default_state()
   if loaded then
-    State.money           = loaded.money or 0
-    State.coins           = loaded.coins or 0
-    State.coins_collected = loaded.coins_collected or false
-    State.seen_help       = loaded.seen_help or false
+    State.money     = loaded.money or 0
+    State.seen_help = loaded.seen_help or false
 
     State.accel           = math.min(loaded.accel, track_data.kind_max("accel"))
     State.top_speed       = math.min(loaded.top_speed, track_data.kind_max("top_speed"))
