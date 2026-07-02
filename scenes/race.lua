@@ -234,26 +234,11 @@ local function draw_race_result()
 
     y = y + 12
 
-    if owns_ghost then
-      local bw   = 150
-      local btnm = 8
-      local lx   = math.floor((usagi.GAME_W - bw * 2 - btnm) / 2)
-      if ui.button("ACCEPT RUN", lx, y, { w = bw, scale = 2 }) then
-        ghost.promote()
-        persist.save()
-        SceneGoto("buy")
-      end
-      if ui.button("USE PREVIOUS", lx + bw + btnm, y, { w = bw, scale = 2 }) then
-        persist.save()
-        SceneGoto("buy")
-      end
-    else
-      local bw = 180
-      if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
-        ghost.promote()
-        persist.save()
-        SceneGoto("buy")
-      end
+    local bw = 180
+    if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
+      ghost.promote()
+      persist.save()
+      SceneGoto("buy")
     end
   else
     centered_text(string.format("Time %.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
