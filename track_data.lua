@@ -16,7 +16,7 @@ M.TRACKS        = {
     coins       = {
       { col = 18, row = 8 },
     },
-    par         = 4.0,
+    ranks       = { C = 1.0, B = 1.5, A = 2.0, S = 2.5 },
     label       = "Track 1",
     unlock_cost = nil,
     shop        = {
@@ -57,7 +57,7 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    par         = 10.0,
+    ranks       = { C = 1.0, B = 1.5, A = 2.2, S = 3.0 },
     label       = "Track 2",
     unlock_cost = 250,
     shop        = {
@@ -91,7 +91,7 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    par         = 10.0,
+    ranks       = { C = 1.2, B = 1.8, A = 2.5, S = 3.5 },
     label       = "Track 3",
     unlock_cost = 500,
     shop        = {
@@ -148,13 +148,13 @@ function M.checkpoint_rect(cp)
   return { x = cp.col * ts, y = cp.row * ts, w = cp.w * ts, h = cp.h * ts }
 end
 
-function M.default_track_state(id)
+function M.default_track_state()
   return {
-    ghost_line = nil,
-    best_time  = nil,
-    par        = M.TRACKS[id].par,
-    ghosts     = 0,
-    coins      = 0,
+    ghost_line   = nil,
+    best_time    = nil,
+    cash_per_sec = nil,
+    ghosts       = 0,
+    coins        = 0,
   }
 end
 

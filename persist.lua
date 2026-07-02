@@ -11,7 +11,7 @@ local function default_state()
     top_speed       = 0,
     active_track    = "track1",
     unlocked        = { track1 = true },
-    tracks          = { track1 = track_data.default_track_state("track1") },
+    tracks          = { track1 = track_data.default_track_state() },
     race            = {
       next_checkpoint = 1,
       time            = 0,
@@ -53,7 +53,7 @@ function M.load()
         if track_data.TRACKS[id] then
           State.unlocked[id] = v
           if v and not State.tracks[id] then
-            State.tracks[id] = track_data.default_track_state(id)
+            State.tracks[id] = track_data.default_track_state()
           end
         end
       end
@@ -63,14 +63,15 @@ function M.load()
       for id, lt in pairs(loaded.tracks) do
         if track_data.TRACKS[id] then
           if not State.tracks[id] then
-            State.tracks[id] = track_data.default_track_state(id)
+            State.tracks[id] = track_data.default_track_state()
           end
-          local ts      = State.tracks[id]
-          local tdata   = track_data.TRACKS[id]
-          ts.ghost_line = lt.ghost_line
-          ts.best_time  = lt.best_time
-          ts.ghosts     = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-          ts.coins      = math.min(lt.coins or 0, #tdata.coins)
+          local ts        = State.tracks[id]
+          local tdata     = track_data.TRACKS[id]
+          ts.ghost_line   = lt.ghost_line
+          ts.best_time    = lt.best_time
+          ts.cash_per_sec = lt.cash_per_sec
+          ts.ghosts       = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
+          ts.coins        = math.min(lt.coins or 0, #tdata.coins)
         end
       end
     else

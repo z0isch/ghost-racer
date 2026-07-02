@@ -209,9 +209,10 @@ function M.get_recording()
 end
 
 function M.promote()
-  local id                    = State.active_track
-  State.tracks[id].ghost_line = run_samples
-  State.tracks[id].best_time  = State.race.run_time
+  local id                      = State.active_track
+  State.tracks[id].ghost_line   = run_samples
+  State.tracks[id].best_time    = State.race.run_time
+  State.tracks[id].cash_per_sec = State.race.run_rate
   M.rebuild_sim(id)
 end
 

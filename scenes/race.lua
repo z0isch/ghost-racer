@@ -60,9 +60,10 @@ local function finish_race()
   local has_baseline     = tstate.ghost_line ~= nil
   race.has_baseline      = has_baseline
   race.run_cash_rate     = economy.lap_cash_rate(recording)
-  local par              = track_data.TRACKS[id].par
-  race.run_mult          = economy.speed_mult(race.run_time, par)
-  race.ghost_mult        = economy.speed_mult(tstate.best_time, par)
+  race.run_rate          = race.run_time > 0 and (race.earned / race.run_time) or 0
+  race.run_rank          = economy.rank_for_rate(id, race.run_rate)
+  race.run_mult          = economy.RANK_MULTS[race.run_rank]
+  race.ghost_mult        = economy.RANK_MULTS[economy.track_rank(id)]
   race.result_start_time = usagi.elapsed
   local ghosts           = tstate.ghosts
   race.run_total_rate    = ghosts * race.run_cash_rate * race.run_mult
@@ -217,6 +218,9 @@ local function draw_race_result()
   local show_rates = owns_ghost
 
   local y = 80
+
+  centered_text(race.run_rank, y, 4, gfx.COLOR_WHITE)
+  y = y + 44
 
   if race.has_baseline then
     local time_col  = delta_color(race.time_delta)
