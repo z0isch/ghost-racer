@@ -109,7 +109,7 @@ function M.draw_shop()
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 13
-    local ghost_earn_label = "Ghosts earn" .. string.format(" $%.2f per © and Checkpoint", economy.PAY * rank_mult)
+    local ghost_earn_label = "Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", economy.PAY * rank_mult)
     gfx.text_ex(ghost_earn_label, x, info_y, 1, 0,
       gfx.COLOR_LIGHT_GRAY, 1)
   end
