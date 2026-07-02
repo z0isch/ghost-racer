@@ -4,15 +4,15 @@ local M = {}
 
 local function default_state()
   return {
-    mode            = "buy",
-    money           = 0,
-    seen_help       = false,
-    accel           = 0,
-    top_speed       = 0,
-    active_track    = "track1",
-    unlocked        = { track1 = true },
-    tracks          = { track1 = track_data.default_track_state() },
-    race            = {
+    mode         = "buy",
+    money        = 0,
+    seen_help    = false,
+    accel        = 0,
+    top_speed    = 0,
+    active_track = "track1",
+    unlocked     = { track1 = true },
+    tracks       = { track1 = track_data.default_track_state() },
+    race         = {
       next_checkpoint = 1,
       time            = 0,
       phase           = "countdown",
@@ -41,8 +41,8 @@ function M.load()
     State.money     = loaded.money or 0
     State.seen_help = loaded.seen_help or false
 
-    State.accel           = math.min(loaded.accel, track_data.kind_max("accel"))
-    State.top_speed       = math.min(loaded.top_speed, track_data.kind_max("top_speed"))
+    State.accel     = math.min(loaded.accel or 0, track_data.kind_max("accel"))
+    State.top_speed = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed"))
 
     if loaded.active_track and track_data.TRACKS[loaded.active_track] then
       State.active_track = loaded.active_track
@@ -69,6 +69,7 @@ function M.load()
           local tdata     = track_data.TRACKS[id]
           ts.ghost_line   = lt.ghost_line
           ts.best_time    = lt.best_time
+          ts.best_earned  = lt.best_earned
           ts.cash_per_sec = lt.cash_per_sec
           ts.ghosts       = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
           ts.coins        = math.min(lt.coins or 0, #tdata.coins)

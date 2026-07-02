@@ -28,9 +28,9 @@ function M.update(dt)
 end
 
 local function shop_button(item, x, y, w)
-  local kind  = item.kind
-  local label = item.label
-  local cost  = economy.upgrade_cost(kind)
+  local kind       = item.kind
+  local label      = item.label
+  local cost       = economy.upgrade_cost(kind)
 
   local affordable = cost ~= nil and (cost == 0 or State.money >= cost)
   if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
@@ -103,12 +103,15 @@ function M.draw_shop()
   gfx.text_ex(lbl_text, x + math.floor((w - lbl_w) / 2), nav_y + 2, 2, 0, gfx.COLOR_WHITE, 1)
 
   local info_y     = nav_y + th_a * 2 + 6
-  local rate_text  = string.format("[%s] %.2f $/sec", economy.track_rank(id), economy.track_cash_rate(id))
+  local raw_rate   = economy.track_raw_cash_rate(id)
+  local rank_mult  = economy.RANK_MULTS[economy.track_rank(id)]
+  local rate_text  = string.format("%.2f x %.1d = %.2f $/sec",
+    raw_rate, rank_mult, raw_rate * rank_mult)
   local rate_w     = usagi.measure_text(rate_text)
   local show_rates = economy.owns_any_ghost()
   if show_rates then
     local info_x = x + math.floor((w - rate_w) / 2)
-    gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_GREEN, 1)
+    gfx.text_ex(rate_text, info_x, info_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
   end
 
   local shop_y = info_y + th_a + 6

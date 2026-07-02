@@ -10,6 +10,7 @@ local track_data       = require "track_data"
 local persist          = require "persist"
 
 local GHOST_RACE_ALPHA = 0.03
+local RANK_ORDER       = { D = 1, C = 2, B = 3, A = 4, S = 5 }
 
 local countdown_time   = 0
 
@@ -50,11 +51,11 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race      = State.race
-  local id        = State.active_track
-  local tstate    = State.tracks[id]
-  local recording = ghost.get_recording()
-  race.run_time   = race.time
+  local race             = State.race
+  local id               = State.active_track
+  local tstate           = State.tracks[id]
+  local recording        = ghost.get_recording()
+  race.run_time          = race.time
 
   race.phase             = "result"
   local has_baseline     = tstate.ghost_line ~= nil
@@ -71,6 +72,10 @@ local function finish_race()
   if has_baseline then
     race.time_delta      = tstate.best_time - race.time
     race.cash_rate_delta = race.run_total_rate - race.ghost_total_rate
+    race.prev_time       = tstate.best_time
+    race.prev_earned     = tstate.best_earned or race.earned
+    race.earned_delta    = race.earned - race.prev_earned
+    race.prev_rank       = economy.track_rank(id)
   end
 end
 
@@ -202,41 +207,31 @@ local function draw_race_result()
     end
   end
 
-  local function centered_rate_delta(value_text, unit_text, value_color, unit_color, y, scale)
-    local vw = usagi.measure_text(value_text) * scale
-    local uw = usagi.measure_text(unit_text) * scale
-    local cx = math.floor((usagi.GAME_W - (vw + uw)) / 2)
-    gfx.text_ex(value_text, cx, y, scale, 0, value_color, 1)
-    gfx.text_ex(unit_text, cx + vw, y, scale, 0, unit_color, 1)
-  end
-
-  local function is_zero_delta(v)
-    return tonumber(string.format("%.2f", v)) == 0
-  end
-
-  local owns_ghost = economy.owns_any_ghost()
-  local show_rates = owns_ghost
-
   local y = 80
 
-  centered_text(race.run_rank, y, 4, gfx.COLOR_WHITE)
+  if race.has_baseline then
+    local rank_col = delta_color(RANK_ORDER[race.run_rank] - RANK_ORDER[race.prev_rank])
+    centered_text(race.prev_rank .. " -> " .. race.run_rank .. " RANK", y, 4, rank_col)
+  else
+    centered_text(race.run_rank .. " RANK", y, 4, gfx.COLOR_WHITE)
+  end
   y = y + 44
 
   if race.has_baseline then
-    local time_col  = delta_color(race.time_delta)
-    local time_sign = race.time_delta >= 0 and "-" or "+"
-    centered_text(string.format("%s%.2fs", time_sign, math.abs(race.time_delta)), y, 2, time_col)
-    y = y + 22
+    local mult_col = delta_color(race.run_mult - race.ghost_mult)
+    centered_text(string.format("x%.1f -> x%.1f", race.ghost_mult, race.run_mult), y, 1, mult_col)
+  else
+    centered_text(string.format("x%.1f", race.run_mult), y, 1, gfx.COLOR_LIGHT_GRAY)
+  end
+  y = y + 16
 
-    if show_rates and not is_zero_delta(race.cash_rate_delta) then
-      local cash_col  = delta_color(race.cash_rate_delta)
-      local cash_sign = race.cash_rate_delta >= 0 and "+" or ""
-      centered_rate_delta(string.format("%s%.2f", cash_sign, race.cash_rate_delta),
-        " $/sec", cash_col, gfx.COLOR_GREEN, y, 2)
-      y = y + 22
-    end
-
-    y = y + 12
+  if race.has_baseline then
+    local time_col = delta_color(race.time_delta)
+    centered_text(string.format("%.2fs -> %.2fs", race.prev_time, race.run_time), y, 2, time_col)
+    y = y + 25
+    local earned_col = delta_color(race.earned_delta)
+    centered_text(string.format("$%.0f -> $%.0f", race.prev_earned, race.earned), y, 2, earned_col)
+    y = y + 25
 
     local bw = 180
     if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
@@ -245,14 +240,10 @@ local function draw_race_result()
       SceneGoto("buy")
     end
   else
-    centered_text(string.format("Time %.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
-    y = y + 22
-    if show_rates then
-      centered_text(string.format("%.2f/sec", race.run_cash_rate), y, 2, gfx.COLOR_WHITE)
-      y = y + 22
-    end
-    y = y + 12
-
+    centered_text(string.format("%.2fs", race.run_time), y, 2, gfx.COLOR_WHITE)
+    y = y + 25
+    centered_text(string.format("$%.2f", math.abs(race.earned)), y, 2, gfx.COLOR_WHITE)
+    y = y + 25
     local bw = 180
     if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
       ghost.promote()

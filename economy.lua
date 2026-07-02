@@ -48,7 +48,8 @@ function M.track_rank(id)
   return M.rank_for_rate(id, tstate and tstate.cash_per_sec)
 end
 
-function M.track_cash_rate(id)
+-- $/sec earned from ghosts before the rank multiplier is applied.
+function M.track_raw_cash_rate(id)
   local tstate = State.tracks[id]
   if not tstate or not tstate.ghost_line then return 0 end
   local period = ghost.loop_period(tstate.ghost_line)
@@ -56,9 +57,13 @@ function M.track_cash_rate(id)
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
   local count   = #tdata.checkpoints + (pickups and #pickups or 0)
-  return tstate.ghosts
-      * (count * GHOST_CHECKPOINT_PAY / period)
-      * M.rank_mult(id, tstate.cash_per_sec)
+  return tstate.ghosts * (count * GHOST_CHECKPOINT_PAY / period)
+end
+
+function M.track_cash_rate(id)
+  local tstate = State.tracks[id]
+  if not tstate then return 0 end
+  return M.track_raw_cash_rate(id) * M.rank_mult(id, tstate.cash_per_sec)
 end
 
 function M.ghost_cash_rate()
