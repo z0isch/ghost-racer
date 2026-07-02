@@ -22,8 +22,8 @@ function M.draw()
   local tx         = math.floor((usagi.GAME_W - tw) / 2)
   local ty         = math.floor(usagi.GAME_H / 3 - th * scale / 2)
 
-  local wave_amp   = 3
-  local wave_speed = 3
+  local wave_amp   = 10
+  local wave_speed = 4
   local wave_gap   = 0.5
   local cx         = tx
   for i = 1, #title do
