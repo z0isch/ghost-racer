@@ -1,12 +1,33 @@
 -- Immediate-mode UI helpers. Call from _draw.
 -- ui.button returns true the frame a click completes (press + release on same button).
 -- ui.label draws scaled/colored text at (x, y).
+-- ui.rank_text draws text in the animated per-rank style (wave + color).
 
 local PAD_X = 4
 local PAD_Y = 2
 local DEFAULT_SCALE = 2
 
-local active = nil -- id of currently armed button (cleared on mouse release)
+-- Wave amplitude (px at text scale AMP_SCALE, scales with the text) and text
+-- color per rank; higher ranks bounce harder.
+local AMP_SCALE = 3
+local RANK_STYLE = {
+  D = { color = gfx.COLOR_RED, amp = 0 },
+  C = { color = gfx.COLOR_WHITE, amp = 1 },
+  B = { color = gfx.COLOR_BLUE, amp = 2 },
+  A = { color = gfx.COLOR_GREEN, amp = 3 },
+  S = { rainbow = true, amp = 4 },
+}
+
+local RAINBOW = {
+  gfx.COLOR_RED, gfx.COLOR_ORANGE, gfx.COLOR_YELLOW,
+  gfx.COLOR_GREEN, gfx.COLOR_BLUE, gfx.COLOR_INDIGO, gfx.COLOR_PINK,
+}
+
+local WAVE_SPEED = 7     -- rad/sec
+local WAVE_PHASE = 0.8   -- rad offset per character
+local RAINBOW_SPEED = 10 -- palette steps/sec
+
+local active = nil       -- id of currently armed button (cleared on mouse release)
 
 local M = {}
 
@@ -19,6 +40,26 @@ M.theme = {
   dim      = gfx.COLOR_DARK_GRAY,
   dim_text = gfx.COLOR_LIGHT_GRAY,
 }
+
+-- Draws `text` in the animated style of `rank`: per-character sine wave with
+-- amplitude rising by rank, rank color (rainbow cycle for S). Returns the
+-- drawn width so callers can lay out mixed-style lines.
+function M.rank_text(text, rank, x, y, scale)
+  local style = RANK_STYLE[rank]
+  local amp   = style.amp * scale / AMP_SCALE
+  local w     = 0
+  for i = 1, #text do
+    local ch    = text:sub(i, i)
+    local wave  = math.sin(usagi.elapsed * WAVE_SPEED + i * WAVE_PHASE) * amp
+    local color = style.color
+    if style.rainbow then
+      color = RAINBOW[(i + math.floor(usagi.elapsed * RAINBOW_SPEED)) % #RAINBOW + 1]
+    end
+    gfx.text_ex(ch, x + w, y + wave, scale, 0, color, 1)
+    w = w + usagi.measure_text(ch) * scale
+  end
+  return w
+end
 
 function M.label(text, x, y, opts)
   opts = opts or {}

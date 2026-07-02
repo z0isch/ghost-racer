@@ -41,6 +41,17 @@ function M.rank_for_rate(id, rate)
   return rank
 end
 
+-- Live $/sec for the run in progress, as if the remaining checkpoints were
+-- crossed right now. Counting the pending payouts makes the HUD rank converge
+-- on the result-screen rank instead of trailing a payout behind it.
+function M.live_race_rate()
+  local race      = State.race
+  local tdata     = track_data.TRACKS[State.active_track]
+  local remaining = #tdata.checkpoints - race.next_checkpoint + 1
+  local earned    = race.earned + remaining * PAY
+  return race.time > 0 and (earned / race.time) or math.huge
+end
+
 function M.rank_mult(id, rate)
   return RANK_MULTS[M.rank_for_rate(id, rate)]
 end

@@ -10,7 +10,6 @@ local track_data       = require "track_data"
 local persist          = require "persist"
 
 local GHOST_RACE_ALPHA = 0.03
-local RANK_ORDER       = { D = 1, C = 2, B = 3, A = 4, S = 5 }
 
 local countdown_time   = 0
 
@@ -197,23 +196,22 @@ local function draw_race_result()
     gfx.text_ex(text, cx, y, scale, 0, color or gfx.COLOR_WHITE, 1)
   end
 
-  local function delta_color(v)
-    if v > 0 then
-      return gfx.COLOR_GREEN
-    elseif v < 0 then
-      return gfx.COLOR_RED
-    else
-      return gfx.COLOR_LIGHT_GRAY
-    end
-  end
-
   local y = 80
 
+  local rank_scale = 4
+  local run_text   = race.run_rank .. " RANK"
   if race.has_baseline then
-    local rank_col = delta_color(RANK_ORDER[race.run_rank] - RANK_ORDER[race.prev_rank])
-    centered_text(race.prev_rank .. " -> " .. race.run_rank .. " RANK", y, 4, rank_col)
+    local arrow = " -> "
+    local total = (usagi.measure_text(race.prev_rank) + usagi.measure_text(arrow)
+      + usagi.measure_text(run_text)) * rank_scale
+    local rx = math.floor((usagi.GAME_W - total) / 2)
+    rx = rx + ui.rank_text(race.prev_rank, race.prev_rank, rx, y, rank_scale)
+    gfx.text_ex(arrow, rx, y, rank_scale, 0, gfx.COLOR_WHITE, 1)
+    rx = rx + usagi.measure_text(arrow) * rank_scale
+    ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
   else
-    centered_text(race.run_rank .. " RANK", y, 4, gfx.COLOR_WHITE)
+    local rx = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
+    ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
   end
   y                          = y + 44
 

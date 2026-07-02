@@ -103,9 +103,10 @@ function M.draw_shop()
   gfx.text_ex(lbl_text, x + math.floor((w - lbl_w) / 2), nav_y + 2, 2, 0, gfx.COLOR_WHITE, 1)
 
   local info_y    = nav_y + th_a * 2
-  local rank_mult = economy.RANK_MULTS[economy.track_rank(id)]
-  local rank_text = string.format("%s RANK", economy.track_rank(id))
-  gfx.text_ex(rank_text, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  local rank      = economy.track_rank(id)
+  local rank_mult = economy.RANK_MULTS[rank]
+  local rank_text = string.format("%s RANK", rank)
+  ui.rank_text(rank_text, rank, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1)
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 13
