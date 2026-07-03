@@ -141,7 +141,7 @@ function M.update(dt)
 end
 
 local function draw_help()
-  dim.draw(usagi.GAME_W, usagi.GAME_H)
+  gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
 
   local title       = "How To Race"
   local title_scale = 3
@@ -196,7 +196,7 @@ local function draw_race_result()
     gfx.text_ex(text, cx, y, scale, 0, color or gfx.COLOR_WHITE, 1)
   end
 
-  local y = 80
+  local y          = 80
 
   local rank_scale = 4
   local run_text   = race.run_rank .. " RANK"
@@ -213,7 +213,7 @@ local function draw_race_result()
     local rx = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
     ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
   end
-  y                          = y + 44
+  y               = y + 44
 
   local ghost_pay = economy.PAY * race.ghost_mult
   local run_pay   = economy.PAY * race.run_mult
