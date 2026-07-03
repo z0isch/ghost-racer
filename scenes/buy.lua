@@ -105,8 +105,8 @@ function M.draw_shop()
   local info_y    = nav_y + th_a * 2
   local rank      = economy.track_rank(id)
   local rank_mult = economy.RANK_MULTS[rank]
-  local rank_text = string.format("%s RANK", rank)
-  ui.rank_text(rank_text, rank, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1)
+  local rank_text = rank
+  ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1)
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 13

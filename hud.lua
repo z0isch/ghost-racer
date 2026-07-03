@@ -20,7 +20,7 @@ function M.draw()
 
   if State.mode == "race" and State.race and State.race.phase == "racing" then
     local rank       = economy.rank_for_rate(State.active_track, economy.live_race_rate())
-    local rank_text  = rank .. " RANK"
+    local rank_text  = rank
     local rank_scale = 3
     local rank_w     = usagi.measure_text(rank_text) * rank_scale
     local rank_x     = (usagi.GAME_W - rank_w) / 2

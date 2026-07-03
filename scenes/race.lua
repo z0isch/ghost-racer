@@ -199,7 +199,7 @@ local function draw_race_result()
   local y          = 80
 
   local rank_scale = 4
-  local run_text   = race.run_rank .. " RANK"
+  local run_text   = race.run_rank
   if race.has_baseline then
     local arrow = " -> "
     local total = (usagi.measure_text(race.prev_rank) + usagi.measure_text(arrow)

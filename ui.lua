@@ -12,7 +12,7 @@ local DEFAULT_SCALE = 2
 local AMP_SCALE = 3
 local RANK_STYLE = {
   D = { color = gfx.COLOR_RED, amp = 0 },
-  C = { color = gfx.COLOR_WHITE, amp = 1 },
+  C = { color = gfx.COLOR_PEACH, amp = 1 },
   B = { color = gfx.COLOR_BLUE, amp = 2 },
   A = { color = gfx.COLOR_GREEN, amp = 3 },
   S = { rainbow = true, amp = 4 },
@@ -20,7 +20,7 @@ local RANK_STYLE = {
 
 local RAINBOW = {
   gfx.COLOR_RED, gfx.COLOR_ORANGE, gfx.COLOR_YELLOW,
-  gfx.COLOR_GREEN, gfx.COLOR_BLUE, gfx.COLOR_INDIGO, gfx.COLOR_PINK,
+  gfx.COLOR_GREEN, gfx.COLOR_BLUE, gfx.COLOR_PINK,
 }
 
 local WAVE_SPEED = 7     -- rad/sec
