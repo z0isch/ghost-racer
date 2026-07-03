@@ -110,13 +110,13 @@ function M.draw_shop()
   end
 
   info_y = info_y + 13
-  local you_earn_label = string.format("You earn $%d per Checkpoint and ©", economy.PAY)
+  local you_earn_label = string.format("Your Rate:  $%d", economy.PAY)
   ui.coin_text(you_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   info_y = info_y + 13
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 3
-    local ghost_earn_label = "Ghosts earn" .. string.format(" $%d per Checkpoint and ©", economy.PAY * rank_mult)
+    local ghost_earn_label = string.format("Ghost Rate: $%d", economy.PAY * rank_mult)
     ui.coin_text(ghost_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   end
 

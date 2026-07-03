@@ -225,24 +225,22 @@ local function draw_race_result()
   local run_pay = economy.PAY * race.run_mult
   if race.has_baseline then
     if race.prev_rank == race.run_rank then
-      local text  = "Ghosts earn" .. string.format(" $%d per Checkpoint and ©", run_pay)
+      local text  = string.format("Ghost Rate: $%d", run_pay)
       local scale = 2
       local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
       ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
     else
       local prev_pay = economy.PAY * race.ghost_mult
       local went_up  = run_pay > prev_pay
-      local prefix   = string.format("Ghost earnings %s $%d -> ", went_up and "up" or "down", prev_pay)
+      local prefix   = string.format("Ghost Rate %s $%d -> ", went_up and "up" or "down", prev_pay)
       local new_pay  = string.format("$%d", run_pay)
-      local suffix   = " per Checkpoint and ©"
       local scale    = 2
-      local total    = usagi.measure_text(prefix .. new_pay .. suffix) * scale
+      local total    = usagi.measure_text(prefix .. new_pay) * scale
       local sx       = math.floor((usagi.GAME_W - total) / 2)
       gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
       sx = sx + usagi.measure_text(prefix) * scale
       gfx.text_ex(new_pay, sx, y, scale, 0, went_up and gfx.COLOR_GREEN or gfx.COLOR_RED, 1)
       sx = sx + usagi.measure_text(new_pay) * scale
-      ui.coin_text(suffix, sx, y, scale, gfx.COLOR_WHITE)
     end
     y = y + 30
   else
