@@ -2,6 +2,7 @@
 -- ui.button returns true the frame a click completes (press + release on same button).
 -- ui.label draws scaled/colored text at (x, y).
 -- ui.rank_text draws text in the animated per-rank style (wave + color).
+-- ui.coin_text draws text with every © in yellow.
 
 local PAD_X = 4
 local PAD_Y = 2
@@ -57,6 +58,28 @@ function M.rank_text(text, rank, x, y, scale)
     end
     gfx.text_ex(ch, x + w, y + wave, scale, 0, color, 1)
     w = w + usagi.measure_text(ch) * scale
+  end
+  return w
+end
+
+-- Draws `text` at (x, y) in `color`, with every © drawn in yellow. Returns
+-- the drawn width so callers can lay out mixed-style lines.
+function M.coin_text(text, x, y, scale, color, alpha)
+  alpha = alpha or 1
+  local w = 0
+  local i = 1
+  while i <= #text do
+    local s, e = text:find("©", i, true)
+    local chunk, chunk_color
+    if s == i then
+      chunk, chunk_color = "©", gfx.COLOR_YELLOW
+      i = e + 1
+    else
+      chunk, chunk_color = text:sub(i, s and s - 1 or #text), color
+      i = s or #text + 1
+    end
+    gfx.text_ex(chunk, x + w, y, scale, 0, chunk_color, alpha)
+    w = w + usagi.measure_text(chunk) * scale
   end
   return w
 end

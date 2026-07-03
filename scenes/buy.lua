@@ -105,14 +105,14 @@ function M.draw_shop()
   local info_y    = nav_y + th_a * 2
   local rank      = economy.track_rank(id)
   local rank_mult = economy.RANK_MULTS[rank]
-  local rank_text = rank
-  ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank_text)) / 2), info_y, 1)
+  if State.tracks[id].ghost_line then
+    ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank)) / 2), info_y, 1)
+  end
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 13
-    local ghost_earn_label = "Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", economy.PAY * rank_mult)
-    gfx.text_ex(ghost_earn_label, x, info_y, 1, 0,
-      gfx.COLOR_LIGHT_GRAY, 1)
+    local ghost_earn_label = "Ghosts earn" .. string.format(" $%d per Checkpoint and ©", economy.PAY * rank_mult)
+    ui.coin_text(ghost_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   end
 
   local shop_y = info_y + th_a + 6

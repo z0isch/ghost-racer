@@ -201,25 +201,50 @@ local function draw_race_result()
   local rank_scale = 4
   local run_text   = race.run_rank
   if race.has_baseline then
-    local arrow = " -> "
-    local total = (usagi.measure_text(race.prev_rank) + usagi.measure_text(arrow)
-      + usagi.measure_text(run_text)) * rank_scale
-    local rx = math.floor((usagi.GAME_W - total) / 2)
-    rx = rx + ui.rank_text(race.prev_rank, race.prev_rank, rx, y, rank_scale)
-    gfx.text_ex(arrow, rx, y, rank_scale, 0, gfx.COLOR_WHITE, 1)
-    rx = rx + usagi.measure_text(arrow) * rank_scale
-    ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
+    if race.prev_rank == race.run_rank then
+      centered_text("NO CHANGE", y, 3, gfx.COLOR_LIGHT_GRAY)
+      y = y + 30
+      local rx = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
+      ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
+    else
+      local arrow = " -> "
+      local total = (usagi.measure_text(race.prev_rank) + usagi.measure_text(arrow)
+        + usagi.measure_text(run_text)) * rank_scale
+      local rx = math.floor((usagi.GAME_W - total) / 2)
+      rx = rx + ui.rank_text(race.prev_rank, race.prev_rank, rx, y, rank_scale)
+      gfx.text_ex(arrow, rx, y, rank_scale, 0, gfx.COLOR_WHITE, 1)
+      rx = rx + usagi.measure_text(arrow) * rank_scale
+      ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
+    end
   else
     local rx = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
     ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
   end
-  y               = y + 44
+  y = y + 44
 
-  local ghost_pay = economy.PAY * race.ghost_mult
-  local run_pay   = economy.PAY * race.run_mult
+  local run_pay = economy.PAY * race.run_mult
   if race.has_baseline then
-    centered_text("Ghosts earn" .. string.format(" $%.2f per Checkpoint and ©", run_pay), y, 2, gfx.COLOR_WHITE)
-    y = y + 25
+    if race.prev_rank == race.run_rank then
+      local text  = "Ghosts earn" .. string.format(" $%d per Checkpoint and ©", run_pay)
+      local scale = 2
+      local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
+      ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
+    else
+      local prev_pay = economy.PAY * race.ghost_mult
+      local went_up  = run_pay > prev_pay
+      local prefix   = string.format("Ghost earnings %s $%d -> ", went_up and "up" or "down", prev_pay)
+      local new_pay  = string.format("$%d", run_pay)
+      local suffix   = " per Checkpoint and ©"
+      local scale    = 2
+      local total    = usagi.measure_text(prefix .. new_pay .. suffix) * scale
+      local sx       = math.floor((usagi.GAME_W - total) / 2)
+      gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
+      sx = sx + usagi.measure_text(prefix) * scale
+      gfx.text_ex(new_pay, sx, y, scale, 0, went_up and gfx.COLOR_GREEN or gfx.COLOR_RED, 1)
+      sx = sx + usagi.measure_text(new_pay) * scale
+      ui.coin_text(suffix, sx, y, scale, gfx.COLOR_WHITE)
+    end
+    y = y + 30
   else
   end
 
