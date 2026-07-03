@@ -76,6 +76,13 @@ local function finish_race()
     race.earned_delta    = race.earned - race.prev_earned
     race.prev_rank       = economy.track_rank(id)
   end
+
+  if (race.run_rank == "A" or race.run_rank == "S") and not tstate.a_rank_earned then
+    tstate.a_rank_earned = true
+    local idx     = track_data.get_track_index(id)
+    local next_id = track_data.TRACK_ORDER[idx + 1]
+    race.show_track_unlock_msg = next_id ~= nil and not State.unlocked[next_id]
+  end
 end
 
 function M.update(dt)
@@ -246,6 +253,10 @@ local function draw_race_result()
   else
   end
 
+  if race.show_track_unlock_msg then
+    centered_text("New track available in the shop!", y, 2, gfx.COLOR_GREEN)
+    y = y + 30
+  end
 
   if race.has_baseline then
     local bw = 180

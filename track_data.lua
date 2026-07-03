@@ -150,12 +150,13 @@ end
 
 function M.default_track_state()
   return {
-    ghost_line   = nil,
-    best_time    = nil,
-    best_earned  = nil,
-    cash_per_sec = nil,
-    ghosts       = 0,
-    coins        = 0,
+    ghost_line    = nil,
+    best_time     = nil,
+    best_earned   = nil,
+    cash_per_sec  = nil,
+    ghosts        = 0,
+    coins         = 0,
+    a_rank_earned = false,
   }
 end
 

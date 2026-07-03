@@ -73,6 +73,7 @@ function M.load()
           ts.cash_per_sec = lt.cash_per_sec
           ts.ghosts       = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
           ts.coins        = math.min(lt.coins or 0, #tdata.coins)
+          ts.a_rank_earned = lt.a_rank_earned or false
         end
       end
     else

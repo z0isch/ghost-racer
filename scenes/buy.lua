@@ -58,6 +58,31 @@ local function shop_button(item, x, y, w)
   return clicked, bh
 end
 
+local function new_track_row(track_id, next_id, next_track_idx, x, y, w)
+  local label = string.format("Track #%d", next_track_idx)
+  local _, th = usagi.measure_text(label)
+  local bh    = th * 2 + 4
+  ui.label(label, x, y + math.floor((bh - th * 2) / 2))
+
+  if not State.tracks[track_id].a_rank_earned then
+    local msg = "Earn A RANK to unlock"
+    local mw  = usagi.measure_text(msg)
+    local mx  = x + w + usagi.measure_text(label) - mw
+    local my  = y + math.floor((bh - th) / 2)
+    ui.label(msg, mx, my, { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
+    return false, bh
+  end
+
+  local cost       = track_data.TRACKS[next_id].unlock_cost
+  local affordable = State.money >= cost
+  local cost_text  = "$" .. tostring(cost)
+  local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
+  local bx         = x + w - SHOP_COST_W
+  local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
+  local clicked    = ui.button(cost_text, bx, y, btn_opts)
+  return clicked, bh
+end
+
 function M.draw()
   local id    = State.active_track
   local tdata = track_data.TRACKS[id]
@@ -106,10 +131,10 @@ function M.draw_shop()
   local rank      = economy.track_rank(id)
   local rank_mult = economy.RANK_MULTS[rank]
   if State.tracks[id].ghost_line then
-    ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank)) / 2), info_y, 1)
+    ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank)) / 2), info_y, 2)
   end
 
-  info_y = info_y + 13
+  info_y = info_y + 20
   local you_earn_label = string.format("Your Rate:  $%d", economy.PAY)
   ui.coin_text(you_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   info_y = info_y + 13
@@ -127,28 +152,18 @@ function M.draw_shop()
     shop_y = shop_y + bh + gap
   end
 
+  local next_track = idx < #track_data.TRACK_ORDER and track_data.TRACK_ORDER[idx + 1] or nil
+  if next_track and not State.unlocked[next_track] then
+    local clicked, bh = new_track_row(id, next_track, idx + 1, x, shop_y, w)
+    if clicked and economy.try_unlock_track(next_track) then
+      State.active_track = next_track
+    end
+    shop_y = shop_y + bh + gap
+  end
+
   local race_x = math.floor((usagi.GAME_W - w) / 2)
   if ui.button("RACE", race_x, usagi.GAME_H - 80, { w = w, scale = 3 }) then
     SceneGoto("race")
-  end
-
-  local next_track = nil
-  for _, tid in ipairs(track_data.TRACK_ORDER) do
-    if not State.unlocked[tid] then
-      next_track = tid; break
-    end
-  end
-  if next_track then
-    local ntdata   = track_data.TRACKS[next_track]
-    local cost     = ntdata.unlock_cost
-    local can_buy  = State.money >= cost
-    local btn_text = string.format("Buy %s - $%d", ntdata.label, cost)
-    if ui.button(btn_text, math.floor((usagi.GAME_W - w) / 2), usagi.GAME_H - 42,
-          { w = w, disabled = not can_buy }) then
-      if economy.try_unlock_track(next_track) then
-        State.active_track = next_track
-      end
-    end
   end
 end
 
