@@ -15,7 +15,7 @@ local countdown_time   = 0
 
 local M                = {}
 
-function get_hints()
+local function get_hints()
   local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
   local right_hint = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
   local left_hint  = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
@@ -78,9 +78,9 @@ local function finish_race()
   end
 
   if (race.run_rank == "A" or race.run_rank == "S") and not tstate.a_rank_earned then
-    tstate.a_rank_earned = true
-    local idx     = track_data.get_track_index(id)
-    local next_id = track_data.TRACK_ORDER[idx + 1]
+    tstate.a_rank_earned       = true
+    local idx                  = track_data.get_track_index(id)
+    local next_id              = track_data.TRACK_ORDER[idx + 1]
     race.show_track_unlock_msg = next_id ~= nil and not State.unlocked[next_id]
   end
 end
@@ -312,8 +312,8 @@ function M.draw()
     end
     if race.first_race then
       local hw = usagi.measure_text(get_hints())
-      local hx = math.floor((usagi.GAME_W - hw) / 2)
-      gfx.text_ex(get_hints(), hx, 34, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+      local hx = usagi.GAME_W - hw
+      gfx.text_ex(get_hints(), hx, 0, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
     end
   end
 end
