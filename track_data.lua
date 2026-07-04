@@ -16,7 +16,7 @@ M.TRACKS        = {
     coins       = {
       { col = 18, row = 8 },
     },
-    ranks       = { C = 1.0, B = 1.5, A = 2.0, S = 2.5 },
+    ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 5.0 },
     label       = "Track 1",
     unlock_cost = nil,
     shop        = {
@@ -66,14 +66,14 @@ M.TRACKS        = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 50,
+        base_cost = 150,
         growth    = 1.55
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 60,
+        base_cost = 900,
         growth    = 1.6
       },
       {
@@ -81,7 +81,7 @@ M.TRACKS        = {
         label     = "Drift",
         currency  = "cash",
         max       = 1,
-        base_cost = 100,
+        base_cost = 2000,
         growth    = 1.6
       },
       {
@@ -89,7 +89,7 @@ M.TRACKS        = {
         label     = "Drift Boost",
         currency  = "cash",
         max       = 1,
-        base_cost = 250,
+        base_cost = 2500,
         growth    = 1.6
       },
     },
