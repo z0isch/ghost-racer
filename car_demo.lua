@@ -12,8 +12,9 @@ local SKID_PERP  = 4
 local SKID_AGE   = 1.0
 local SKID_STEP  = 1 / 20
 
-local GREEN_AT   = 0.6 -- drift seconds before the boost arms; matches car.drift_threshold
-local PIP_DIST   = 14  -- boost pip trail distance; matches car.lua's BOOST_TRAIL_START
+local GREEN_AT     = 0.6 -- drift seconds before the boost arms; matches car.drift_threshold
+local PIP_RADIUS   = 14  -- boost pip orbit radius; matches car.lua's BOOST_ORBIT_RADIUS
+local PIP_SPEED    = 3   -- matches car.lua's BOOST_ORBIT_SPEED
 
 local M          = {}
 
@@ -78,7 +79,7 @@ local function drift_boost_pose(t)
   }
 end
 
--- Boost: cruise right with a spare charge trailing behind, then spend it for
+-- Boost: cruise right with a spare charge circling it, then spend it for
 -- flames and a burst of speed.
 local B_START_X = 12
 local B_CRUISE_T = 1.0
@@ -174,8 +175,8 @@ function M.draw(kind, x, y)
 
   if p.flame then draw_flames(px, py, p.facing) end
 
-  for b = 1, p.pips or 0 do
-    local q = util.vec_from_angle(p.facing + math.pi, PIP_DIST + (b - 1) * 10)
+  for _ = 1, p.pips or 0 do
+    local q = util.vec_from_angle(usagi.elapsed * PIP_SPEED, PIP_RADIUS)
     gfx.circ_fill(px + q.x, py + q.y, 3, gfx.COLOR_ORANGE, 1)
   end
 

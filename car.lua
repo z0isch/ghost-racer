@@ -1,31 +1,28 @@
-local road                   = require "road"
-local angle                  = require "angle"
-local track_data             = require "track_data"
+local road               = require "road"
+local angle              = require "angle"
+local track_data         = require "track_data"
 
-local CAR_SIZE               = 16
-local CAR_MARGIN             = 3
-local ACCEL_BASE             = 30
-local ACCEL_STEP             = 10
-local TOP_VEL_BASE           = 200
-local TOP_VEL_STEP           = 15
-local OVERSPEED_IMPULSE      = 100
-local OVERSPEED_DECAY        = 100
-local BOOST_FLAME_TIME       = 0.8
-local BOOST_TRAIL_START      = 14
-local BOOST_TRAIL_STEP       = 10
-local BOOST_TRAIL_MIN_MOVE   = 2
-local BOOST_TRAIL_MAX_POINTS = 100
+local CAR_SIZE           = 16
+local CAR_MARGIN         = 3
+local ACCEL_BASE         = 30
+local ACCEL_STEP         = 10
+local TOP_VEL_BASE       = 200
+local TOP_VEL_STEP       = 15
+local OVERSPEED_IMPULSE  = 100
+local OVERSPEED_DECAY    = 100
+local BOOST_FLAME_TIME   = 0.8
+local BOOST_ORBIT_RADIUS = 12
+local BOOST_ORBIT_SPEED  = 3
 
-local M                      = {}
+local M                  = {}
 
-M.SIZE                       = CAR_SIZE
-M.MARGIN                     = CAR_MARGIN
+M.SIZE                   = CAR_SIZE
+M.MARGIN                 = CAR_MARGIN
 
-local skid_marks             = {}
-local skid_prev              = nil
-local trail                  = {}
+local skid_marks         = {}
+local skid_prev          = nil
 
-local car                    = {
+local car                = {
   x                    = 0,
   y                    = 0,
   vel                  = 0,
@@ -71,7 +68,6 @@ function M.reset(spawn)
   car.boost_flame_t        = 0
   skid_marks               = {}
   skid_prev                = nil
-  trail                    = { { x = car.x + 8, y = car.y + 8 } }
 end
 
 function M.apply_upgrades(accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks)
@@ -219,13 +215,6 @@ function M.update(dt, map)
       i = i + 1
     end
   end
-
-  local cx, cy = car.x + 8, car.y + 8
-  local last_pt = trail[#trail]
-  if not last_pt or (cx - last_pt.x) ^ 2 + (cy - last_pt.y) ^ 2 >= BOOST_TRAIL_MIN_MOVE ^ 2 then
-    trail[#trail + 1] = { x = cx, y = cy }
-    if #trail > BOOST_TRAIL_MAX_POINTS then table.remove(trail, 1) end
-  end
 end
 
 function M.draw()
@@ -260,26 +249,14 @@ function M.draw_flames()
   end
 end
 
-local function point_behind(dist)
-  local n = #trail
-  if n == 0 then return nil end
-  local accum = 0
-  for i = n, 2, -1 do
-    local p2, p1 = trail[i], trail[i - 1]
-    local seg    = math.sqrt((p2.x - p1.x) ^ 2 + (p2.y - p1.y) ^ 2)
-    if accum + seg >= dist then
-      local t = seg > 0 and (dist - accum) / seg or 0
-      return { x = p2.x + (p1.x - p2.x) * t, y = p2.y + (p1.y - p2.y) * t }
-    end
-    accum = accum + seg
-  end
-  return trail[1]
-end
-
 function M.draw_boosts()
+  if car.boosts == 0 then return end
+  local cx, cy = car.x + 8, car.y + 8
+  local slot   = 2 * math.pi / car.max_boosts
   for b = 1, car.boosts do
-    local p = point_behind(BOOST_TRAIL_START + (b - 1) * BOOST_TRAIL_STEP)
-    if p then gfx.circ_fill(p.x, p.y, 3, gfx.COLOR_ORANGE, 1) end
+    local a = usagi.elapsed * BOOST_ORBIT_SPEED + (b - 1) * slot
+    local p = util.vec_from_angle(a, BOOST_ORBIT_RADIUS)
+    gfx.circ_fill(cx + p.x, cy + p.y, 3, gfx.COLOR_ORANGE, 1)
   end
 end
 
