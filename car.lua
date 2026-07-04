@@ -10,6 +10,7 @@ local TOP_VEL_BASE       = 200
 local TOP_VEL_STEP       = 15
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
+local WALL_DECEL         = 1000
 local BOOST_FLAME_TIME   = 0.8
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
@@ -114,12 +115,12 @@ function M.update(dt, map)
     car.y = new_y
   elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
     car.x = new_x
-    car.vel = car.vel * 0.5
+    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
   elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
     car.y = new_y
-    car.vel = car.vel * 0.5
+    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
   else
-    car.vel = 0
+    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
   end
 
   local effective_top_vel = car.top_vel
