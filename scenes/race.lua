@@ -310,11 +310,9 @@ function M.draw()
         SceneGoto("buy")
       end
     end
-    if race.first_race then
-      local hw = usagi.measure_text(get_hints())
-      local hx = usagi.GAME_W - hw
-      gfx.text_ex(get_hints(), hx, 0, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
-    end
+    local hw = usagi.measure_text(get_hints())
+    local hx = usagi.GAME_W - hw
+    gfx.text_ex(get_hints(), hx, 0, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
   end
 end
 
