@@ -114,11 +114,16 @@ function M.upgrade_cost(kind)
   return math.floor(u.base_cost * (u.growth ^ lvl))
 end
 
+-- Kinds that show a one-time explainer modal in the buy scene the first time
+-- they're purchased (rank 1 for multi-rank items like `boost`).
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true }
+
 function M.try_buy(kind)
   local id   = State.active_track
   local cost = M.upgrade_cost(kind)
   if cost == nil then return end
   if kind == "ghosts" and not State.tracks[id].ghost_line then return end
+  if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" then
@@ -131,9 +136,13 @@ function M.try_buy(kind)
     end
     if kind == "coins" then ghost.rebuild_sim(id) end
   else
+    local was_zero = State[kind] == 0
     State[kind] = State[kind] + 1
+    if was_zero and FIRST_PURCHASE_MODAL_KINDS[kind] then
+      State.purchase_modal = kind
+    end
   end
-  car.apply_upgrades(State.accel, State.top_speed)
+  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   persist.save()
 end
 

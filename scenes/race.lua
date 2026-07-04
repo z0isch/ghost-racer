@@ -19,7 +19,14 @@ local function get_hints()
   local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
   local right_hint = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
   local left_hint  = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
-  return accel_hint .. right_hint .. left_hint
+  local hints      = accel_hint .. right_hint .. left_hint
+  if State.drift >= 1 then
+    hints = hints .. "\n" .. input.mapping_for(input.BTN2) .. " to drift while turning"
+  end
+  if State.boost >= 1 then
+    hints = hints .. "\n" .. input.mapping_for(input.BTN3) .. " to boost"
+  end
+  return hints
 end
 
 function M.enter()
@@ -32,7 +39,7 @@ function M.enter()
     first_race      = not State.seen_help,
   }
   ghost.reset_recording()
-  car.apply_upgrades(State.accel, State.top_speed)
+  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   car.reset(track_data.TRACKS[State.active_track].spawn)
   popups.clear()
   countdown_time = 3
@@ -292,6 +299,7 @@ function M.draw()
   car.draw_skid_marks()
   ghost.draw_sim(GHOST_RACE_ALPHA)
   ghost.draw_race_ghost()
+  car.draw_boosts()
   car.draw_flames()
   car.draw()
   popups.draw()

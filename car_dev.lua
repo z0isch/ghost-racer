@@ -26,6 +26,7 @@ end
 
 function _init()
   map = build_map()
+  car.apply_upgrades(0, 0, true, true, 5)
   car.reset({ col = COLS / 2, row = ROWS / 2 })
 end
 

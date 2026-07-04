@@ -10,6 +10,31 @@ local popups      = require "popups"
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
 
+-- First-purchase explainer copy, keyed by shop `kind`. Shown once as an
+-- overlay in this scene immediately on purchase (see economy.try_buy).
+local MODAL_INFO  = {
+  drift = {
+    title = "Drift Unlocked!",
+    body  = function()
+      return "Hold " .. input.mapping_for(input.BTN2) .. " while turning\nto slide around corners."
+    end,
+  },
+  drift_boost = {
+    title = "Drift Boost Unlocked!",
+    body  = function()
+      return "Drift long enough, then release\n" .. input.mapping_for(input.BTN2)
+          .. " for a burst of speed.\nA green flash means it's armed."
+    end,
+  },
+  boost = {
+    title = "Boost Unlocked!",
+    body  = function()
+      return "Press " .. input.mapping_for(input.BTN3) .. " to spend a charge\nfor an instant burst of speed.\n"
+          .. "One charge per rank, per race."
+    end,
+  },
+}
+
 local M           = {}
 
 function M.enter()
@@ -25,6 +50,9 @@ function M.update(dt)
     economy.bank(ev)
   end
   popups.update(dt)
+  if State.purchase_modal and input.pressed(input.BTN1) then
+    State.purchase_modal = nil
+  end
 end
 
 local function shop_button(item, x, y, w)
@@ -34,6 +62,9 @@ local function shop_button(item, x, y, w)
 
   local affordable = cost ~= nil and (cost == 0 or State.money >= cost)
   if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
+    affordable = false
+  end
+  if kind == "drift_boost" and State.drift == 0 then
     affordable = false
   end
 
@@ -97,7 +128,49 @@ function M.draw()
   ghost.draw_sim(GHOST_ALPHA)
   popups.draw()
   hud.draw()
-  M.draw_shop()
+  if State.purchase_modal then
+    M.draw_purchase_modal()
+  else
+    M.draw_shop()
+  end
+end
+
+function M.draw_purchase_modal()
+  gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
+
+  local info        = MODAL_INFO[State.purchase_modal]
+  local title       = info.title
+  local body        = info.body()
+
+  local title_scale = 3
+  local tw          = usagi.measure_text(title) * title_scale
+  local ty          = 60
+
+  local body_scale  = 2
+  local bw          = usagi.measure_text(body) * body_scale
+  local by          = ty + 60
+
+  local btn_w       = 180
+  local btn_y       = by + 70
+
+  local panel_pad   = 16
+  local panel_w     = math.max(tw, bw, btn_w) + panel_pad * 2
+  local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
+  local panel_y     = ty - panel_pad
+  local panel_h     = (btn_y + 32 + panel_pad) - panel_y
+  gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
+  gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
+
+  local tx = math.floor((usagi.GAME_W - tw) / 2)
+  gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
+
+  local bx = math.floor((usagi.GAME_W - bw) / 2)
+  gfx.text_ex(body, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+
+  local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
+  if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
+    State.purchase_modal = nil
+  end
 end
 
 function M.draw_shop()

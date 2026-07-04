@@ -9,6 +9,9 @@ local function default_state()
     seen_help    = false,
     accel        = 0,
     top_speed    = 0,
+    drift        = 0,
+    drift_boost  = 0,
+    boost        = 0,
     active_track = "track1",
     unlocked     = { track1 = true },
     tracks       = { track1 = track_data.default_track_state() },
@@ -28,6 +31,9 @@ function M.save()
     seen_help    = State.seen_help,
     accel        = State.accel,
     top_speed    = State.top_speed,
+    drift        = State.drift,
+    drift_boost  = State.drift_boost,
+    boost        = State.boost,
     active_track = State.active_track,
     unlocked     = State.unlocked,
     tracks       = State.tracks,
@@ -41,8 +47,11 @@ function M.load()
     State.money     = loaded.money or 0
     State.seen_help = loaded.seen_help or false
 
-    State.accel     = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
-    State.top_speed = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed") or 0)
+    State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
+    State.top_speed   = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed") or 0)
+    State.drift       = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
+    State.drift_boost = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
+    State.boost       = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
 
     if loaded.active_track and track_data.TRACKS[loaded.active_track] then
       State.active_track = loaded.active_track
