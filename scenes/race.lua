@@ -8,6 +8,7 @@ local economy          = require "economy"
 local popups           = require "popups"
 local track_data       = require "track_data"
 local persist          = require "persist"
+local modal            = require "modal"
 
 local GHOST_RACE_ALPHA = 0.03
 
@@ -155,37 +156,7 @@ function M.update(dt)
 end
 
 local function draw_help()
-  gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
-
-  local title       = "How To Race"
-  local title_scale = 3
-  local tw          = usagi.measure_text(title) * title_scale
-  local ty          = 70
-
-
-  local body_scale = 2
-  local bw         = usagi.measure_text(get_hints()) * body_scale
-  local by         = ty + 50
-
-  local btn_w      = 180
-  local btn_y      = by + 90
-
-  local panel_pad  = 16
-  local panel_w    = math.max(tw, bw, btn_w) + panel_pad * 2
-  local panel_x    = math.floor((usagi.GAME_W - panel_w) / 2)
-  local panel_y    = ty - panel_pad
-  local panel_h    = (btn_y + 32 + panel_pad) - panel_y
-  gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
-  gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
-
-  local tx = math.floor((usagi.GAME_W - tw) / 2)
-  gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
-
-  local bx = math.floor((usagi.GAME_W - bw) / 2)
-  gfx.text_ex(get_hints(), bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
-
-  local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
-  if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
+  if modal.draw({ title = "How To Race", body = get_hints() }) then
     dismiss_help()
   end
 end

@@ -6,6 +6,7 @@ local ghost       = require "ghost"
 local track_data  = require "track_data"
 local road        = require "road"
 local popups      = require "popups"
+local modal       = require "modal"
 
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
@@ -136,39 +137,8 @@ function M.draw()
 end
 
 function M.draw_purchase_modal()
-  gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
-
-  local info        = MODAL_INFO[State.purchase_modal]
-  local title       = info.title
-  local body        = info.body()
-
-  local title_scale = 3
-  local tw          = usagi.measure_text(title) * title_scale
-  local ty          = 60
-
-  local body_scale  = 2
-  local bw          = usagi.measure_text(body) * body_scale
-  local by          = ty + 60
-
-  local btn_w       = 180
-  local btn_y       = by + 70
-
-  local panel_pad   = 16
-  local panel_w     = math.max(tw, bw, btn_w) + panel_pad * 2
-  local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
-  local panel_y     = ty - panel_pad
-  local panel_h     = (btn_y + 32 + panel_pad) - panel_y
-  gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
-  gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
-
-  local tx = math.floor((usagi.GAME_W - tw) / 2)
-  gfx.text_ex(title, tx, ty, title_scale, 0, gfx.COLOR_WHITE, 1)
-
-  local bx = math.floor((usagi.GAME_W - bw) / 2)
-  gfx.text_ex(body, bx, by, body_scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
-
-  local btn_x = math.floor((usagi.GAME_W - btn_w) / 2)
-  if ui.button("GOT IT", btn_x, btn_y, { w = btn_w, scale = 2 }) then
+  local info = MODAL_INFO[State.purchase_modal]
+  if modal.draw({ title = info.title, body = info.body() }) then
     State.purchase_modal = nil
   end
 end
