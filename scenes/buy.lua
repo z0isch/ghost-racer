@@ -7,6 +7,7 @@ local track_data  = require "track_data"
 local road        = require "road"
 local popups      = require "popups"
 local modal       = require "modal"
+local car_demo    = require "car_demo"
 
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
@@ -37,6 +38,9 @@ local MODAL_INFO  = {
 }
 
 local M           = {}
+
+-- Which kind the demo loop was last reset for, so it restarts per modal.
+local demo_kind
 
 function M.enter()
   ghost.reset_all_phases()
@@ -137,8 +141,18 @@ function M.draw()
 end
 
 function M.draw_purchase_modal()
-  local info = MODAL_INFO[State.purchase_modal]
-  if modal.draw({ title = info.title, body = info.body() }) then
+  local kind = State.purchase_modal
+  if kind ~= demo_kind then
+    demo_kind = kind
+    car_demo.reset()
+  end
+  local info = MODAL_INFO[kind]
+  local demo = {
+    w    = car_demo.W,
+    h    = car_demo.H,
+    draw = function(x, y) car_demo.draw(kind, x, y) end,
+  }
+  if modal.draw({ title = info.title, body = info.body(), demo = demo }) then
     State.purchase_modal = nil
   end
 end
