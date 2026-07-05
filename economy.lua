@@ -1,11 +1,11 @@
-local ghost          = require "ghost"
-local track_data     = require "track_data"
-local popups         = require "popups"
-local car            = require "car"
-local persist        = require "persist"
+local ghost        = require "ghost"
+local track_data   = require "track_data"
+local popups       = require "popups"
+local car          = require "car"
+local persist      = require "persist"
 
 -- Rank multipliers, tuning knobs only - change freely.
-local RANK_MULTS     = {
+local RANK_MULTS   = {
   D = 0.2,
   C = 0.4,
   B = 0.6,
@@ -13,15 +13,32 @@ local RANK_MULTS     = {
   S = 2.0
 }
 -- Ascending order of ranks above the D floor, checked against track_data.TRACKS[id].ranks.
-local RANK_LETTERS   = { "C", "B", "A", "S" }
+local RANK_LETTERS = { "C", "B", "A", "S" }
 
-local M              = {}
+local M            = {}
 
-M.RANK_MULTS         = RANK_MULTS
+M.RANK_MULTS       = RANK_MULTS
 
 -- $ awarded per checkpoint/coin on a given track.
 function M.track_pay(id)
   return track_data.TRACKS[id].pay
+end
+
+-- $ paid per checkpoint/coin at a given rank mult, boosted by 1 + mult above
+-- the D floor so D rank keeps base pay and every rank above it earns a bonus
+-- on top instead of losing a cut like the ghost payout does. Rounded to a
+-- whole dollar since floating point mults (0.4, 0.6, ...) don't always land
+-- on an exact integer and every "$%d" display of this value would break.
+function M.pay_for_mult(id, mult)
+  return math.floor(M.track_pay(id) * (1 + mult - RANK_MULTS.D) + 0.5)
+end
+
+-- $ awarded per checkpoint/coin to the player during a live race, based on
+-- the track's current established rank.
+function M.player_pay(id)
+  local tstate = State.tracks[id]
+  local mult   = M.rank_mult(id, tstate and tstate.cash_per_sec)
+  return M.pay_for_mult(id, mult)
 end
 
 -- True if any unlocked track already has at least one of `kind` (a
@@ -54,9 +71,10 @@ end
 -- on the result-screen rank instead of trailing a payout behind it.
 function M.live_race_rate()
   local race      = State.race
-  local tdata     = track_data.TRACKS[State.active_track]
+  local id        = State.active_track
+  local tdata     = track_data.TRACKS[id]
   local remaining = #tdata.checkpoints - race.next_checkpoint + 1
-  local earned    = race.earned + remaining * tdata.pay
+  local earned    = race.raw_earned + remaining * M.track_pay(id)
   return race.time > 0 and (earned / race.time) or math.huge
 end
 
@@ -136,8 +154,8 @@ function M.try_buy(kind)
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" then
-    local was_first_ghost = kind == "ghosts" and State.tracks[id][kind] == 0
-    local was_first_ever  = FIRST_PURCHASE_MODAL_KINDS[kind] and not M.owns_any(kind)
+    local was_first_ghost  = kind == "ghosts" and State.tracks[id][kind] == 0
+    local was_first_ever   = FIRST_PURCHASE_MODAL_KINDS[kind] and not M.owns_any(kind)
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if was_first_ghost then
       ghost.restart_schedule(id)

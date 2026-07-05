@@ -19,7 +19,7 @@ local MODAL_INFO  = {
     title = "Ghost Unlocked!",
     body  = function()
       return
-      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times help increase your rank\nmaking ghosts earn more per checkpoint."
+      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times help increase your rank\nwhich increases pay rates."
     end,
   },
   coins = {
@@ -27,7 +27,7 @@ local MODAL_INFO  = {
     body  = function()
       return ui.COIN_CHAR ..
           " pay cash whenever you or a ghost drives\nthrough them.\n\n" ..
-          ui.COIN_CHAR .. " help increase your rank\nmaking ghosts earn more per checkpoint and " .. ui.COIN_CHAR
+          ui.COIN_CHAR .. " help your rank which increases pay rates."
     end,
   },
   drift = {
@@ -218,7 +218,7 @@ function M.draw_shop()
     info_y = info_y + 20
   end
 
-  local you_earn_label = string.format("Your Rate:  $%d", tdata.pay)
+  local you_earn_label = string.format("Your Rate:  $%d", economy.player_pay(id))
   ui.coin_text(you_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   info_y = info_y + 13
 

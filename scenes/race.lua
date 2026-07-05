@@ -38,6 +38,7 @@ function M.enter()
     time            = 0,
     phase           = State.seen_help and "countdown" or "help",
     earned          = 0,
+    raw_earned      = 0,
     coins_collected = {},
     first_race      = not State.seen_help,
   }
@@ -70,7 +71,7 @@ local function finish_race()
   local has_baseline     = tstate.ghost_line ~= nil
   race.has_baseline      = has_baseline
   race.run_cash_rate     = economy.lap_cash_rate(recording)
-  race.run_rate          = race.run_time > 0 and (race.earned / race.run_time) or 0
+  race.run_rate          = race.run_time > 0 and (race.raw_earned / race.run_time) or 0
   race.run_rank          = economy.rank_for_rate(id, race.run_rate)
   race.run_mult          = economy.RANK_MULTS[race.run_rank]
   race.ghost_mult        = economy.RANK_MULTS[economy.track_rank(id)]
@@ -122,16 +123,18 @@ function M.update(dt)
 
     local car_rect = car.rect()
 
+    local pay = economy.player_pay(id)
     for ci = 1, road.active_coin_count(State.tracks[id].coins, tdata.coins) do
       local coin = tdata.coins[ci]
       if not race.coins_collected[ci]
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
-        State.money              = State.money + tdata.pay
-        race.earned              = race.earned + tdata.pay
+        State.money              = State.money + pay
+        race.earned              = race.earned + pay
+        race.raw_earned          = race.raw_earned + tdata.pay
         sfx.play("coin")
         popups.spawn({
-          amount = tdata.pay,
+          amount = pay,
           x      = coin.col * track_data.tile_size + track_data.tile_size / 2,
           y      = coin.row * track_data.tile_size,
         })
@@ -140,10 +143,11 @@ function M.update(dt)
 
     local cp = tdata.checkpoints[race.next_checkpoint]
     if cp and util.rect_overlap(car_rect, track_data.checkpoint_rect(cp)) then
-      State.money = State.money + tdata.pay
-      race.earned = race.earned + tdata.pay
+      State.money     = State.money + pay
+      race.earned     = race.earned + pay
+      race.raw_earned = race.raw_earned + tdata.pay
       popups.spawn({
-        amount = tdata.pay,
+        amount = pay,
         x      = car_rect.x + car.SIZE / 2,
         y      = car_rect.y,
       })
@@ -207,6 +211,26 @@ local function draw_race_result()
     ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
   end
   y = y + 44
+
+  local your_pay = economy.pay_for_mult(State.active_track, race.run_mult)
+  if race.has_baseline and race.prev_rank ~= race.run_rank then
+    local your_prev_pay = economy.pay_for_mult(State.active_track, race.ghost_mult)
+    local went_up       = your_pay > your_prev_pay
+    local prefix        = string.format("Your Rate %s $%d -> ", went_up and "up" or "down", your_prev_pay)
+    local new_pay       = string.format("$%d", your_pay)
+    local scale         = 2
+    local total         = usagi.measure_text(prefix .. new_pay) * scale
+    local sx            = math.floor((usagi.GAME_W - total) / 2)
+    gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
+    sx = sx + usagi.measure_text(prefix) * scale
+    gfx.text_ex(new_pay, sx, y, scale, 0, went_up and gfx.COLOR_GREEN or gfx.COLOR_RED, 1)
+  else
+    local text  = string.format("Your Rate: $%d", your_pay)
+    local scale = 2
+    local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
+    ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
+  end
+  y = y + 30
 
   local run_pay = economy.track_pay(State.active_track) * race.run_mult
   if race.has_baseline then

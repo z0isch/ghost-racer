@@ -58,7 +58,7 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    ranks       = { C = 10.0, B = 14.0, A = 16.0, S = 35.0 },
+    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 35.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
