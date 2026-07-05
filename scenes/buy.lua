@@ -19,15 +19,14 @@ local MODAL_INFO  = {
     title = "Ghost Unlocked!",
     body  = function()
       return
-      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times help increase your rank\nwhich increases pay rates."
+      "A ghost repeats your best lap\nforever, banking cash at every\ncheckpoint - even while you're away!"
     end,
   },
   coins = {
     title = ui.COIN_CHAR .. " Unlocked!",
     body  = function()
       return ui.COIN_CHAR ..
-          " pay cash whenever you or a ghost drives\nthrough them.\n\n" ..
-          ui.COIN_CHAR .. " help your rank which increases pay rates."
+          " pay cash whenever you or a ghost drives\nthrough them."
     end,
   },
   drift = {
