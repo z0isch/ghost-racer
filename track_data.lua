@@ -111,8 +111,8 @@ M.TRACKS        = {
     },
     ranks       = { C = 1.2, B = 1.8, A = 2.5, S = 3.5 },
     label       = "Track 3",
-    pay         = 5,
-    unlock_cost = 500,
+    pay         = 45,
+    unlock_cost = 2500,
     shop        = {
       {
         kind      = "ghosts",
