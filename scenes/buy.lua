@@ -209,7 +209,7 @@ function M.draw_shop()
     ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank)) / 2), info_y, 2)
     info_y = info_y + th_a * 2 + 2
     if State.tracks[id].ghosts > 0 then
-      local track_rate_text = string.format("$%.1f/sec", economy.track_cash_rate(id))
+      local track_rate_text = string.format("$%.2f/sec", economy.track_cash_rate(id))
       local track_rate_w    = usagi.measure_text(track_rate_text)
       gfx.text_ex(track_rate_text, x + math.floor((w - track_rate_w) / 2), info_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
       info_y = info_y + th_a + 6

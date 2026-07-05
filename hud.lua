@@ -17,7 +17,7 @@ function M.draw()
   gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
 
   if economy.owns_any_ghost() then
-    local total_rate_text = string.format("$%.1f/sec", economy.ghost_cash_rate())
+    local total_rate_text = string.format("$%.2f/sec", economy.ghost_cash_rate())
     local total_rate_w    = usagi.measure_text(total_rate_text)
     local total_rate_x    = (usagi.GAME_W - total_rate_w) / 2
     gfx.text_ex(total_rate_text, total_rate_x, total_rate_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
