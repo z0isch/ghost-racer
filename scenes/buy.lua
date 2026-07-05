@@ -19,15 +19,15 @@ local MODAL_INFO  = {
     title = "Ghost Unlocked!",
     body  = function()
       return
-      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times increase your rank\nmaking ghosts earn more per checkpoint."
+      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times help increase your rank\nmaking ghosts earn more per checkpoint."
     end,
   },
   coins = {
     title = ui.COIN_CHAR .. " Unlocked!",
     body  = function()
       return ui.COIN_CHAR ..
-          " collected pay cash whenever you\nor a ghost drives through them.\n\n" ..
-          ui.COIN_CHAR .. " also increase your race rank\nmaking ghosts earn more per checkpoint and " .. ui.COIN_CHAR
+          " pay cash whenever you or a ghost drives\nthrough them.\n\n" ..
+          ui.COIN_CHAR .. " help increase your rank\nmaking ghosts earn more per checkpoint and " .. ui.COIN_CHAR
     end,
   },
   drift = {
@@ -207,9 +207,17 @@ function M.draw_shop()
   local rank_mult = economy.RANK_MULTS[rank]
   if State.tracks[id].ghost_line then
     ui.rank_text(rank, rank, x + math.floor((w - usagi.measure_text(rank)) / 2), info_y, 2)
+    info_y = info_y + th_a * 2 + 2
+    if State.tracks[id].ghosts > 0 then
+      local track_rate_text = string.format("$%.1f/sec", economy.track_cash_rate(id))
+      local track_rate_w    = usagi.measure_text(track_rate_text)
+      gfx.text_ex(track_rate_text, x + math.floor((w - track_rate_w) / 2), info_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+      info_y = info_y + th_a + 6
+    end
+  else
+    info_y = info_y + 20
   end
 
-  info_y = info_y + 20
   local you_earn_label = string.format("Your Rate:  $%d", economy.PAY)
   ui.coin_text(you_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   info_y = info_y + 13
@@ -237,7 +245,7 @@ function M.draw_shop()
   end
 
   local race_x = math.floor((usagi.GAME_W - w) / 2)
-  if ui.button("RACE", race_x, usagi.GAME_H - 80, { w = w, scale = 3 }) then
+  if ui.button("RACE", race_x, usagi.GAME_H - 40, { w = w, scale = 3 }) then
     SceneGoto("race")
   end
 end

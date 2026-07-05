@@ -14,7 +14,9 @@ local GHOST_RACE_ALPHA = 0.03
 
 local countdown_time   = 0
 
-local M                = {}
+local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
+
+local M = {}
 
 local function get_hints()
   local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
@@ -156,7 +158,7 @@ function M.update(dt)
 end
 
 local function draw_help()
-  if modal.draw({ title = "How To Race", body = get_hints() }) then
+  if modal.draw({ title = "How To Race", body = "Hit checkpoints to make $$$!\n\n" .. get_hints() .. "\n" }) then
     dismiss_help()
   end
 end
@@ -173,7 +175,8 @@ end
 
 local function draw_race_result()
   dim.draw(usagi.GAME_W, usagi.GAME_H)
-  local race = State.race
+  local race      = State.race
+  local has_ghost = State.tracks[State.active_track].ghosts > 0
 
   local function centered_text(text, y, scale, color)
     local tw = usagi.measure_text(text) * scale
@@ -187,8 +190,6 @@ local function draw_race_result()
   local run_text   = race.run_rank
   if race.has_baseline then
     if race.prev_rank == race.run_rank then
-      centered_text("NO CHANGE", y, 3, gfx.COLOR_LIGHT_GRAY)
-      y = y + 30
       local rx = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
       ui.rank_text(run_text, race.run_rank, rx, y, rank_scale)
     else
@@ -228,7 +229,32 @@ local function draw_race_result()
       sx = sx + usagi.measure_text(new_pay) * scale
     end
     y = y + 30
-  else
+
+    if has_ghost then
+      if round2(race.run_total_rate) == round2(race.ghost_total_rate) then
+        local text  = string.format("$%.2f/sec", race.run_total_rate)
+        local scale = 2
+        local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
+        ui.coin_text(text, sx, y, scale, gfx.COLOR_LIGHT_GRAY)
+      else
+        local went_up = race.run_total_rate > race.ghost_total_rate
+        local prefix  = string.format("$%.2f/sec -> ", race.ghost_total_rate)
+        local new_val = string.format("$%.2f/sec", race.run_total_rate)
+        local scale   = 2
+        local total   = usagi.measure_text(prefix .. new_val) * scale
+        local sx      = math.floor((usagi.GAME_W - total) / 2)
+        gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
+        sx = sx + usagi.measure_text(prefix) * scale
+        gfx.text_ex(new_val, sx, y, scale, 0, went_up and gfx.COLOR_GREEN or gfx.COLOR_RED, 1)
+      end
+      y = y + 30
+    end
+  elseif has_ghost then
+    local text  = string.format("Track Rate: $%.2f/sec", race.run_total_rate)
+    local scale = 2
+    local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
+    ui.coin_text(text, sx, y, scale, gfx.COLOR_LIGHT_GRAY)
+    y = y + 30
   end
 
   if race.show_track_unlock_msg then
