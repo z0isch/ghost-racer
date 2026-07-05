@@ -10,13 +10,12 @@ local track_data       = require "track_data"
 local persist          = require "persist"
 local modal            = require "modal"
 
-local GHOST_RACE_ALPHA = 0.1
+local GHOST_RACE_ALPHA = 0.05
+local FINISH_BEAT_SECS = .2
 
 local countdown_time   = 0
 
-local function round2(n) return math.floor(n * 100 + 0.5) / 100 end
-
-local M = {}
+local M                = {}
 
 local function get_hints()
   local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
@@ -37,7 +36,6 @@ function M.enter()
     next_checkpoint = 1,
     time            = 0,
     phase           = State.seen_help and "countdown" or "help",
-    earned          = 0,
     raw_earned      = 0,
     coins_collected = {},
     first_race      = not State.seen_help,
@@ -61,40 +59,39 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race             = State.race
-  local id               = State.active_track
-  local tstate           = State.tracks[id]
-  local recording        = ghost.get_recording()
-  race.run_time          = race.time
+  local race      = State.race
+  local id        = State.active_track
+  local tstate    = State.tracks[id]
 
-  race.phase             = "result"
-  local has_baseline     = tstate.ghost_line ~= nil
-  race.has_baseline      = has_baseline
-  race.run_cash_rate     = economy.lap_cash_rate(recording)
-  race.run_rate          = race.run_time > 0 and (race.raw_earned / race.run_time) or 0
-  race.run_rank          = economy.rank_for_rate(id, race.run_rate)
-  race.result_start_time = usagi.elapsed
+  race.run_rate   = race.time > 0 and (race.raw_earned / race.time) or 0
+  race.phase      = "finished"
+  race.beat_left  = FINISH_BEAT_SECS
 
-  -- The established rank never drops, so the rank that will actually govern
-  -- pay once this lap is promoted is the higher of the previous established
-  -- rank and this run's rank.
-  local prev_rank        = economy.track_rank(id)
-  local new_rank         = economy.rank_for_rate(id, math.max(tstate.best_rate or 0, race.run_rate))
-  race.prev_rank         = prev_rank
-  race.new_rank          = new_rank
-  race.rank_up           = has_baseline and new_rank ~= prev_rank
+  local first_lap = tstate.ghost_line == nil
+  local prev_rank = economy.track_rank(id)
+  ghost.promote()
+  local new_rank = economy.track_rank(id)
 
-  local new_mult         = economy.RANK_MULTS[new_rank]
-  race.ghost_total_rate  = economy.track_cash_rate(id)
-  race.run_total_rate    = tstate.ghosts * race.run_cash_rate * new_mult
-
-  local was_a_or_s       = prev_rank == "A" or prev_rank == "S"
-  local is_a_or_s        = new_rank == "A" or new_rank == "S"
-  if is_a_or_s and not was_a_or_s then
-    local idx                  = track_data.get_track_index(id)
-    local next_id              = track_data.TRACK_ORDER[idx + 1]
-    race.show_track_unlock_msg = next_id ~= nil and not State.unlocked[next_id]
+  if first_lap or new_rank ~= prev_rank then
+    local was_a_or_s  = prev_rank == "A" or prev_rank == "S"
+    local is_a_or_s   = new_rank == "A" or new_rank == "S"
+    local show_unlock = false
+    if is_a_or_s and not was_a_or_s then
+      local idx     = track_data.get_track_index(id)
+      local next_id = track_data.TRACK_ORDER[idx + 1]
+      show_unlock   = next_id ~= nil and not State.unlocked[next_id]
+    end
+    State.race_modal = {
+      track_id    = id,
+      rank        = new_rank,
+      -- nil on the first lap: the modal then shows the explainer body
+      -- instead of rate deltas.
+      prev_rank   = not first_lap and prev_rank or nil,
+      show_unlock = show_unlock,
+    }
   end
+
+  persist.save()
 end
 
 function M.update(dt)
@@ -114,6 +111,11 @@ function M.update(dt)
       countdown_time = 0
       race.phase = "racing"
     end
+  elseif race.phase == "finished" then
+    race.beat_left = race.beat_left - dt
+    if race.beat_left <= 0 then
+      SceneGoto("buy")
+    end
   elseif race.phase == "racing" then
     local id    = State.active_track
     local tdata = track_data.TRACKS[id]
@@ -131,7 +133,6 @@ function M.update(dt)
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
         State.money              = State.money + pay
-        race.earned              = race.earned + pay
         race.raw_earned          = race.raw_earned + tdata.pay
         sfx.play("coin")
         popups.spawn({
@@ -145,7 +146,6 @@ function M.update(dt)
     local cp = tdata.checkpoints[race.next_checkpoint]
     if cp and util.rect_overlap(car_rect, track_data.checkpoint_rect(cp)) then
       State.money     = State.money + pay
-      race.earned     = race.earned + pay
       race.raw_earned = race.raw_earned + tdata.pay
       popups.spawn({
         amount = pay,
@@ -178,129 +178,12 @@ local function draw_countdown()
   gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_WHITE, 1)
 end
 
--- Draws the total-rate line, comparing established rate (before this lap is
--- promoted) to the projected rate after promotion. Both sides use the same
--- (sticky) rank multiplier when there's no rank-up, so the delta reflects
--- only the change in ghost-line quality, never a rank swing.
-local function draw_total_rate_line(y, scale)
-  local race = State.race
-  if round2(race.run_total_rate) == round2(race.ghost_total_rate) then
-    local text = string.format("$%.2f/sec", race.run_total_rate)
-    local sx   = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
-    ui.coin_text(text, sx, y, scale, gfx.COLOR_LIGHT_GRAY)
-  else
-    local went_up = race.run_total_rate > race.ghost_total_rate
-    local prefix  = string.format("$%.2f/sec -> ", race.ghost_total_rate)
-    local new_val = string.format("$%.2f/sec", race.run_total_rate)
-    local total   = usagi.measure_text(prefix .. new_val) * scale
-    local sx      = math.floor((usagi.GAME_W - total) / 2)
-    gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
-    sx = sx + usagi.measure_text(prefix) * scale
-    gfx.text_ex(new_val, sx, y, scale, 0, went_up and gfx.COLOR_GREEN or gfx.COLOR_RED, 1)
-  end
-end
-
-local function draw_race_result()
-  dim.draw(usagi.GAME_W, usagi.GAME_H)
-  local race      = State.race
-  local has_ghost = State.tracks[State.active_track].ghosts > 0
-
-  local function centered_text(text, y, scale, color)
-    local tw = usagi.measure_text(text) * scale
-    local cx = math.floor((usagi.GAME_W - tw) / 2)
-    gfx.text_ex(text, cx, y, scale, 0, color or gfx.COLOR_WHITE, 1)
-  end
-
-  local y          = 80
-  local rank_scale = 4
-  local scale      = 2
-
-  if not race.has_baseline then
-    -- First-ever run on this track: just show what rank it earned.
-    local run_text = race.run_rank
-    local rx       = math.floor((usagi.GAME_W - usagi.measure_text(run_text) * rank_scale) / 2)
-    ui.rank_text(run_text, run_text, rx, y, rank_scale)
-    y              = y + 44
-
-    local mult     = economy.RANK_MULTS[run_text]
-    local your_pay = economy.pay_for_mult(State.active_track, mult)
-    local text     = string.format("Your Rate: $%d", your_pay)
-    local sx       = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
-    ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
-    y = y + 30
-
-    if has_ghost then
-      local track_text = string.format("Track Rate: $%.2f/sec", race.run_total_rate)
-      local tsx        = math.floor((usagi.GAME_W - usagi.measure_text(track_text) * scale) / 2)
-      ui.coin_text(track_text, tsx, y, scale, gfx.COLOR_LIGHT_GRAY)
-      y = y + 30
-    end
-  elseif race.rank_up then
-    -- Ranked up: celebrate with the arrow and both pay-rate increases.
-    local arrow = " -> "
-    local total = (usagi.measure_text(race.prev_rank) + usagi.measure_text(arrow)
-      + usagi.measure_text(race.new_rank)) * rank_scale
-    local rx    = math.floor((usagi.GAME_W - total) / 2)
-    rx          = rx + ui.rank_text(race.prev_rank, race.prev_rank, rx, y, rank_scale)
-    gfx.text_ex(arrow, rx, y, rank_scale, 0, gfx.COLOR_WHITE, 1)
-    rx = rx + usagi.measure_text(arrow) * rank_scale
-    ui.rank_text(race.new_rank, race.new_rank, rx, y, rank_scale)
-    y                   = y + 44
-
-    local prev_mult     = economy.RANK_MULTS[race.prev_rank]
-    local new_mult      = economy.RANK_MULTS[race.new_rank]
-    local your_prev_pay = economy.pay_for_mult(State.active_track, prev_mult)
-    local your_pay      = economy.pay_for_mult(State.active_track, new_mult)
-    local prefix        = string.format("Your Rate up $%d -> ", your_prev_pay)
-    local new_pay       = string.format("$%d", your_pay)
-    local ptotal        = usagi.measure_text(prefix .. new_pay) * scale
-    local sx            = math.floor((usagi.GAME_W - ptotal) / 2)
-    gfx.text_ex(prefix, sx, y, scale, 0, gfx.COLOR_WHITE, 1)
-    sx = sx + usagi.measure_text(prefix) * scale
-    gfx.text_ex(new_pay, sx, y, scale, 0, gfx.COLOR_GREEN, 1)
-    y = y + 30
-
-    if has_ghost then
-      local prev_pay = economy.track_pay(State.active_track) * prev_mult
-      local run_pay  = economy.track_pay(State.active_track) * new_mult
-      local gprefix  = string.format("Ghost Rate up $%d -> ", prev_pay)
-      local gnew_pay = string.format("$%d", run_pay)
-      local gtotal   = usagi.measure_text(gprefix .. gnew_pay) * scale
-      local gsx      = math.floor((usagi.GAME_W - gtotal) / 2)
-      gfx.text_ex(gprefix, gsx, y, scale, 0, gfx.COLOR_WHITE, 1)
-      gsx = gsx + usagi.measure_text(gprefix) * scale
-      gfx.text_ex(gnew_pay, gsx, y, scale, 0, gfx.COLOR_GREEN, 1)
-      y = y + 30
-
-      draw_total_rate_line(y, scale)
-      y = y + 30
-    end
-  elseif has_ghost then
-    -- Ordinary run: rank is safe, only the total rate can move.
-    draw_total_rate_line(y, scale)
-    y = y + 30
-  end
-
-  if race.show_track_unlock_msg then
-    centered_text("New track available in the shop!", y, 2, gfx.COLOR_GREEN)
-    y = y + 30
-  end
-
-  y = y + 15
-  local bw = 180
-  if ui.button("Ok", math.floor((usagi.GAME_W - bw) / 2), y, { w = bw, scale = 2 }) then
-    ghost.promote()
-    persist.save()
-    SceneGoto("buy")
-  end
-end
-
 function M.draw()
   local id    = State.active_track
   local tdata = track_data.TRACKS[id]
   road.draw_track(tdata.map)
   local race = State.race
-  if race.phase ~= "result" then
+  if race.phase ~= "finished" then
     local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
     for i = active, #checkpoints do
@@ -321,9 +204,7 @@ function M.draw()
     draw_help()
   elseif race.phase == "countdown" then
     draw_countdown()
-  elseif race.phase == "result" then
-    draw_race_result()
-  else
+  elseif race.phase == "racing" then
     if not race.first_race then
       if ui.button("QUIT", 5, 5, { w = 50 }) then
         persist.save()

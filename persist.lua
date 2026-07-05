@@ -22,7 +22,6 @@ local function default_state()
       next_checkpoint = 1,
       time            = 0,
       phase           = "countdown",
-      earned          = 0,
       coins_collected = {},
     },
   }

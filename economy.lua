@@ -82,8 +82,8 @@ function M.rank_mult(id, rate)
   return RANK_MULTS[M.rank_for_rate(id, rate)]
 end
 
--- Rank of the established (high-water) rate stored for a track. Never drops
--- once earned, even if a later lap is slower - see ghost.promote().
+-- Rank of the best promoted lap stored for a track. Only better laps are
+-- promoted (see ghost.promote()), so this never drops.
 function M.track_rank(id)
   local tstate = State.tracks[id]
   return M.rank_for_rate(id, tstate and tstate.best_rate)

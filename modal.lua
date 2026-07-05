@@ -19,7 +19,9 @@ local M            = {}
 -- Draws the modal. Returns true the frame the button is clicked.
 -- opts: title (string), body (string), button (string, default "GOT IT"),
 -- demo (optional { w, h, draw = function(x, y) }, drawn between the body and
--- the button).
+-- the button), draw_title (optional function(x, y, scale) replacing the
+-- default plain-white title render - `title` is still required for layout,
+-- so it must measure the same width as whatever draw_title actually draws).
 function M.draw(opts)
   gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
 
@@ -50,7 +52,11 @@ function M.draw(opts)
   gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
 
   local tx = math.floor((usagi.GAME_W - tw) / 2)
-  ui.coin_text(title, tx, ty, TITLE_SCALE, gfx.COLOR_WHITE)
+  if opts.draw_title then
+    opts.draw_title(tx, ty, TITLE_SCALE)
+  else
+    ui.coin_text(title, tx, ty, TITLE_SCALE, gfx.COLOR_WHITE)
+  end
 
   local bx = math.floor((usagi.GAME_W - bw) / 2)
   ui.coin_text(body, bx, by, BODY_SCALE, gfx.COLOR_LIGHT_GRAY)

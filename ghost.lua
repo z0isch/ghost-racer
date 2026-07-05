@@ -209,12 +209,19 @@ function M.get_recording()
   return State.race.recording
 end
 
+-- Stores the finished run as the track's ghost lap, but only if it beats the
+-- stored best $/sec - a worse lap leaves the ghost (and therefore the rank)
+-- untouched. Returns true when the lap was promoted.
 function M.promote()
-  local id          = State.active_track
-  local tstate      = State.tracks[id]
+  local id     = State.active_track
+  local tstate = State.tracks[id]
+  if tstate.best_rate and State.race.run_rate <= tstate.best_rate then
+    return false
+  end
   tstate.ghost_line = State.race.recording
-  tstate.best_rate  = math.max(tstate.best_rate or 0, State.race.run_rate)
+  tstate.best_rate  = State.race.run_rate
   M.rebuild_sim(id)
+  return true
 end
 
 -- Drawing.

@@ -75,7 +75,7 @@ M.TRACKS        = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 600,
+        base_cost = 500,
         growth    = 1.6
       },
       {
