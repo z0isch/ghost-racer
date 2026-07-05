@@ -64,10 +64,9 @@ function M.rank_text(text, rank, x, y, scale)
   return w
 end
 
--- Draws `text` at (x, y) in `color`, with every COIN_CHAR drawn in yellow. Returns
--- the drawn width so callers can lay out mixed-style lines.
-function M.coin_text(text, x, y, scale, color, alpha)
-  alpha = alpha or 1
+-- Draws one line of `text` at (x, y) in `color`, with every COIN_CHAR drawn
+-- in yellow. Returns the drawn width.
+local function coin_line(text, x, y, scale, color, alpha)
   local w = 0
   local i = 1
   while i <= #text do
@@ -84,6 +83,24 @@ function M.coin_text(text, x, y, scale, color, alpha)
     w = w + usagi.measure_text(chunk) * scale
   end
   return w
+end
+
+-- Draws `text` at (x, y) in `color`, with every COIN_CHAR drawn in yellow.
+-- Supports embedded "\n" line breaks, left-aligning each line at `x`. Returns
+-- the width of the widest line so callers can lay out mixed-style lines.
+function M.coin_text(text, x, y, scale, color, alpha)
+  alpha = alpha or 1
+  -- measure_text's height return is only meaningful for single-line input
+  -- (see modal.lua), so measure a guaranteed single-line string for line_h
+  -- rather than the possibly multi-line `text`.
+  local _, line_h = usagi.measure_text(COIN_CHAR)
+  local max_w = 0
+  local line_y = y
+  for line in (text .. "\n"):gmatch("(.-)\n") do
+    max_w = math.max(max_w, coin_line(line, x, line_y, scale, color, alpha))
+    line_y = line_y + line_h * scale
+  end
+  return max_w
 end
 
 function M.label(text, x, y, opts)

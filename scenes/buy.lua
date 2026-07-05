@@ -116,7 +116,7 @@ local function new_track_row(track_id, next_id, next_track_idx, x, y, w)
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
   if not State.tracks[track_id].a_rank_earned then
-    local msg = "Earn A RANK to unlock"
+    local msg = "RANK A needed"
     local mw  = usagi.measure_text(msg)
     local mx  = x + w + usagi.measure_text(label) - mw
     local my  = y + math.floor((bh - th) / 2)
@@ -218,13 +218,13 @@ function M.draw_shop()
     info_y = info_y + 20
   end
 
-  local you_earn_label = string.format("Your Rate:  $%d", economy.PAY)
+  local you_earn_label = string.format("Your Rate:  $%d", tdata.pay)
   ui.coin_text(you_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   info_y = info_y + 13
 
   if State.tracks[State.active_track].ghosts > 0 then
     info_y                 = info_y + 3
-    local ghost_earn_label = string.format("Ghost Rate: $%d", economy.PAY * rank_mult)
+    local ghost_earn_label = string.format("Ghost Rate: $%d", tdata.pay * rank_mult)
     ui.coin_text(ghost_earn_label, x, info_y, 1, gfx.COLOR_LIGHT_GRAY)
   end
 

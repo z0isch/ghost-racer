@@ -4,8 +4,6 @@ local popups         = require "popups"
 local car            = require "car"
 local persist        = require "persist"
 
-local PAY            = 5
-
 -- Rank multipliers, tuning knobs only - change freely.
 local RANK_MULTS     = {
   D = 0.2,
@@ -19,8 +17,12 @@ local RANK_LETTERS   = { "C", "B", "A", "S" }
 
 local M              = {}
 
-M.PAY                = PAY
 M.RANK_MULTS         = RANK_MULTS
+
+-- $ awarded per checkpoint/coin on a given track.
+function M.track_pay(id)
+  return track_data.TRACKS[id].pay
+end
 
 -- True if any unlocked track already has at least one of `kind` (a
 -- per-track shop item, e.g. "ghosts" or "coins") purchased.
@@ -54,7 +56,7 @@ function M.live_race_rate()
   local race      = State.race
   local tdata     = track_data.TRACKS[State.active_track]
   local remaining = #tdata.checkpoints - race.next_checkpoint + 1
-  local earned    = race.earned + remaining * PAY
+  local earned    = race.earned + remaining * tdata.pay
   return race.time > 0 and (earned / race.time) or math.huge
 end
 
@@ -76,7 +78,7 @@ function M.track_raw_cash_rate(id)
   if period <= 0 then return 0 end
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
-  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * PAY
+  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
   return tstate.ghosts * (pay / period)
 end
 
@@ -100,7 +102,7 @@ function M.lap_cash_rate(line)
   local tdata   = track_data.TRACKS[State.active_track]
   local tstate  = State.tracks[State.active_track]
   local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins)
-  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * PAY
+  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
   return pay / period
 end
 
@@ -174,7 +176,7 @@ function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
   local mult   = M.rank_mult(id, tstate.cash_per_sec)
-  local pay    = PAY * mult
+  local pay    = M.track_pay(id) * mult
   State.money  = State.money + pay
   if id == State.active_track then
     popups.spawn({

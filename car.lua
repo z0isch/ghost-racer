@@ -23,38 +23,45 @@ M.MARGIN                 = CAR_MARGIN
 local skid_marks         = {}
 local skid_prev          = nil
 
-local car                = {
-  x                    = 0,
-  y                    = 0,
-  vel                  = 0,
-  top_vel              = TOP_VEL_BASE,
-  facing_angle         = 0,
-  vel_angle            = 0,
-  turn_rate_slow       = 2.0,
-  turn_rate_fast       = 1.0,
-  turn_ref_speed       = TOP_VEL_BASE,
-  drift_turn_rate      = 3.6,
-  drift_slide          = math.pi / 8,
-  drift_deccel         = 200,
-  accel                = ACCEL_BASE,
-  deccel               = 150,
-  is_drifitng          = false,
-  skid_max_age         = 2.5,
-  skid_max_count       = 200,
-  boost_value          = 200,
-  boost_length         = 1.2,
-  drift_threshold      = 0.5,
-  drift_time           = 0,
-  boost_ready          = false,
-  boost_time_remaining = 0,
-  drift_enabled        = false,
-  drift_boost_enabled  = false,
-  max_boosts           = 0,
-  boosts               = 0,
-  boost_flame_t        = 0,
-}
+-- Mutable per-run state, kept on State (not a file-scope local) so a
+-- mid-race dev live-reload doesn't snap the car back to spawn.
+local function default_car()
+  return {
+    x                    = 0,
+    y                    = 0,
+    vel                  = 0,
+    top_vel              = TOP_VEL_BASE,
+    facing_angle         = 0,
+    vel_angle            = 0,
+    turn_rate_slow       = 2.0,
+    turn_rate_fast       = 1.0,
+    turn_ref_speed       = TOP_VEL_BASE,
+    drift_turn_rate      = 3.6,
+    drift_slide          = math.pi / 8,
+    drift_deccel         = 200,
+    accel                = ACCEL_BASE,
+    deccel               = 150,
+    is_drifitng          = false,
+    skid_max_age         = 2.5,
+    skid_max_count       = 200,
+    boost_value          = 200,
+    boost_length         = 1.2,
+    drift_threshold      = 0.5,
+    drift_time           = 0,
+    boost_ready          = false,
+    boost_time_remaining = 0,
+    drift_enabled        = false,
+    drift_boost_enabled  = false,
+    max_boosts           = 0,
+    boosts               = 0,
+    boost_flame_t        = 0,
+  }
+end
+
+M.default_state = default_car
 
 function M.reset(spawn)
+  local car                = State.car
   local ts                 = track_data.tile_size
   car.x                    = spawn.col * ts
   car.y                    = spawn.row * ts
@@ -72,6 +79,7 @@ function M.reset(spawn)
 end
 
 function M.apply_upgrades(accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks)
+  local car               = State.car
   car.accel               = ACCEL_BASE + accel_lvl * ACCEL_STEP
   car.top_vel             = TOP_VEL_BASE + top_speed_lvl * TOP_VEL_STEP
   car.drift_enabled       = drift_enabled or false
@@ -80,14 +88,17 @@ function M.apply_upgrades(accel_lvl, top_speed_lvl, drift_enabled, drift_boost_e
 end
 
 function M.pose()
+  local car = State.car
   return { x = car.x, y = car.y, angle = car.facing_angle, drift = car.is_drifitng }
 end
 
 function M.rect()
+  local car = State.car
   return { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
 end
 
 function M.update(dt, map)
+  local car           = State.car
   local holding_left  = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
   local is_drifitng   = false
@@ -219,6 +230,7 @@ function M.update(dt, map)
 end
 
 function M.draw()
+  local car      = State.car
   local car_tint = gfx.COLOR_WHITE
   if car.boost_ready then
     car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
@@ -227,6 +239,7 @@ function M.draw()
 end
 
 function M.draw_flames()
+  local car = State.car
   if car.boost_flame_t <= 0 then return end
   local cx     = car.x + 8
   local cy     = car.y + 8
@@ -251,6 +264,7 @@ function M.draw_flames()
 end
 
 function M.draw_boosts()
+  local car = State.car
   if car.boosts == 0 then return end
   local cx, cy = car.x + 8, car.y + 8
   local slot   = 2 * math.pi / car.max_boosts

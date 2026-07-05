@@ -127,11 +127,11 @@ function M.update(dt)
       if not race.coins_collected[ci]
           and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
         race.coins_collected[ci] = true
-        State.money              = State.money + economy.PAY
-        race.earned              = race.earned + economy.PAY
+        State.money              = State.money + tdata.pay
+        race.earned              = race.earned + tdata.pay
         sfx.play("coin")
         popups.spawn({
-          amount = economy.PAY,
+          amount = tdata.pay,
           x      = coin.col * track_data.tile_size + track_data.tile_size / 2,
           y      = coin.row * track_data.tile_size,
         })
@@ -140,10 +140,10 @@ function M.update(dt)
 
     local cp = tdata.checkpoints[race.next_checkpoint]
     if cp and util.rect_overlap(car_rect, track_data.checkpoint_rect(cp)) then
-      State.money = State.money + economy.PAY
-      race.earned = race.earned + economy.PAY
+      State.money = State.money + tdata.pay
+      race.earned = race.earned + tdata.pay
       popups.spawn({
-        amount = economy.PAY,
+        amount = tdata.pay,
         x      = car_rect.x + car.SIZE / 2,
         y      = car_rect.y,
       })
@@ -208,15 +208,17 @@ local function draw_race_result()
   end
   y = y + 44
 
-  local run_pay = economy.PAY * race.run_mult
+  local run_pay = economy.track_pay(State.active_track) * race.run_mult
   if race.has_baseline then
     if race.prev_rank == race.run_rank then
-      local text  = string.format("Ghost Rate: $%d", run_pay)
-      local scale = 2
-      local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
-      ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
+      if has_ghost then
+        local text  = string.format("Ghost Rate: $%d", run_pay)
+        local scale = 2
+        local sx    = math.floor((usagi.GAME_W - usagi.measure_text(text) * scale) / 2)
+        ui.coin_text(text, sx, y, scale, gfx.COLOR_WHITE)
+      end
     else
-      local prev_pay = economy.PAY * race.ghost_mult
+      local prev_pay = economy.track_pay(State.active_track) * race.ghost_mult
       local went_up  = run_pay > prev_pay
       local prefix   = string.format("Ghost Rate %s $%d -> ", went_up and "up" or "down", prev_pay)
       local new_pay  = string.format("$%d", run_pay)

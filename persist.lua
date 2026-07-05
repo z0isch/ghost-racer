@@ -17,6 +17,7 @@ local function default_state()
     active_track = "track1",
     unlocked     = { track1 = true },
     tracks       = { track1 = track_data.default_track_state() },
+    car          = car.default_state(),
     race         = {
       next_checkpoint = 1,
       time            = 0,

@@ -18,6 +18,7 @@ M.TRACKS        = {
     },
     ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 5.0 },
     label       = "Track 1",
+    pay         = 5,
     unlock_cost = nil,
     shop        = {
       {
@@ -39,7 +40,7 @@ M.TRACKS        = {
         kind      = "accel",
         label     = "Acceleration",
         currency  = "cash",
-        max       = 5,
+        max       = 4,
         base_cost = 25,
         growth    = 1.6
       },
@@ -57,8 +58,9 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    ranks       = { C = 1.0, B = 1.5, A = 2.2, S = 3.0 },
+    ranks       = { C = 10.0, B = 14.0, A = 16.0, S = 35.0 },
     label       = "Track 2",
+    pay         = 15,
     unlock_cost = 250,
     shop        = {
       {
@@ -67,13 +69,13 @@ M.TRACKS        = {
         currency  = "cash",
         max       = 8,
         base_cost = 150,
-        growth    = 1.55
+        growth    = 1.6
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 900,
+        base_cost = 600,
         growth    = 1.6
       },
       {
@@ -81,7 +83,7 @@ M.TRACKS        = {
         label     = "Drift",
         currency  = "cash",
         max       = 1,
-        base_cost = 2000,
+        base_cost = 1800,
         growth    = 1.6
       },
       {
@@ -89,7 +91,7 @@ M.TRACKS        = {
         label     = "Drift Boost",
         currency  = "cash",
         max       = 1,
-        base_cost = 2500,
+        base_cost = 2000,
         growth    = 1.6
       },
     },
@@ -109,6 +111,7 @@ M.TRACKS        = {
     },
     ranks       = { C = 1.2, B = 1.8, A = 2.5, S = 3.5 },
     label       = "Track 3",
+    pay         = 5,
     unlock_cost = 500,
     shop        = {
       {

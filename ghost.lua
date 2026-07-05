@@ -11,7 +11,6 @@ M.LAP_PAUSE          = LAP_PAUSE
 
 local sim_time       = 0
 local track_sim      = {}
-local run_samples    = {}
 local pending_events = {}
 
 local function get_track_sim(id)
@@ -26,7 +25,7 @@ M.get_track_sim = get_track_sim
 -- Re-anchor a track's ghost schedule so phase 0 lines up with right now.
 -- Used when the first ghost is bought so it starts at the beginning of the line.
 function M.restart_schedule(id)
-  local ts = get_track_sim(id)
+  local ts            = get_track_sim(id)
   ts.ghost_base       = sim_time
   ts.ghost_prev_phase = {}
 end
@@ -189,12 +188,14 @@ function M.collect_crossings()
   return events
 end
 
--- Recording for the current race run.
+-- Recording for the current race run. Stored on State (not a file-scope
+-- local) so a mid-race dev live-reload doesn't wipe the in-progress lap.
 function M.reset_recording()
-  run_samples = {}
+  State.race.recording = {}
 end
 
 function M.record(t, pose)
+  local run_samples             = State.race.recording
   run_samples[#run_samples + 1] = {
     t     = t,
     x     = pose.x,
@@ -205,12 +206,12 @@ function M.record(t, pose)
 end
 
 function M.get_recording()
-  return run_samples
+  return State.race.recording
 end
 
 function M.promote()
   local id                      = State.active_track
-  State.tracks[id].ghost_line   = run_samples
+  State.tracks[id].ghost_line   = State.race.recording
   State.tracks[id].best_time    = State.race.run_time
   State.tracks[id].best_earned  = State.race.earned
   State.tracks[id].cash_per_sec = State.race.run_rate

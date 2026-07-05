@@ -50,10 +50,10 @@ function M.draw(opts)
   gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
 
   local tx = math.floor((usagi.GAME_W - tw) / 2)
-  gfx.text_ex(title, tx, ty, TITLE_SCALE, 0, gfx.COLOR_WHITE, 1)
+  ui.coin_text(title, tx, ty, TITLE_SCALE, gfx.COLOR_WHITE)
 
   local bx = math.floor((usagi.GAME_W - bw) / 2)
-  gfx.text_ex(body, bx, by, BODY_SCALE, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  ui.coin_text(body, bx, by, BODY_SCALE, gfx.COLOR_LIGHT_GRAY)
 
   if demo then
     demo.draw(math.floor((usagi.GAME_W - demo.w) / 2), demo_y)
