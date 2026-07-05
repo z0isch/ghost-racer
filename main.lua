@@ -1,6 +1,4 @@
 local persist = require "persist"
-local car     = require "car"
-local ghost   = require "ghost"
 local buy     = require "scenes.buy"
 local race    = require "scenes.race"
 local intro   = require "scenes.intro"
@@ -25,10 +23,17 @@ end
 
 function _init()
   persist.load()
-  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
-  for id, _ in pairs(State.unlocked) do
-    ghost.rebuild_sim(id)
+  persist.resync_car_and_ghosts()
+
+  if usagi.IS_DEV then
+    usagi.menu_item("Dev: Save State", function()
+      persist.dev_save_snapshot()
+    end)
+    usagi.menu_item("Dev: Load State", function()
+      persist.dev_load_snapshot()
+    end)
   end
+
   -- enter initial scene without triggering exit on a previous scene
   scenes[State.mode].enter()
 end
