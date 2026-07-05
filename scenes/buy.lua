@@ -15,6 +15,21 @@ local GHOST_ALPHA = 0.6
 -- First-purchase explainer copy, keyed by shop `kind`. Shown once as an
 -- overlay in this scene immediately on purchase (see economy.try_buy).
 local MODAL_INFO  = {
+  ghosts = {
+    title = "Ghost Unlocked!",
+    body  = function()
+      return
+      "A ghost repeats your last lap\nforever, banking cash at every\ncheckpoint - even while you're away!\nFaster lap times increase your rank\nmaking ghosts earn more per checkpoint."
+    end,
+  },
+  coins = {
+    title = ui.COIN_CHAR .. " Unlocked!",
+    body  = function()
+      return ui.COIN_CHAR ..
+          " collected pay cash whenever you\nor a ghost drives through them.\n\n" ..
+          ui.COIN_CHAR .. " also increase your race rank\nmaking ghosts earn more per checkpoint and " .. ui.COIN_CHAR
+    end,
+  },
   drift = {
     title = "Drift Unlocked!",
     body  = function()
@@ -147,11 +162,14 @@ function M.draw_purchase_modal()
     car_demo.reset()
   end
   local info = MODAL_INFO[kind]
-  local demo = {
-    w    = car_demo.W,
-    h    = car_demo.H,
-    draw = function(x, y) car_demo.draw(kind, x, y) end,
-  }
+  local demo
+  if car_demo.supports(kind) then
+    demo = {
+      w    = car_demo.W,
+      h    = car_demo.H,
+      draw = function(x, y) car_demo.draw(kind, x, y) end,
+    }
+  end
   if modal.draw({ title = info.title, body = info.body(), demo = demo }) then
     State.purchase_modal = nil
   end

@@ -2,11 +2,12 @@
 -- ui.button returns true the frame a click completes (press + release on same button).
 -- ui.label draws scaled/colored text at (x, y).
 -- ui.rank_text draws text in the animated per-rank style (wave + color).
--- ui.coin_text draws text with every © in yellow.
+-- ui.coin_text draws text with every COIN_CHAR in yellow.
 
 local PAD_X = 4
 local PAD_Y = 2
 local DEFAULT_SCALE = 2
+local COIN_CHAR = "©"
 
 -- Wave amplitude (px at text scale AMP_SCALE, scales with the text) and text
 -- color per rank; higher ranks bounce harder.
@@ -32,6 +33,7 @@ local active = nil       -- id of currently armed button (cleared on mouse relea
 
 local M = {}
 
+M.COIN_CHAR = COIN_CHAR
 M.theme = {
   fill     = gfx.COLOR_DARK_GRAY,
   hover    = gfx.COLOR_INDIGO,
@@ -62,17 +64,17 @@ function M.rank_text(text, rank, x, y, scale)
   return w
 end
 
--- Draws `text` at (x, y) in `color`, with every © drawn in yellow. Returns
+-- Draws `text` at (x, y) in `color`, with every COIN_CHAR drawn in yellow. Returns
 -- the drawn width so callers can lay out mixed-style lines.
 function M.coin_text(text, x, y, scale, color, alpha)
   alpha = alpha or 1
   local w = 0
   local i = 1
   while i <= #text do
-    local s, e = text:find("©", i, true)
+    local s, e = text:find(COIN_CHAR, i, true)
     local chunk, chunk_color
     if s == i then
-      chunk, chunk_color = "©", gfx.COLOR_YELLOW
+      chunk, chunk_color = COIN_CHAR, gfx.COLOR_YELLOW
       i = e + 1
     else
       chunk, chunk_color = text:sub(i, s and s - 1 or #text), color

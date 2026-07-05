@@ -111,6 +111,12 @@ local POSES = {
   boost       = boost_pose,
 }
 
+-- True if `kind` has a scripted demo pose (used to decide whether the
+-- first-purchase modal in scenes/buy.lua shows the car demo area).
+function M.supports(kind)
+  return POSES[kind] ~= nil
+end
+
 local function skid_points(x, y, p)
   local back = util.vec_from_angle(p.facing + math.pi, SKID_BACK)
   local perp = util.vec_from_angle(p.facing + math.pi / 2, SKID_PERP)

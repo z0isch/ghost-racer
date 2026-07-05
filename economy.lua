@@ -22,11 +22,17 @@ local M              = {}
 M.PAY                = PAY
 M.RANK_MULTS         = RANK_MULTS
 
-function M.owns_any_ghost()
+-- True if any unlocked track already has at least one of `kind` (a
+-- per-track shop item, e.g. "ghosts" or "coins") purchased.
+function M.owns_any(kind)
   for _, tstate in pairs(State.tracks) do
-    if tstate.ghosts and tstate.ghosts >= 1 then return true end
+    if tstate[kind] and tstate[kind] >= 1 then return true end
   end
   return false
+end
+
+function M.owns_any_ghost()
+  return M.owns_any("ghosts")
 end
 
 -- Rank earned by a $/sec rate on a given track. Below the lowest threshold is "D".
@@ -115,8 +121,9 @@ function M.upgrade_cost(kind)
 end
 
 -- Kinds that show a one-time explainer modal in the buy scene the first time
--- they're purchased (rank 1 for multi-rank items like `boost`).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true }
+-- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
+-- across any track for `ghosts` / `coins`, since those counts are per-track).
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true }
 
 function M.try_buy(kind)
   local id   = State.active_track
@@ -128,6 +135,7 @@ function M.try_buy(kind)
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" then
     local was_first_ghost = kind == "ghosts" and State.tracks[id][kind] == 0
+    local was_first_ever  = FIRST_PURCHASE_MODAL_KINDS[kind] and not M.owns_any(kind)
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if was_first_ghost then
       ghost.restart_schedule(id)
@@ -135,6 +143,9 @@ function M.try_buy(kind)
       ghost.reset_track_phases(id)
     end
     if kind == "coins" then ghost.rebuild_sim(id) end
+    if was_first_ever then
+      State.purchase_modal = kind
+    end
   else
     local was_zero = State[kind] == 0
     State[kind] = State[kind] + 1

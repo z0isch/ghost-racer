@@ -2,12 +2,12 @@ local track_data = require "track_data"
 local car        = require "car"
 local ghost      = require "ghost"
 
-local M = {}
+local M          = {}
 
 local function default_state()
   return {
     mode         = "buy",
-    money        = 0,
+    money        = 10000,
     seen_help    = false,
     accel        = 0,
     top_speed    = 0,
@@ -126,7 +126,7 @@ end
 -- data/dev_snapshot.json, so it can be reloaded with `dev_load_snapshot`
 -- (or hand-edited for tuning) across restarts.
 function M.dev_save_snapshot()
-  local json  = usagi.to_json(progression_of_state())
+  local json   = usagi.to_json(progression_of_state())
   local f, err = io.open(DEV_SNAPSHOT_FILE, "w")
   if not f then
     print("[dev] failed to write " .. DEV_SNAPSHOT_FILE .. ": " .. tostring(err))
