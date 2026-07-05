@@ -83,7 +83,7 @@ M.TRACKS        = {
         label     = "Drift",
         currency  = "cash",
         max       = 1,
-        base_cost = 1800,
+        base_cost = 900,
         growth    = 1.6
       },
       {
@@ -91,7 +91,7 @@ M.TRACKS        = {
         label     = "Drift Boost",
         currency  = "cash",
         max       = 1,
-        base_cost = 2000,
+        base_cost = 1200,
         growth    = 1.6
       },
     },
@@ -177,13 +177,10 @@ end
 
 function M.default_track_state()
   return {
-    ghost_line    = nil,
-    best_time     = nil,
-    best_earned   = nil,
-    cash_per_sec  = nil,
-    ghosts        = 0,
-    coins         = 0,
-    a_rank_earned = false,
+    ghost_line = nil,
+    best_rate  = nil,
+    ghosts     = 0,
+    coins      = 0,
   }
 end
 

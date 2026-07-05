@@ -115,7 +115,7 @@ local function new_track_row(track_id, next_id, next_track_idx, x, y, w)
   local bh    = th * 2 + 4
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
-  if not State.tracks[track_id].a_rank_earned then
+  if not economy.a_rank_earned(track_id) then
     local msg = "RANK A needed"
     local mw  = usagi.measure_text(msg)
     local mx  = x + w + usagi.measure_text(label) - mw

@@ -37,7 +37,7 @@ end
 -- the track's current established rank.
 function M.player_pay(id)
   local tstate = State.tracks[id]
-  local mult   = M.rank_mult(id, tstate and tstate.cash_per_sec)
+  local mult   = M.rank_mult(id, tstate and tstate.best_rate)
   return M.pay_for_mult(id, mult)
 end
 
@@ -82,10 +82,17 @@ function M.rank_mult(id, rate)
   return RANK_MULTS[M.rank_for_rate(id, rate)]
 end
 
--- Rank of the promoted lap currently stored for a track.
+-- Rank of the established (high-water) rate stored for a track. Never drops
+-- once earned, even if a later lap is slower - see ghost.promote().
 function M.track_rank(id)
   local tstate = State.tracks[id]
-  return M.rank_for_rate(id, tstate and tstate.cash_per_sec)
+  return M.rank_for_rate(id, tstate and tstate.best_rate)
+end
+
+-- True once a track's established rank has ever reached A or S.
+function M.a_rank_earned(id)
+  local rank = M.track_rank(id)
+  return rank == "A" or rank == "S"
 end
 
 -- $/sec earned from ghosts before the rank multiplier is applied.
@@ -103,7 +110,7 @@ end
 function M.track_cash_rate(id)
   local tstate = State.tracks[id]
   if not tstate then return 0 end
-  return M.track_raw_cash_rate(id) * M.rank_mult(id, tstate.cash_per_sec)
+  return M.track_raw_cash_rate(id) * M.rank_mult(id, tstate.best_rate)
 end
 
 function M.ghost_cash_rate()
@@ -193,7 +200,7 @@ end
 function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
-  local mult   = M.rank_mult(id, tstate.cash_per_sec)
+  local mult   = M.rank_mult(id, tstate.best_rate)
   local pay    = M.track_pay(id) * mult
   State.money  = State.money + pay
   if id == State.active_track then

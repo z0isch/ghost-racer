@@ -85,12 +85,9 @@ local function apply_progression(loaded)
         local ts         = State.tracks[id]
         local tdata      = track_data.TRACKS[id]
         ts.ghost_line    = lt.ghost_line
-        ts.best_time     = lt.best_time
-        ts.best_earned   = lt.best_earned
-        ts.cash_per_sec  = lt.cash_per_sec
+        ts.best_rate     = lt.best_rate
         ts.ghosts        = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
         ts.coins         = math.min(lt.coins or 0, #tdata.coins)
-        ts.a_rank_earned = lt.a_rank_earned or false
       end
     end
   else

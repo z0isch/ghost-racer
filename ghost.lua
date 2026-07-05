@@ -210,11 +210,10 @@ function M.get_recording()
 end
 
 function M.promote()
-  local id                      = State.active_track
-  State.tracks[id].ghost_line   = State.race.recording
-  State.tracks[id].best_time    = State.race.run_time
-  State.tracks[id].best_earned  = State.race.earned
-  State.tracks[id].cash_per_sec = State.race.run_rate
+  local id          = State.active_track
+  local tstate      = State.tracks[id]
+  tstate.ghost_line = State.race.recording
+  tstate.best_rate  = math.max(tstate.best_rate or 0, State.race.run_rate)
   M.rebuild_sim(id)
 end
 
