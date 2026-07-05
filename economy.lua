@@ -24,13 +24,14 @@ function M.track_pay(id)
   return track_data.TRACKS[id].pay
 end
 
--- $ paid per checkpoint/coin at a given rank mult, boosted by 1 + mult above
--- the D floor so D rank keeps base pay and every rank above it earns a bonus
--- on top instead of losing a cut like the ghost payout does. Rounded to a
--- whole dollar since floating point mults (0.4, 0.6, ...) don't always land
--- on an exact integer and every "$%d" display of this value would break.
+-- $ paid per checkpoint/coin at a given rank mult, scaled by mult over the D
+-- floor so D rank keeps base pay and each rank above it multiplies it (with
+-- the current RANK_MULTS: C 2x, B 3x, A 5x, S 10x) - a constant 1/RANK_MULTS.D
+-- ratio over the ghost payout at every rank. Rounded to a whole dollar since
+-- floating point mults (0.4, 0.6, ...) don't always divide to an exact
+-- integer and every "$%d" display of this value would break.
 function M.pay_for_mult(id, mult)
-  return math.floor(M.track_pay(id) * (1 + mult - RANK_MULTS.D) + 0.5)
+  return math.floor(M.track_pay(id) * (mult / RANK_MULTS.D) + 0.5)
 end
 
 -- $ awarded per checkpoint/coin to the player during a live race, based on

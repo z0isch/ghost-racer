@@ -58,7 +58,7 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 35.0 },
+    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 12.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
@@ -105,11 +105,12 @@ M.TRACKS        = {
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
     coins       = {
-      { col = 18, row = 7 },
-      { col = 34, row = 12 },
-      { col = 10, row = 16 },
+      { col = 36, row = 12 },
+      { col = 10, row = 18 },
+      { col = 24, row = 16 },
+      { col = 4,  row = 11 },
     },
-    ranks       = { C = 1.2, B = 1.8, A = 2.5, S = 3.5 },
+    ranks       = { C = 12.0, B = 18.0, A = 20.0, S = 29.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2500,
@@ -119,14 +120,14 @@ M.TRACKS        = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 75,
-        growth    = 1.55
+        base_cost = 1500,
+        growth    = 1.6
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 120,
+        base_cost = 3000,
         growth    = 1.6
       },
       {
@@ -134,7 +135,7 @@ M.TRACKS        = {
         label     = "Boost",
         currency  = "cash",
         max       = 5,
-        base_cost = 200,
+        base_cost = 2500,
         growth    = 1.6
       },
     },
