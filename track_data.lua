@@ -142,27 +142,29 @@ M.TRACKS        = {
     },
   },
   track4 = {
-    map         = track4,
-    spawn       = { col = 20, row = 11 },
-    checkpoints = {
-      { col = 34, row = 6,  w = 5, h = 4 },
-      { col = 10, row = 14, w = 7, h = 2 },
-      { col = 1,  row = 1,  w = 5, h = 5 },
+    map                = track4,
+    spawn              = { col = 20, row = 11 },
+    checkpoints        = {
+      { col = 34, row = 2,  w = 4, h = 4 },
+      { col = 2,  row = 16, w = 4, h = 4 },
+      { col = 2,  row = 2,  w = 4, h = 4 },
+      { col = 34, row = 16, w = 4, h = 4 },
+      { col = 18, row = 9,  w = 4, h = 4 }
     },
-    coins       = {
+    coins              = {
       { col = 36, row = 12 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 4,  row = 11 },
     },
-    ranks       = { C = 36.0, B = 66.0, A = 90.0, S = 111.0 },
-    label       = "Track 4",
-    pay         = 135,
-    unlock_cost = 25000,
+    ranks              = { C = 36.0, B = 66.0, A = 90.0, S = 111.0 },
+    label              = "Track 4",
+    pay                = 135,
+    unlock_cost        = 25000,
     -- Unlocking needs an S rank on every earlier track instead of the usual
     -- rank A on the previous one (see economy.track_unlock_ready).
     unlock_needs_all_s = true,
-    shop        = {
+    shop               = {
       {
         kind      = "ghosts",
         label     = "Ghost",
