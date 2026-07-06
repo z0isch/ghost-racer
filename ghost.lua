@@ -52,16 +52,25 @@ local function compute_cp_crossings(line, checkpoints)
   return crossings
 end
 
-local function compute_coin_pickups(line, coins, coin_count)
+-- Whether a sample point `s` (the car's top-left corner) overlaps a coin's
+-- rect. With no magnet radius this is the car's 16px box against the coin
+-- tile; with a radius, a circle centered on the car against the tile.
+local function sample_overlaps(s, rect, radius)
+  if radius then
+    return util.circ_rect_overlap({ x = s.x + CAR_SIZE / 2, y = s.y + CAR_SIZE / 2, r = radius }, rect)
+  end
+  return util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
+end
+
+local function compute_coin_pickups(line, coins, coin_count, radius)
   if not line or #line == 0 then return nil end
   local pickups = {}
   local ts      = track_data.tile_size
   for ci = 1, coin_count do
     local rect        = track_data.coin_rect(coins[ci])
-    local car_box     = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
-    local inside_prev = util.rect_overlap(car_box, rect)
+    local inside_prev = sample_overlaps(line[1], rect, radius)
     for _, s in ipairs(line) do
-      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
+      local inside = sample_overlaps(s, rect, radius)
       if inside and not inside_prev then
         pickups[#pickups + 1] = { t = s.t, x = rect.x + ts / 2, y = rect.y }
         break
@@ -79,7 +88,8 @@ function M.rebuild_sim(id)
   local tstate          = State.tracks[id]
   local tdata           = track_data.TRACKS[id]
   ts.ghost_cp_crossings = compute_cp_crossings(tstate.ghost_line, tdata.checkpoints)
-  ts.ghost_coin_pickups = compute_coin_pickups(tstate.ghost_line, tdata.coins, tstate.coins)
+  ts.ghost_coin_pickups = compute_coin_pickups(tstate.ghost_line, tdata.coins, tstate.coins,
+    track_data.magnet_radius(State.magnet))
   ts.ghost_prev_phase   = {}
 end
 

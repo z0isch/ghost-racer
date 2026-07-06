@@ -49,9 +49,33 @@ local MODAL_INFO  = {
           .. "One charge per rank, per race."
     end,
   },
+  magnet = {
+    title = "Coin Magnet Unlocked!",
+    body  = function()
+      return
+          "Pulls in " .. ui.COIN_CHAR .. " from a larger radius\naround your car."
+    end,
+  },
+  nirvana = {
+    title   = "Well Done!",
+    -- Drawn in the S-rank style: per-character rainbow sine wave.
+    rainbow = true,
+    button  = "OKAY",
+    body    = function()
+      return "You have escaped the endless loop\nand can finally be at peace."
+    end,
+  },
 }
 
-local M           = {}
+-- Clears the purchase modal; dismissing Nirvana also returns to the title
+-- screen, since there's nothing left to buy.
+local function dismiss_purchase_modal()
+  local kind           = State.purchase_modal
+  State.purchase_modal = nil
+  if kind == "nirvana" then SceneGoto("intro") end
+end
+
+local M = {}
 
 -- Which kind the demo loop was last reset for, so it restarts per modal.
 local demo_kind
@@ -70,7 +94,7 @@ function M.update(dt)
   end
   popups.update(dt)
   if State.purchase_modal and input.pressed(input.BTN1) then
-    State.purchase_modal = nil
+    dismiss_purchase_modal()
   end
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
@@ -78,9 +102,19 @@ function M.update(dt)
 end
 
 local function shop_button(item, x, y, w)
-  local kind       = item.kind
-  local label      = item.label
-  local cost       = economy.upgrade_cost(kind)
+  local kind  = item.kind
+  local label = item.label
+  local cost  = economy.upgrade_cost(kind)
+
+  if not economy.shop_item_unlocked(State.active_track, item) then
+    local _, th = usagi.measure_text(label)
+    local bh    = th * 2 + 4
+    ui.label(label, x, y + math.floor((bh - th * 2) / 2))
+    local msg = "RANK " .. item.requires_rank .. " needed"
+    local mw  = usagi.measure_text(msg)
+    ui.label(msg, x + w - mw, y + math.floor((bh - th) / 2), { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
+    return false, bh
+  end
 
   local affordable = cost ~= nil and (cost == 0 or State.money >= cost)
   if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
@@ -175,8 +209,12 @@ function M.draw_purchase_modal()
       draw = function(x, y) car_demo.draw(kind, x, y) end,
     }
   end
-  if modal.draw({ title = info.title, body = info.body(), demo = demo }) then
-    State.purchase_modal = nil
+  local draw_title
+  if info.rainbow then
+    draw_title = function(x, y, scale) ui.rank_text(info.title, "S", x, y, scale) end
+  end
+  if modal.draw({ title = info.title, body = info.body(), demo = demo, draw_title = draw_title, button = info.button }) then
+    dismiss_purchase_modal()
   end
 end
 

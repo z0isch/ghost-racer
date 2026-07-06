@@ -121,12 +121,20 @@ function M.update(dt)
     ghost.record(race.time, car.pose())
 
     local car_rect = car.rect()
+    local magnet_r = track_data.magnet_radius(State.magnet)
 
     local pay = economy.player_pay(id)
     for ci = 1, road.active_coin_count(State.tracks[id].coins, tdata.coins) do
       local coin = tdata.coins[ci]
-      if not race.coins_collected[ci]
-          and util.rect_overlap(car_rect, track_data.coin_rect(coin)) then
+      local overlap
+      if magnet_r then
+        local cx = car_rect.x + car.SIZE / 2
+        local cy = car_rect.y + car.SIZE / 2
+        overlap  = util.circ_rect_overlap({ x = cx, y = cy, r = magnet_r }, track_data.coin_rect(coin))
+      else
+        overlap = util.rect_overlap(car_rect, track_data.coin_rect(coin))
+      end
+      if not race.coins_collected[ci] and overlap then
         race.coins_collected[ci] = true
         State.money              = State.money + pay
         race.raw_earned          = race.raw_earned + tdata.pay
@@ -192,6 +200,11 @@ function M.draw()
   ghost.draw_race_ghost()
   car.draw_boosts()
   car.draw_flames()
+  local magnet_r = track_data.magnet_radius(State.magnet)
+  if magnet_r then
+    local car_rect = car.rect()
+    gfx.circ_fill(car_rect.x + car.SIZE / 2, car_rect.y + car.SIZE / 2, magnet_r, gfx.COLOR_BLACK, 0.1)
+  end
   car.draw()
   popups.draw()
   hud.draw()

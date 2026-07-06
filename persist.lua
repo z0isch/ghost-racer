@@ -7,13 +7,15 @@ local M          = {}
 local function default_state()
   return {
     mode         = "buy",
-    money        = 0,
+    money        = 100000000,
     seen_help    = false,
     accel        = 0,
     top_speed    = 0,
     drift        = 0,
     drift_boost  = 0,
     boost        = 0,
+    nirvana      = 0,
+    magnet       = 0,
     active_track = "track1",
     unlocked     = { track1 = true },
     tracks       = { track1 = track_data.default_track_state() },
@@ -42,6 +44,8 @@ local function progression_of_state()
     drift        = State.drift,
     drift_boost  = State.drift_boost,
     boost        = State.boost,
+    nirvana      = State.nirvana,
+    magnet       = State.magnet,
     active_track = State.active_track,
     unlocked     = State.unlocked,
     tracks       = State.tracks,
@@ -59,6 +63,8 @@ local function apply_progression(loaded)
   State.drift       = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
   State.drift_boost = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
   State.boost       = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
+  State.nirvana     = math.min(loaded.nirvana or 0, track_data.kind_max("nirvana") or 0)
+  State.magnet      = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
 
   if loaded.active_track and track_data.TRACKS[loaded.active_track] then
     State.active_track = loaded.active_track
@@ -81,12 +87,12 @@ local function apply_progression(loaded)
         if not State.tracks[id] then
           State.tracks[id] = track_data.default_track_state()
         end
-        local ts         = State.tracks[id]
-        local tdata      = track_data.TRACKS[id]
-        ts.ghost_line    = lt.ghost_line
-        ts.best_rate     = lt.best_rate
-        ts.ghosts        = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-        ts.coins         = math.min(lt.coins or 0, #tdata.coins)
+        local ts      = State.tracks[id]
+        local tdata   = track_data.TRACKS[id]
+        ts.ghost_line = lt.ghost_line
+        ts.best_rate  = lt.best_rate
+        ts.ghosts     = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
+        ts.coins      = math.min(lt.coins or 0, #tdata.coins)
       end
     end
   else

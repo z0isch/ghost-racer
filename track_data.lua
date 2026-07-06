@@ -7,7 +7,16 @@ local M         = {}
 
 M.tile_size     = track1.tilewidth
 
-M.TRACKS        = {
+-- Coin-pickup radius (px) granted by each level of the "magnet" upgrade.
+-- Level 0 (no magnet) falls back to plain box-overlap pickup instead of a
+-- circle, so M.MAGNET_RADII[0] is intentionally absent (Lua indexes from 1).
+M.MAGNET_RADII  = { 18, 24, 30 }
+
+function M.magnet_radius(level)
+  return M.MAGNET_RADII[level]
+end
+
+M.TRACKS      = {
   track1 = {
     map         = track1,
     spawn       = { col = 5, row = 14 },
@@ -56,7 +65,7 @@ M.TRACKS        = {
     },
     coins       = {
       { col = 18, row = 7 },
-      { col = 34, row = 12 },
+      { col = 34, row = 13 },
       { col = 10, row = 16 },
     },
     ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 13.0 },
@@ -179,12 +188,29 @@ M.TRACKS        = {
         currency  = "cash",
         base_cost = 25000,
         growth    = 1.6
+      },
+      {
+        kind      = "magnet",
+        label     = "Coin Magnet",
+        currency  = "cash",
+        max       = 3,
+        base_cost = 20000,
+        growth    = 1.6
+      },
+      {
+        kind          = "nirvana",
+        label         = "Nirvana",
+        currency      = "cash",
+        max           = 1,
+        base_cost     = 0,
+        growth        = 1,
+        requires_rank = "S"
       }
     },
   },
 }
 
-M.TRACK_ORDER   = { "track1", "basic", "track2", "track4" }
+M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
 
 function M.track_shop_item(track_id, kind)
   for _, item in ipairs(M.TRACKS[track_id].shop) do

@@ -14,6 +14,7 @@ local RANK_MULTS   = {
 }
 -- Ascending order of ranks above the D floor, checked against track_data.TRACKS[id].ranks.
 local RANK_LETTERS = { "C", "B", "A", "S" }
+local RANK_ORDER   = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
 local M            = {}
 
@@ -96,6 +97,13 @@ function M.a_rank_earned(id)
   return rank == "A" or rank == "S"
 end
 
+-- True when a shop item's rank gate (`requires_rank`, e.g. Nirvana needing
+-- rank S on Track 4) is met on the given track. Ungated items always pass.
+function M.shop_item_unlocked(id, item)
+  if not item.requires_rank then return true end
+  return RANK_ORDER[M.track_rank(id)] >= RANK_ORDER[item.requires_rank]
+end
+
 -- True when the rank requirement to unlock a track is met: rank A on the
 -- previous track normally, or an S rank on every earlier track when the
 -- track sets `unlock_needs_all_s`.
@@ -149,7 +157,8 @@ function M.lap_cash_rate(line)
   if period <= 0 then return 0 end
   local tdata   = track_data.TRACKS[State.active_track]
   local tstate  = State.tracks[State.active_track]
-  local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins)
+  local radius  = track_data.magnet_radius(State.magnet)
+  local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins, radius)
   local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
   return pay / period
 end
@@ -173,12 +182,13 @@ end
 -- Kinds that show a one-time explainer modal in the buy scene the first time
 -- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true }
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, nirvana = true, magnet = true }
 
 function M.try_buy(kind)
   local id   = State.active_track
   local cost = M.upgrade_cost(kind)
   if cost == nil then return end
+  if not M.shop_item_unlocked(id, track_data.track_shop_item(id, kind)) then return end
   if kind == "ghosts" and not State.tracks[id].ghost_line then return end
   if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end
@@ -201,6 +211,11 @@ function M.try_buy(kind)
     State[kind] = State[kind] + 1
     if was_zero and FIRST_PURCHASE_MODAL_KINDS[kind] then
       State.purchase_modal = kind
+    end
+    if kind == "magnet" then
+      for tid, unlocked in pairs(State.unlocked) do
+        if unlocked then ghost.rebuild_sim(tid) end
+      end
     end
   end
   car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
