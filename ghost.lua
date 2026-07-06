@@ -30,24 +30,24 @@ function M.restart_schedule(id)
   ts.ghost_prev_phase = {}
 end
 
+-- Checkpoints only count in order (like the live race): a sample overlapping
+-- checkpoint N's rect is ignored unless N is the next one expected.
 local function compute_cp_crossings(line, checkpoints)
   if not line or #line == 0 then return nil end
   local crossings = {}
-  for ci, cp in ipairs(checkpoints) do
-    local rect        = track_data.checkpoint_rect(cp)
-    local car_box     = { x = line[1].x, y = line[1].y, w = CAR_SIZE, h = CAR_SIZE }
-    local inside_prev = util.rect_overlap(car_box, rect)
-    for _, s in ipairs(line) do
-      local inside = util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
-      if inside and not inside_prev then
-        crossings[ci] = { t = s.t, x = s.x + CAR_SIZE / 2, y = s.y }
-        break
-      end
-      inside_prev = inside
+  local next_cp   = 1
+  for _, s in ipairs(line) do
+    local cp = checkpoints[next_cp]
+    if not cp then break end
+    local rect = track_data.checkpoint_rect(cp)
+    if util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect) then
+      crossings[next_cp] = { t = s.t, x = s.x + CAR_SIZE / 2, y = s.y }
+      next_cp            = next_cp + 1
     end
-    if not crossings[ci] then
-      crossings[ci] = { t = 0, x = rect.x + rect.w / 2, y = rect.y + rect.h / 2 }
-    end
+  end
+  for ci = next_cp, #checkpoints do
+    local rect    = track_data.checkpoint_rect(checkpoints[ci])
+    crossings[ci] = { t = 0, x = rect.x + rect.w / 2, y = rect.y + rect.h / 2 }
   end
   return crossings
 end
