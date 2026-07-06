@@ -111,14 +111,15 @@ local function shop_button(item, x, y, w)
   return clicked, bh
 end
 
-local function new_track_row(track_id, next_id, next_track_idx, x, y, w)
+local function new_track_row(next_id, next_track_idx, x, y, w)
   local label = string.format("Track #%d", next_track_idx)
   local _, th = usagi.measure_text(label)
   local bh    = th * 2 + 4
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
-  if not economy.a_rank_earned(track_id) then
-    local msg = "RANK A needed"
+  if not economy.track_unlock_ready(next_id) then
+    local msg = track_data.TRACKS[next_id].unlock_needs_all_s
+        and "RANK S on all tracks" or "RANK A needed"
     local mw  = usagi.measure_text(msg)
     local mx  = x + w + usagi.measure_text(label) - mw
     local my  = y + math.floor((bh - th) / 2)
@@ -283,7 +284,7 @@ function M.draw_shop()
 
   local next_track = idx < #track_data.TRACK_ORDER and track_data.TRACK_ORDER[idx + 1] or nil
   if next_track and not State.unlocked[next_track] then
-    local clicked, bh = new_track_row(id, next_track, idx + 1, x, shop_y, w)
+    local clicked, bh = new_track_row(next_track, idx + 1, x, shop_y, w)
     if clicked and economy.try_unlock_track(next_track) then
       State.active_track = next_track
     end

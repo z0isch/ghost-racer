@@ -69,18 +69,14 @@ local function finish_race()
 
   local first_lap = tstate.ghost_line == nil
   local prev_rank = economy.track_rank(id)
+  local locked_id = economy.next_locked_track()
+  local was_ready = locked_id ~= nil and economy.track_unlock_ready(locked_id)
   ghost.promote()
   local new_rank = economy.track_rank(id)
 
   if first_lap or new_rank ~= prev_rank then
-    local was_a_or_s  = prev_rank == "A" or prev_rank == "S"
-    local is_a_or_s   = new_rank == "A" or new_rank == "S"
-    local show_unlock = false
-    if is_a_or_s and not was_a_or_s then
-      local idx     = track_data.get_track_index(id)
-      local next_id = track_data.TRACK_ORDER[idx + 1]
-      show_unlock   = next_id ~= nil and not State.unlocked[next_id]
-    end
+    local show_unlock = locked_id ~= nil and not was_ready
+        and economy.track_unlock_ready(locked_id)
     State.race_modal = {
       track_id    = id,
       rank        = new_rank,

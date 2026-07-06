@@ -1,6 +1,7 @@
 local basic_map = require "tile-map.basic"
 local track1    = require "tile-map.track1"
 local track2    = require "tile-map.track2"
+local track4    = require "tile-map.track4"
 
 local M         = {}
 
@@ -16,7 +17,7 @@ M.TRACKS        = {
     coins       = {
       { col = 18, row = 8 },
     },
-    ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 5.0 },
+    ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 4.4 },
     label       = "Track 1",
     pay         = 5,
     unlock_cost = nil,
@@ -58,7 +59,7 @@ M.TRACKS        = {
       { col = 34, row = 12 },
       { col = 10, row = 16 },
     },
-    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 12.0 },
+    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 13.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
@@ -110,7 +111,7 @@ M.TRACKS        = {
       { col = 24, row = 16 },
       { col = 4,  row = 11 },
     },
-    ranks       = { C = 12.0, B = 18.0, A = 20.0, S = 29.0 },
+    ranks       = { C = 12.0, B = 22.0, A = 30.0, S = 37.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2500,
@@ -140,9 +141,48 @@ M.TRACKS        = {
       },
     },
   },
+  track4 = {
+    map         = track4,
+    spawn       = { col = 20, row = 11 },
+    checkpoints = {
+      { col = 34, row = 6,  w = 5, h = 4 },
+      { col = 10, row = 14, w = 7, h = 2 },
+      { col = 1,  row = 1,  w = 5, h = 5 },
+    },
+    coins       = {
+      { col = 36, row = 12 },
+      { col = 10, row = 18 },
+      { col = 24, row = 16 },
+      { col = 4,  row = 11 },
+    },
+    ranks       = { C = 36.0, B = 66.0, A = 90.0, S = 111.0 },
+    label       = "Track 4",
+    pay         = 135,
+    unlock_cost = 25000,
+    -- Unlocking needs an S rank on every earlier track instead of the usual
+    -- rank A on the previous one (see economy.track_unlock_ready).
+    unlock_needs_all_s = true,
+    shop        = {
+      {
+        kind      = "ghosts",
+        label     = "Ghost",
+        currency  = "cash",
+        max       = 8,
+        base_cost = 15000,
+        growth    = 1.6
+      },
+      {
+        kind      = "coins",
+        label     = "Coin",
+        currency  = "cash",
+        base_cost = 25000,
+        growth    = 1.6
+      }
+    },
+  },
 }
 
-M.TRACK_ORDER   = { "track1", "basic", "track2" }
+M.TRACK_ORDER   = { "track1", "basic", "track2", "track4" }
 
 function M.track_shop_item(track_id, kind)
   for _, item in ipairs(M.TRACKS[track_id].shop) do

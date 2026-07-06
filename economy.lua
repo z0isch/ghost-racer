@@ -96,6 +96,28 @@ function M.a_rank_earned(id)
   return rank == "A" or rank == "S"
 end
 
+-- True when the rank requirement to unlock a track is met: rank A on the
+-- previous track normally, or an S rank on every earlier track when the
+-- track sets `unlock_needs_all_s`.
+function M.track_unlock_ready(id)
+  local idx = track_data.get_track_index(id)
+  if track_data.TRACKS[id].unlock_needs_all_s then
+    for i = 1, idx - 1 do
+      if M.track_rank(track_data.TRACK_ORDER[i]) ~= "S" then return false end
+    end
+    return true
+  end
+  return M.a_rank_earned(track_data.TRACK_ORDER[idx - 1])
+end
+
+-- First track in TRACK_ORDER the player hasn't unlocked yet, or nil.
+function M.next_locked_track()
+  for _, tid in ipairs(track_data.TRACK_ORDER) do
+    if not State.unlocked[tid] then return tid end
+  end
+  return nil
+end
+
 -- $/sec earned from ghosts before the rank multiplier is applied.
 function M.track_raw_cash_rate(id)
   local tstate = State.tracks[id]
@@ -188,6 +210,7 @@ end
 function M.try_unlock_track(id)
   local cost = track_data.TRACKS[id].unlock_cost
   if not cost or State.money < cost then return end
+  if not M.track_unlock_ready(id) then return end
   State.money        = State.money - cost
   State.unlocked[id] = true
   if not State.tracks[id] then
