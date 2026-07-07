@@ -203,7 +203,7 @@ function M.draw()
   local magnet_r = track_data.magnet_radius(State.magnet)
   if magnet_r then
     local car_rect = car.rect()
-    gfx.circ_fill(car_rect.x + car.SIZE / 2, car_rect.y + car.SIZE / 2, magnet_r, gfx.COLOR_BLACK, 0.1)
+    gfx.circ_fill(car_rect.x + car.SIZE / 2, car_rect.y + car.SIZE / 2, magnet_r, gfx.COLOR_BLACK, 0.07)
   end
   car.draw()
   popups.draw()
