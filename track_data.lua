@@ -25,7 +25,10 @@ M.TRACKS      = {
     },
     coins       = {
       { col = 18, row = 8 },
+      -- second set (new game loop) - positions are provisional, tune freely
+      { col = 26, row = 9 },
     },
+    base_coins  = 1,
     ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 4.4 },
     label       = "Track 1",
     pay         = 5,
@@ -67,7 +70,12 @@ M.TRACKS      = {
       { col = 18, row = 7 },
       { col = 34, row = 13 },
       { col = 10, row = 16 },
+      -- second set (new game loop) - positions are provisional, tune freely
+      { col = 6,  row = 8 },
+      { col = 28, row = 9 },
+      { col = 20, row = 14 },
     },
+    base_coins  = 3,
     ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 13.0 },
     label       = "Track 2",
     pay         = 15,
@@ -119,7 +127,13 @@ M.TRACKS      = {
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 3,  row = 11 },
+      -- second set (new game loop) - positions are provisional, tune freely
+      { col = 20, row = 3 },
+      { col = 36, row = 14 },
+      { col = 14, row = 12 },
+      { col = 32, row = 19 },
     },
+    base_coins  = 4,
     ranks       = { C = 12.0, B = 22.0, A = 30.0, S = 35.0 },
     label       = "Track 3",
     pay         = 45,
@@ -165,7 +179,13 @@ M.TRACKS      = {
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 4,  row = 11 },
+      -- second set (new game loop) - positions are provisional, tune freely
+      { col = 10, row = 7 },
+      { col = 30, row = 7 },
+      { col = 6,  row = 14 },
+      { col = 24, row = 20 },
     },
+    base_coins         = 4,
     ranks              = { C = 66.0, B = 85.0, A = 90.0, S = 115.0 },
     label              = "Track 4",
     pay                = 135,
@@ -244,12 +264,24 @@ function M.checkpoint_rect(cp)
   return { x = cp.col * ts, y = cp.row * ts, w = cp.w * ts, h = cp.h * ts }
 end
 
-function M.default_track_state()
+-- Coins active for free from the start of a loop: the whole original
+-- (pre-Nirvana) set once the player has looped at least once.
+function M.free_coins(id, loop)
+  return (loop or 1) >= 2 and M.TRACKS[id].base_coins or 0
+end
+
+-- Highest total coin count reachable on a track this loop: the original set
+-- in loop 1, both sets in loop 2+.
+function M.max_coins(id, loop)
+  return (loop or 1) >= 2 and #M.TRACKS[id].coins or M.TRACKS[id].base_coins
+end
+
+function M.default_track_state(id, loop)
   return {
     ghost_line = nil,
     best_rate  = nil,
     ghosts     = 0,
-    coins      = 0,
+    coins      = M.free_coins(id, loop),
   }
 end
 

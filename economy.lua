@@ -167,22 +167,25 @@ function M.upgrade_cost(kind)
   local id = State.active_track
   local u  = track_data.track_shop_item(id, kind)
   if not u then return nil end
+  if kind == "coins" then
+    local free = track_data.free_coins(id, State.loop)
+    if State.tracks[id].coins >= track_data.max_coins(id, State.loop) then return nil end
+    return math.floor(u.base_cost * (u.growth ^ (State.tracks[id].coins - free)))
+  end
   local lvl
-  if kind == "ghosts" or kind == "coins" then
+  if kind == "ghosts" then
     lvl = State.tracks[id][kind]
   else
     lvl = State[kind]
   end
-  local max = u.max
-  if kind == "coins" then max = #track_data.TRACKS[id].coins end
-  if lvl >= max then return nil end
+  if lvl >= u.max then return nil end
   return math.floor(u.base_cost * (u.growth ^ lvl))
 end
 
 -- Kinds that show a one-time explainer modal in the buy scene the first time
 -- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, nirvana = true, magnet = true }
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true }
 
 function M.try_buy(kind)
   local id   = State.active_track
@@ -195,7 +198,6 @@ function M.try_buy(kind)
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" then
     local was_first_ghost  = kind == "ghosts" and State.tracks[id][kind] == 0
-    local was_first_ever   = FIRST_PURCHASE_MODAL_KINDS[kind] and not M.owns_any(kind)
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if was_first_ghost then
       ghost.restart_schedule(id)
@@ -203,20 +205,25 @@ function M.try_buy(kind)
       ghost.reset_track_phases(id)
     end
     if kind == "coins" then ghost.rebuild_sim(id) end
-    if was_first_ever then
-      State.purchase_modal = kind
+    if FIRST_PURCHASE_MODAL_KINDS[kind] and not State.seen_modals[kind] then
+      State.seen_modals[kind] = true
+      State.purchase_modal    = kind
     end
   else
-    local was_zero = State[kind] == 0
     State[kind] = State[kind] + 1
-    if was_zero and FIRST_PURCHASE_MODAL_KINDS[kind] then
-      State.purchase_modal = kind
+    if FIRST_PURCHASE_MODAL_KINDS[kind] and not State.seen_modals[kind] then
+      State.seen_modals[kind] = true
+      State.purchase_modal    = kind
     end
     if kind == "magnet" then
       for tid, unlocked in pairs(State.unlocked) do
         if unlocked then ghost.rebuild_sim(tid) end
       end
     end
+  end
+  if kind == "nirvana" then
+    persist.start_new_loop()
+    return
   end
   car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   persist.save()
@@ -229,7 +236,7 @@ function M.try_unlock_track(id)
   State.money        = State.money - cost
   State.unlocked[id] = true
   if not State.tracks[id] then
-    State.tracks[id] = track_data.default_track_state()
+    State.tracks[id] = track_data.default_track_state(id, State.loop)
   end
   ghost.rebuild_sim(id)
   persist.save()

@@ -34,6 +34,12 @@ function M.draw()
     cx = cx + cw
   end
 
+  if State.loop >= 2 then
+    local tag = "LOOP " .. State.loop
+    local tw2 = usagi.measure_text(tag) * 2
+    gfx.text_ex(tag, math.floor((usagi.GAME_W - tw2) / 2), ty + th * scale + 12, 2, 0, gfx.COLOR_INDIGO, 1)
+  end
+
   local w      = 200
   local race_x = math.floor((usagi.GAME_W - w) / 2)
   if ui.button("RACE", race_x, usagi.GAME_H - 120, { w = w, scale = 3 }) then

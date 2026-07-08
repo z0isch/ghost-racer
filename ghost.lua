@@ -103,6 +103,13 @@ function M.reset_all_phases()
   end
 end
 
+-- Drops every cached track sim and any queued crossing events. Used when the
+-- whole progression state is replaced (start of a new loop).
+function M.clear_all_sims()
+  track_sim      = {}
+  pending_events = {}
+end
+
 function M.loop_period(line)
   if not line or #line == 0 then return 0 end
   return line[#line].t + LAP_PAUSE

@@ -33,7 +33,7 @@ function _init()
       persist.dev_load_snapshot()
     end)
   end
-
+  --persist.start_new_loop()
   -- enter initial scene without triggering exit on a previous scene
   scenes[State.mode].enter()
 end

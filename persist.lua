@@ -9,6 +9,8 @@ local function default_state()
     mode         = "buy",
     money        = 0,
     seen_help    = false,
+    loop         = 1,
+    seen_modals  = {},
     accel        = 0,
     top_speed    = 0,
     drift        = 0,
@@ -18,7 +20,7 @@ local function default_state()
     magnet       = 0,
     active_track = "track1",
     unlocked     = { track1 = true },
-    tracks       = { track1 = track_data.default_track_state() },
+    tracks       = { track1 = track_data.default_track_state("track1", 1) },
     car          = car.default_state(),
     race         = {
       next_checkpoint = 1,
@@ -39,6 +41,8 @@ local function progression_of_state()
   return {
     money        = State.money,
     seen_help    = State.seen_help,
+    loop         = State.loop,
+    seen_modals  = State.seen_modals,
     accel        = State.accel,
     top_speed    = State.top_speed,
     drift        = State.drift,
@@ -57,6 +61,8 @@ end
 local function apply_progression(loaded)
   State.money       = loaded.money or 0
   State.seen_help   = loaded.seen_help or false
+  State.loop        = loaded.loop or 1
+  State.seen_modals = loaded.seen_modals or {}
 
   State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
   State.top_speed   = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed") or 0)
@@ -75,7 +81,7 @@ local function apply_progression(loaded)
       if track_data.TRACKS[id] then
         State.unlocked[id] = v
         if v and not State.tracks[id] then
-          State.tracks[id] = track_data.default_track_state()
+          State.tracks[id] = track_data.default_track_state(id, State.loop)
         end
       end
     end
@@ -85,20 +91,15 @@ local function apply_progression(loaded)
     for id, lt in pairs(loaded.tracks) do
       if track_data.TRACKS[id] then
         if not State.tracks[id] then
-          State.tracks[id] = track_data.default_track_state()
+          State.tracks[id] = track_data.default_track_state(id, State.loop)
         end
         local ts      = State.tracks[id]
-        local tdata   = track_data.TRACKS[id]
         ts.ghost_line = lt.ghost_line
         ts.best_rate  = lt.best_rate
         ts.ghosts     = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-        ts.coins      = math.min(lt.coins or 0, #tdata.coins)
+        ts.coins      = math.max(track_data.free_coins(id, State.loop),
+          math.min(lt.coins or 0, track_data.max_coins(id, State.loop)))
       end
-    end
-  else
-    if loaded.upgrades then
-      State.tracks.basic.ghosts = math.min(loaded.upgrades.ghosts or 0, track_data.kind_max("ghosts"))
-      State.tracks.basic.coins  = math.min(loaded.upgrades.coins or 0, #track_data.TRACKS.basic.coins)
     end
   end
 end
@@ -110,6 +111,26 @@ function M.resync_car_and_ghosts()
   for id, _ in pairs(State.unlocked) do
     ghost.rebuild_sim(id)
   end
+end
+
+-- Buying Nirvana ends the game... into a new loop: everything resets to a
+-- fresh save except the loop counter, dismissed tutorials, and every track's
+-- original coin set, which starts active for free (see track_data.free_coins).
+function M.start_new_loop()
+  local next_loop     = (State.loop or 1) + 1
+  local seen_help     = State.seen_help
+  local seen_modals   = State.seen_modals
+  State               = default_state()
+  State.loop          = next_loop
+  State.seen_help     = seen_help
+  State.seen_modals   = seen_modals
+  State.tracks.track1 = track_data.default_track_state("track1", next_loop)
+  -- The ending modal always shows, even on repeat loops - it's the payoff,
+  -- not a tutorial.
+  State.purchase_modal = "nirvana"
+  ghost.clear_all_sims()
+  M.resync_car_and_ghosts()
+  M.save()
 end
 
 function M.save()
