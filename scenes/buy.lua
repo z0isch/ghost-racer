@@ -219,40 +219,59 @@ function M.draw_purchase_modal()
 end
 
 -- Post-race modal: shown after the very first lap on a track (explains the
--- beat-your-lap loop) and after any lap that raised the track's rank (shows
--- the pay-rate changes). See scenes/race.lua finish_race().
+-- beat-your-lap loop), after any lap that raised the track's rank (shows the
+-- pay-rate changes), and/or after a lap that raised the track's ghost $/sec
+-- (shows that rate's change). All three can coincide on one lap; they share
+-- this single modal rather than stacking separate popups. See
+-- scenes/race.lua finish_race().
 function M.draw_race_modal()
-  local info  = State.race_modal
-  local id    = info.track_id
-  local title = "RANK " .. info.rank .. (info.prev_rank and "!" or "")
+  local info         = State.race_modal
+  local id           = info.track_id
+  local rank_changed = info.prev_rank ~= nil
+  -- A cash-only bump (no rank change, not the first-lap explainer) hides the
+  -- rank entirely rather than showing a bare, unchanged "RANK X".
+  local show_rank    = info.first_lap or rank_changed
 
-  local body
-  if info.prev_rank then
+  local body_parts   = {}
+
+  if info.first_lap then
+    body_parts[#body_parts + 1] = "Lap saved! Beat it to raise\nyour rank and pay rates."
+  elseif rank_changed then
     local prev_mult = economy.RANK_MULTS[info.prev_rank]
     local new_mult  = economy.RANK_MULTS[info.rank]
-    body            = string.format("Your Rate:  $%d -> $%d",
+    local line      = string.format("Your Rate:  $%d -> $%d",
       economy.pay_for_mult(id, prev_mult), economy.pay_for_mult(id, new_mult))
     if State.tracks[id].ghosts > 0 then
       local pay = economy.track_pay(id)
-      body = body .. string.format("\nGhost Rate: $%d -> $%d",
+      line = line .. string.format("\nGhost Rate: $%d -> $%d",
         math.floor(pay * prev_mult + 0.5), math.floor(pay * new_mult + 0.5))
     end
-  else
-    body = "Lap saved! Beat it to raise\nyour rank and pay rates."
+    body_parts[#body_parts + 1] = line
+  end
+
+  if info.cash_after then
+    body_parts[#body_parts + 1] = string.format("$/sec: $%.2f -> $%.2f", info.cash_before, info.cash_after)
   end
 
   if info.show_unlock then
-    body = body .. "\n\nNew track available in the shop!"
+    body_parts[#body_parts + 1] = "New track available in the shop!"
   end
 
-  local bang       = info.prev_rank and "!" or ""
-  local draw_title = function(x, y, scale)
-    local rx = x
-    rx = rx + ui.coin_text("RANK ", rx, y, scale, gfx.COLOR_WHITE)
-    rx = rx + ui.rank_text(info.rank, info.rank, rx, y, scale)
-    if bang ~= "" then
-      ui.coin_text(bang, rx, y, scale, gfx.COLOR_WHITE)
+  local body = table.concat(body_parts, "\n\n")
+
+  local title, draw_title
+  if show_rank then
+    title      = "RANK " .. info.rank .. (rank_changed and "!" or "")
+    draw_title = function(x, y, scale)
+      local rx = x
+      rx = rx + ui.coin_text("RANK ", rx, y, scale, gfx.COLOR_WHITE)
+      rx = rx + ui.rank_text(info.rank, info.rank, rx, y, scale)
+      if rank_changed then
+        ui.coin_text("!", rx, y, scale, gfx.COLOR_WHITE)
+      end
     end
+  else
+    title = "$/SEC INCREASE!"
   end
 
   if modal.draw({ title = title, body = body, draw_title = draw_title }) then

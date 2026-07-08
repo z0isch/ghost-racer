@@ -145,14 +145,14 @@ M.TRACKS      = {
         currency  = "cash",
         max       = 8,
         base_cost = 1500,
-        growth    = 1.6
+        growth    = 1.4
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
         base_cost = 2000,
-        growth    = 1.6
+        growth    = 1.4
       },
       {
         kind      = "boost",
@@ -160,7 +160,7 @@ M.TRACKS      = {
         currency  = "cash",
         max       = 5,
         base_cost = 2500,
-        growth    = 1.6
+        growth    = 1.4
       },
     },
   },
@@ -189,7 +189,7 @@ M.TRACKS      = {
     ranks              = { C = 66.0, B = 85.0, A = 90.0, S = 115.0 },
     label              = "Track 4",
     pay                = 135,
-    unlock_cost        = 25000,
+    unlock_cost        = 10000,
     -- Unlocking needs an S rank on every earlier track instead of the usual
     -- rank A on the previous one (see economy.track_unlock_ready).
     unlock_needs_all_s = true,

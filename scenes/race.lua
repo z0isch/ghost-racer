@@ -13,6 +13,12 @@ local modal            = require "modal"
 local GHOST_RACE_ALPHA = 0.05
 local FINISH_BEAT_SECS = .2
 
+-- $/sec is compared at cent precision so the modal only fires when the
+-- displayed "$%.2f -> $%.2f" values actually differ.
+local function cents(v)
+  return math.floor(v * 100 + 0.5)
+end
+
 local countdown_time   = 0
 
 local M                = {}
@@ -59,31 +65,42 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race      = State.race
-  local id        = State.active_track
-  local tstate    = State.tracks[id]
+  local race        = State.race
+  local id          = State.active_track
+  local tstate      = State.tracks[id]
 
-  race.run_rate   = race.time > 0 and (race.raw_earned / race.time) or 0
-  race.phase      = "finished"
-  race.beat_left  = FINISH_BEAT_SECS
+  race.run_rate     = race.time > 0 and (race.raw_earned / race.time) or 0
+  race.phase        = "finished"
+  race.beat_left    = FINISH_BEAT_SECS
 
-  local first_lap = tstate.ghost_line == nil
-  local prev_rank = economy.track_rank(id)
-  local locked_id = economy.next_locked_track()
-  local was_ready = locked_id ~= nil and economy.track_unlock_ready(locked_id)
+  local first_lap   = tstate.ghost_line == nil
+  local had_ghost   = tstate.ghosts > 0
+  local prev_rank   = economy.track_rank(id)
+  local cash_before = economy.track_cash_rate(id)
+  local locked_id   = economy.next_locked_track()
+  local was_ready   = locked_id ~= nil and economy.track_unlock_ready(locked_id)
   ghost.promote()
-  local new_rank = economy.track_rank(id)
+  local new_rank  = economy.track_rank(id)
+  local cash_after = economy.track_cash_rate(id)
 
-  if first_lap or new_rank ~= prev_rank then
+  local rank_changed = not first_lap and new_rank ~= prev_rank
+  local cash_up       = had_ghost and cents(cash_after) > cents(cash_before)
+
+  if first_lap or rank_changed or cash_up then
     local show_unlock = locked_id ~= nil and not was_ready
         and economy.track_unlock_ready(locked_id)
     State.race_modal = {
       track_id    = id,
       rank        = new_rank,
-      -- nil on the first lap: the modal then shows the explainer body
-      -- instead of rate deltas.
-      prev_rank   = not first_lap and prev_rank or nil,
+      first_lap   = first_lap,
+      -- nil unless the rank actually changed: title/body only show the
+      -- rank-delta block then.
+      prev_rank   = rank_changed and prev_rank or nil,
       show_unlock = show_unlock,
+      -- nil unless the track's ghost $/sec went up (requires an owned
+      -- ghost). Merged into this same modal rather than a second popup.
+      cash_before = cash_up and cash_before or nil,
+      cash_after  = cash_up and cash_after or nil,
     }
   end
 
