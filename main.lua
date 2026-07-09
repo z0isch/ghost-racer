@@ -39,6 +39,7 @@ function _init()
 end
 
 function _update(dt)
+  State.loop_time = (State.loop_time or 0) + dt
   scenes[State.mode].update(dt)
 end
 

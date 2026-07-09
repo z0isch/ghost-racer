@@ -46,7 +46,7 @@ M.TRACKS      = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 30,
+        base_cost = 25,
         growth    = 1.6
       },
       {
@@ -54,7 +54,7 @@ M.TRACKS      = {
         label     = "Acceleration",
         currency  = "cash",
         max       = 4,
-        base_cost = 25,
+        base_cost = 20,
         growth    = 1.6
       },
     },
@@ -87,14 +87,14 @@ M.TRACKS      = {
         currency  = "cash",
         max       = 8,
         base_cost = 150,
-        growth    = 1.6
+        growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
         base_cost = 500,
-        growth    = 1.6
+        growth    = 1.3
       },
       {
         kind      = "drift",
@@ -109,7 +109,7 @@ M.TRACKS      = {
         label     = "Drift Boost",
         currency  = "cash",
         max       = 1,
-        base_cost = 1200,
+        base_cost = 1000,
         growth    = 1.6
       },
     },
@@ -144,15 +144,15 @@ M.TRACKS      = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 1500,
-        growth    = 1.4
+        base_cost = 1000,
+        growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 2000,
-        growth    = 1.4
+        base_cost = 1500,
+        growth    = 1.3
       },
       {
         kind      = "boost",
@@ -160,7 +160,7 @@ M.TRACKS      = {
         currency  = "cash",
         max       = 5,
         base_cost = 2500,
-        growth    = 1.4
+        growth    = 1.3
       },
     },
   },
@@ -199,23 +199,23 @@ M.TRACKS      = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 10000,
-        growth    = 1.6
+        base_cost = 9000,
+        growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 15000,
-        growth    = 1.6
+        base_cost = 10000,
+        growth    = 1.3
       },
       {
         kind      = "magnet",
         label     = "Coin Magnet",
         currency  = "cash",
         max       = 3,
-        base_cost = 15000,
-        growth    = 1.6
+        base_cost = 11000,
+        growth    = 1.3
       },
       {
         kind          = "nirvana",

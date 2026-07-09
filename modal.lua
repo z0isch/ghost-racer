@@ -21,7 +21,10 @@ local M            = {}
 -- demo (optional { w, h, draw = function(x, y) }, drawn between the body and
 -- the button), draw_title (optional function(x, y, scale) replacing the
 -- default plain-white title render - `title` is still required for layout,
--- so it must measure the same width as whatever draw_title actually draws).
+-- so it must measure the same width as whatever draw_title actually draws),
+-- draw_body (optional function(x, y, scale) replacing the default light-gray
+-- body render - `body` is still required for layout, so it must measure the
+-- same width/line count as whatever draw_body actually draws).
 function M.draw(opts)
   gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
 
@@ -59,7 +62,11 @@ function M.draw(opts)
   end
 
   local bx = math.floor((usagi.GAME_W - bw) / 2)
-  ui.coin_text(body, bx, by, BODY_SCALE, gfx.COLOR_LIGHT_GRAY)
+  if opts.draw_body then
+    opts.draw_body(bx, by, BODY_SCALE)
+  else
+    ui.coin_text(body, bx, by, BODY_SCALE, gfx.COLOR_LIGHT_GRAY)
+  end
 
   if demo then
     demo.draw(math.floor((usagi.GAME_W - demo.w) / 2), demo_y)

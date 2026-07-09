@@ -10,6 +10,7 @@ local function default_state()
     money        = 0,
     seen_help    = false,
     loop         = 1,
+    loop_time    = 0,
     seen_modals  = {},
     accel        = 0,
     top_speed    = 0,
@@ -42,6 +43,7 @@ local function progression_of_state()
     money        = State.money,
     seen_help    = State.seen_help,
     loop         = State.loop,
+    loop_time    = State.loop_time,
     seen_modals  = State.seen_modals,
     accel        = State.accel,
     top_speed    = State.top_speed,
@@ -62,6 +64,7 @@ local function apply_progression(loaded)
   State.money       = loaded.money or 0
   State.seen_help   = loaded.seen_help or false
   State.loop        = loaded.loop or 1
+  State.loop_time   = loaded.loop_time or 0
   State.seen_modals = loaded.seen_modals or {}
 
   State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
@@ -117,14 +120,18 @@ end
 -- fresh save except the loop counter, dismissed tutorials, and every track's
 -- original coin set, which starts active for free (see track_data.free_coins).
 function M.start_new_loop()
-  local next_loop     = (State.loop or 1) + 1
-  local seen_help     = State.seen_help
-  local seen_modals   = State.seen_modals
-  State               = default_state()
-  State.loop          = next_loop
-  State.seen_help     = seen_help
-  State.seen_modals   = seen_modals
-  State.tracks.track1 = track_data.default_track_state("track1", next_loop)
+  local next_loop      = (State.loop or 1) + 1
+  local finished_time  = State.loop_time or 0
+  local seen_help      = State.seen_help
+  local seen_modals    = State.seen_modals
+  State                = default_state()
+  State.loop           = next_loop
+  State.seen_help      = seen_help
+  State.seen_modals    = seen_modals
+  -- Not part of default_state/progression - only read once by the "Well
+  -- Done!" modal that's about to show, reporting on the loop that just ended.
+  State.last_loop_time = finished_time
+  State.tracks.track1  = track_data.default_track_state("track1", next_loop)
   -- The ending modal always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
   State.purchase_modal = "nirvana"

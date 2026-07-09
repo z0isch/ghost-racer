@@ -12,9 +12,21 @@ local car_demo    = require "car_demo"
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
 
+-- Formats a duration in seconds as H:MM:SS (or M:SS under an hour).
+local function format_duration(seconds)
+  local total = math.floor(seconds + 0.5)
+  local h     = math.floor(total / 3600)
+  local m     = math.floor((total % 3600) / 60)
+  local s     = total % 60
+  if h > 0 then
+    return string.format("%d:%02d:%02d", h, m, s)
+  end
+  return string.format("%d:%02d", m, s)
+end
+
 -- First-purchase explainer copy, keyed by shop `kind`. Shown once as an
 -- overlay in this scene immediately on purchase (see economy.try_buy).
-local MODAL_INFO  = {
+local MODAL_INFO = {
   ghosts = {
     title = "Ghost Unlocked!",
     body  = function()
@@ -57,12 +69,21 @@ local MODAL_INFO  = {
     end,
   },
   nirvana = {
-    title   = "Well Done!",
-    -- Drawn in the S-rank style: per-character rainbow sine wave.
-    rainbow = true,
-    button  = "OKAY",
-    body    = function()
-      return "You have escaped the endless loop\nand can finally be at peace."
+    title     = "Loop Complete!",
+    rainbow   = true,
+    button    = "OKAY",
+    body      = function()
+      return "RANK D\n\nTime: " ..
+          format_duration(State.last_loop_time or 0) ..
+          "\n\nUnfortunately you have not escaped the endless loop.\nGo faster for a better rank."
+    end,
+    draw_body = function(x, y, scale)
+      local _, line_h = usagi.measure_text("RANK D")
+      ui.rank_text("RANK D", "D", x, y, scale)
+      ui.coin_text(
+        "Time: " .. format_duration(State.last_loop_time or 0) ..
+        "\n\nUnfortunately you have not escaped the endless loop.\nGo faster for a better rank.",
+        x, y + line_h * scale * 2, scale, gfx.COLOR_LIGHT_GRAY)
     end,
   },
 }
@@ -213,7 +234,7 @@ function M.draw_purchase_modal()
   if info.rainbow then
     draw_title = function(x, y, scale) ui.rank_text(info.title, "S", x, y, scale) end
   end
-  if modal.draw({ title = info.title, body = info.body(), demo = demo, draw_title = draw_title, button = info.button }) then
+  if modal.draw({ title = info.title, body = info.body(), demo = demo, draw_title = draw_title, draw_body = info.draw_body, button = info.button }) then
     dismiss_purchase_modal()
   end
 end
