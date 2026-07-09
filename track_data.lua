@@ -93,7 +93,7 @@ M.TRACKS      = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 500,
+        base_cost = 400,
         growth    = 1.3
       },
       {
@@ -101,7 +101,7 @@ M.TRACKS      = {
         label     = "Drift",
         currency  = "cash",
         max       = 1,
-        base_cost = 900,
+        base_cost = 700,
         growth    = 1.6
       },
       {
@@ -109,7 +109,7 @@ M.TRACKS      = {
         label     = "Drift Boost",
         currency  = "cash",
         max       = 1,
-        base_cost = 1000,
+        base_cost = 800,
         growth    = 1.6
       },
     },
@@ -151,7 +151,7 @@ M.TRACKS      = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 1500,
+        base_cost = 1100,
         growth    = 1.3
       },
       {
@@ -159,7 +159,7 @@ M.TRACKS      = {
         label     = "Boost",
         currency  = "cash",
         max       = 5,
-        base_cost = 2500,
+        base_cost = 2000,
         growth    = 1.3
       },
     },
