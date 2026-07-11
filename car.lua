@@ -11,6 +11,11 @@ local TOP_VEL_STEP       = 15
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
 local WALL_DECEL         = 750
+local SQUEEL_MIN_VEL     = 80
+local ENGINE_MIN_VOL     = 0.3
+-- sfx voices can't have their volume changed while playing, so the engine
+-- loop is restarted whenever the speed-based volume has moved this far.
+local ENGINE_VOL_STEP    = 0.1
 local BOOST_FLAME_TIME   = 0.8
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
@@ -20,11 +25,10 @@ local M                  = {}
 M.SIZE                   = CAR_SIZE
 M.MARGIN                 = CAR_MARGIN
 
-local skid_marks         = {}
-local skid_prev          = nil
-
--- Mutable per-run state, kept on State (not a file-scope local) so a
--- mid-race dev live-reload doesn't snap the car back to spawn.
+-- This module is stateless: every function takes the car state table as its
+-- first argument. Callers own the table and keep it somewhere reload-safe
+-- (the game stores it on State.car) so a mid-race dev live-reload doesn't
+-- snap the car back to spawn.
 local function default_car()
   return {
     x                    = 0,
@@ -44,6 +48,8 @@ local function default_car()
     is_drifitng          = false,
     skid_max_age         = 2.5,
     skid_max_count       = 200,
+    skid_marks           = {},
+    skid_prev            = nil,
     boost_value          = 200,
     boost_length         = 1.2,
     drift_threshold      = 0.5,
@@ -55,13 +61,13 @@ local function default_car()
     max_boosts           = 0,
     boosts               = 0,
     boost_flame_t        = 0,
+    engine_vol           = 0,
   }
 end
 
 M.default_state = default_car
 
-function M.reset(spawn)
-  local car                = State.car
+function M.reset(car, spawn)
   local ts                 = track_data.tile_size
   car.x                    = spawn.col * ts
   car.y                    = spawn.row * ts
@@ -74,12 +80,11 @@ function M.reset(spawn)
   car.boost_time_remaining = 0
   car.boosts               = car.max_boosts
   car.boost_flame_t        = 0
-  skid_marks               = {}
-  skid_prev                = nil
+  car.skid_marks           = {}
+  car.skid_prev            = nil
 end
 
-function M.apply_upgrades(accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks)
-  local car               = State.car
+function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks)
   car.accel               = ACCEL_BASE + accel_lvl * ACCEL_STEP
   car.top_vel             = TOP_VEL_BASE + top_speed_lvl * TOP_VEL_STEP
   car.drift_enabled       = drift_enabled or false
@@ -87,18 +92,15 @@ function M.apply_upgrades(accel_lvl, top_speed_lvl, drift_enabled, drift_boost_e
   car.max_boosts          = boost_ranks or 0
 end
 
-function M.pose()
-  local car = State.car
+function M.pose(car)
   return { x = car.x, y = car.y, angle = car.facing_angle, drift = car.is_drifitng }
 end
 
-function M.rect()
-  local car = State.car
+function M.rect(car)
   return { x = car.x, y = car.y, w = CAR_SIZE, h = CAR_SIZE }
 end
 
-function M.update(dt, map)
-  local car           = State.car
+function M.update(car, dt, map)
   local holding_left  = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
   local is_drifitng   = false
@@ -140,6 +142,7 @@ function M.update(dt, map)
     car.vel = car.vel + OVERSPEED_IMPULSE
     car.boosts = car.boosts - 1
     car.boost_flame_t = BOOST_FLAME_TIME
+    sfx.play("boost")
   end
 
   if car.vel > effective_top_vel then
@@ -181,15 +184,37 @@ function M.update(dt, map)
       car.boost_time_remaining = car.boost_length
       car.vel = math.min(car.vel + car.boost_value, car.top_vel)
       car.boost_ready = false
+      sfx.play("boost")
     end
     car.is_drifitng = false
     car.drift_time  = 0
+  end
+
+  if is_drifitng and car.vel > 0 then
+    if not sfx.is_playing("squeal") and car.vel > SQUEEL_MIN_VEL then
+      sfx.play("squeal")
+    end
+  elseif sfx.is_playing("squeal") then
+    sfx.stop("squeal")
+  end
+
+  if car.vel > 0 then
+    local t   = util.clamp(car.vel / car.top_vel, 0, 1)
+    local vol = ENGINE_MIN_VOL + (1 - ENGINE_MIN_VOL) * t
+    if not sfx.is_playing("engine") or math.abs(vol - car.engine_vol) >= ENGINE_VOL_STEP then
+      sfx.stop("engine")
+      sfx.play_ex("engine", vol, 1, 0)
+      car.engine_vol = vol
+    end
+  elseif sfx.is_playing("engine") then
+    sfx.stop("engine")
   end
 
   if car.boost_time_remaining > 0 then
     car.boost_time_remaining = car.boost_time_remaining - dt
   end
 
+  local skid_marks = car.skid_marks
   if is_drifitng then
     local cx   = car.x + 8
     local cy   = car.y + 8
@@ -199,23 +224,23 @@ function M.update(dt, map)
     local ly   = cy + back.y - perp.y
     local rx   = cx + back.x + perp.x
     local ry   = cy + back.y + perp.y
-    if skid_prev then
+    if car.skid_prev then
       skid_marks[#skid_marks + 1] = {
-        lx1 = skid_prev.lx,
-        ly1 = skid_prev.ly,
+        lx1 = car.skid_prev.lx,
+        ly1 = car.skid_prev.ly,
         lx2 = lx,
         ly2 = ly,
-        rx1 = skid_prev.rx,
-        ry1 = skid_prev.ry,
+        rx1 = car.skid_prev.rx,
+        ry1 = car.skid_prev.ry,
         rx2 = rx,
         ry2 = ry,
         age = 0,
       }
       if #skid_marks > car.skid_max_count then table.remove(skid_marks, 1) end
     end
-    skid_prev = { lx = lx, ly = ly, rx = rx, ry = ry }
+    car.skid_prev = { lx = lx, ly = ly, rx = rx, ry = ry }
   else
-    skid_prev = nil
+    car.skid_prev = nil
   end
 
   local i = 1
@@ -229,8 +254,7 @@ function M.update(dt, map)
   end
 end
 
-function M.draw()
-  local car      = State.car
+function M.draw(car)
   local car_tint = gfx.COLOR_WHITE
   if car.boost_ready then
     car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
@@ -238,8 +262,7 @@ function M.draw()
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end
 
-function M.draw_flames()
-  local car = State.car
+function M.draw_flames(car)
   if car.boost_flame_t <= 0 then return end
   local cx     = car.x + 8
   local cy     = car.y + 8
@@ -263,8 +286,7 @@ function M.draw_flames()
   end
 end
 
-function M.draw_boosts()
-  local car = State.car
+function M.draw_boosts(car)
   if car.boosts == 0 then return end
   local cx, cy = car.x + 8, car.y + 8
   local slot   = 2 * math.pi / car.max_boosts
@@ -275,8 +297,8 @@ function M.draw_boosts()
   end
 end
 
-function M.draw_skid_marks()
-  for _, mark in ipairs(skid_marks) do
+function M.draw_skid_marks(car)
+  for _, mark in ipairs(car.skid_marks) do
     gfx.line(mark.lx1, mark.ly1, mark.lx2, mark.ly2, gfx.COLOR_BLACK)
     gfx.line(mark.rx1, mark.ry1, mark.rx2, mark.ry2, gfx.COLOR_BLACK)
   end

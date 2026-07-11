@@ -6,8 +6,6 @@ local TILE_SIZE = 16
 local COLS      = GAME_W / TILE_SIZE
 local ROWS      = GAME_H / TILE_SIZE
 
-local map
-
 local function build_map()
   local data = {}
   for i = 1, COLS * ROWS do
@@ -25,21 +23,24 @@ function _config()
 end
 
 function _init()
-  map = build_map()
-  car.apply_upgrades(0, 0, true, true, 5)
-  car.reset({ col = COLS / 2, row = ROWS / 2 })
+  State = {
+    map = build_map(),
+    car = car.default_state(),
+  }
+  car.apply_upgrades(State.car, 0, 0, true, true, 5)
+  car.reset(State.car, { col = COLS / 2, row = ROWS / 2 })
 end
 
 function _update(dt)
   if input.key_pressed(input.KEY_R) then
-    car.reset({ col = COLS / 2, row = ROWS / 2 })
+    car.reset(State.car, { col = COLS / 2, row = ROWS / 2 })
   end
-  car.update(dt, map)
+  car.update(State.car, dt, State.map)
 end
 
 function _draw()
   gfx.clear(gfx.COLOR_INDIGO)
-  car.draw_skid_marks()
-  car.draw_flames()
-  car.draw()
+  car.draw_skid_marks(State.car)
+  car.draw_flames(State.car)
+  car.draw(State.car)
 end

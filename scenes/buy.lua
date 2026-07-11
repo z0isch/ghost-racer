@@ -101,6 +101,13 @@ local M = {}
 -- Which kind the demo loop was last reset for, so it restarts per modal.
 local demo_kind
 
+-- Applause follows the Nirvana fanfare once it finishes, rather than
+-- overlapping it (see economy.try_buy). Edge-triggered on the fanfare
+-- ending rather than tied to the modal, since the modal only re-arms via
+-- demo_kind on the very first Nirvana purchase (seen_modals carries the
+-- kind across loops after that).
+local loop_complete_was_playing = false
+
 function M.enter()
   ghost.reset_all_phases()
 end
@@ -114,6 +121,11 @@ function M.update(dt)
     economy.bank(ev)
   end
   popups.update(dt)
+  local loop_complete_playing = sfx.is_playing("loop_complete")
+  if loop_complete_was_playing and not loop_complete_playing then
+    sfx.play("applause")
+  end
+  loop_complete_was_playing = loop_complete_playing
   if State.purchase_modal and input.pressed(input.BTN1) then
     dismiss_purchase_modal()
   end

@@ -222,10 +222,11 @@ function M.try_buy(kind)
     end
   end
   if kind == "nirvana" then
+    sfx.play("loop_complete")
     persist.start_new_loop()
     return
   end
-  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
+  car.apply_upgrades(State.car, State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   persist.save()
 end
 

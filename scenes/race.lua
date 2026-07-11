@@ -19,9 +19,10 @@ local function cents(v)
   return math.floor(v * 100 + 0.5)
 end
 
-local countdown_time   = 0
+local countdown_time  = 0
+local countdown_shown = 0
 
-local M                = {}
+local M               = {}
 
 local function get_hints()
   local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
@@ -47,10 +48,11 @@ function M.enter()
     first_race      = not State.seen_help,
   }
   ghost.reset_recording()
-  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
-  car.reset(track_data.TRACKS[State.active_track].spawn)
+  car.apply_upgrades(State.car, State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
+  car.reset(State.car, track_data.TRACKS[State.active_track].spawn)
   popups.clear()
   countdown_time = 3
+  countdown_shown = 0
   persist.save()
 end
 
@@ -61,6 +63,7 @@ local function dismiss_help()
   State.seen_help  = true
   State.race.phase = "countdown"
   countdown_time   = 3
+  countdown_shown  = 0
   persist.save()
 end
 
@@ -72,6 +75,8 @@ local function finish_race()
   race.run_rate     = race.time > 0 and (race.raw_earned / race.time) or 0
   race.phase        = "finished"
   race.beat_left    = FINISH_BEAT_SECS
+  sfx.stop("engine")
+  sfx.play("applause")
 
   local first_lap   = tstate.ghost_line == nil
   local had_ghost   = tstate.ghosts > 0
@@ -80,11 +85,11 @@ local function finish_race()
   local locked_id   = economy.next_locked_track()
   local was_ready   = locked_id ~= nil and economy.track_unlock_ready(locked_id)
   ghost.promote()
-  local new_rank  = economy.track_rank(id)
-  local cash_after = economy.track_cash_rate(id)
+  local new_rank     = economy.track_rank(id)
+  local cash_after   = economy.track_cash_rate(id)
 
   local rank_changed = not first_lap and new_rank ~= prev_rank
-  local cash_up       = had_ghost and cents(cash_after) > cents(cash_before)
+  local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
 
   if first_lap or rank_changed or cash_up then
     local show_unlock = locked_id ~= nil and not was_ready
@@ -119,10 +124,16 @@ function M.update(dt)
       dismiss_help()
     end
   elseif race.phase == "countdown" then
+    local shown = math.ceil(countdown_time)
+    if shown ~= countdown_shown and shown > 0 then
+      countdown_shown = shown
+      sfx.play("start")
+    end
     countdown_time = countdown_time - (dt * 2)
     if countdown_time <= 0 then
       countdown_time = 0
       race.phase = "racing"
+      sfx.play("go")
     end
   elseif race.phase == "finished" then
     race.beat_left = race.beat_left - dt
@@ -133,11 +144,11 @@ function M.update(dt)
     local id    = State.active_track
     local tdata = track_data.TRACKS[id]
 
-    car.update(dt, tdata.map)
+    car.update(State.car, dt, tdata.map)
     race.time = race.time + dt
-    ghost.record(race.time, car.pose())
+    ghost.record(race.time, car.pose(State.car))
 
-    local car_rect = car.rect()
+    local car_rect = car.rect(State.car)
     local magnet_r = track_data.magnet_radius(State.magnet)
 
     local pay = economy.player_pay(id)
@@ -212,17 +223,17 @@ function M.draw()
     end
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins, race.coins_collected)
-  car.draw_skid_marks()
+  car.draw_skid_marks(State.car)
   ghost.draw_sim(GHOST_RACE_ALPHA)
   ghost.draw_race_ghost()
-  car.draw_boosts()
-  car.draw_flames()
+  car.draw_boosts(State.car)
+  car.draw_flames(State.car)
   local magnet_r = track_data.magnet_radius(State.magnet)
   if magnet_r then
-    local car_rect = car.rect()
+    local car_rect = car.rect(State.car)
     gfx.circ_fill(car_rect.x + car.SIZE / 2, car_rect.y + car.SIZE / 2, magnet_r, gfx.COLOR_BLACK, 0.07)
   end
-  car.draw()
+  car.draw(State.car)
   popups.draw()
   hud.draw()
 

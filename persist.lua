@@ -110,7 +110,7 @@ end
 -- Re-syncs car tuning and ghost sims after progression fields change out
 -- from under them (real load at boot, or a dev snapshot restore mid-session).
 function M.resync_car_and_ghosts()
-  car.apply_upgrades(State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
+  car.apply_upgrades(State.car, State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   for id, _ in pairs(State.unlocked) do
     ghost.rebuild_sim(id)
   end
