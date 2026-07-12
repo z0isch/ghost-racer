@@ -11,6 +11,10 @@ local TOP_VEL_STEP       = 15
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
 local WALL_DECEL         = 750
+-- Movement is swept in substeps of at most this many pixels so a fast car
+-- (boost stacking, dt spike) can't jump its collision samples over a wall
+-- tile in a single frame.
+local MAX_MOVE_STEP      = 4
 local SQUEEL_MIN_VEL     = 80
 local ENGINE_MIN_VOL     = 0.3
 -- sfx voices can't have their volume changed while playing, so the engine
@@ -137,26 +141,35 @@ function M.update(car, dt, map)
 
   local drift_factor = is_drifitng and 1.1 or 1
   local vel_vec      = util.vec_from_angle(car.vel_angle, drift_factor * car.vel * dt)
-  local new_x        = util.clamp(car.x + vel_vec.x, 0, usagi.GAME_W - CAR_SIZE)
-  local new_y        = util.clamp(car.y + vel_vec.y, 0, usagi.GAME_H - CAR_SIZE)
 
   local function wall_decel(vel)
     if vel < 0 then return math.min(0, vel + WALL_DECEL * dt) end
     return math.max(0, vel - WALL_DECEL * dt)
   end
 
-  if road.on_road(map, new_x, new_y, CAR_SIZE, CAR_MARGIN) then
-    car.x = new_x
-    car.y = new_y
-  elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
-    car.x = new_x
-    car.vel = wall_decel(car.vel)
-  elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
-    car.y = new_y
-    car.vel = wall_decel(car.vel)
-  else
-    car.vel = wall_decel(car.vel)
+  local max_axis = math.max(math.abs(vel_vec.x), math.abs(vel_vec.y))
+  local steps    = math.max(1, math.ceil(max_axis / MAX_MOVE_STEP))
+  local step_x   = vel_vec.x / steps
+  local step_y   = vel_vec.y / steps
+  local hit_wall = false
+  for _ = 1, steps do
+    local new_x = util.clamp(car.x + step_x, 0, usagi.GAME_W - CAR_SIZE)
+    local new_y = util.clamp(car.y + step_y, 0, usagi.GAME_H - CAR_SIZE)
+    if road.on_road(map, new_x, new_y, CAR_SIZE, CAR_MARGIN) then
+      car.x = new_x
+      car.y = new_y
+    elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
+      car.x = new_x
+      hit_wall = true
+    elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
+      car.y = new_y
+      hit_wall = true
+    else
+      hit_wall = true
+      break
+    end
   end
+  if hit_wall then car.vel = wall_decel(car.vel) end
 
   local effective_top_vel = car.top_vel
   local min_vel           = car.reverse_enabled and -effective_top_vel or 0
