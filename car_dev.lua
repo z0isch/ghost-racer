@@ -27,7 +27,7 @@ function _init()
     map = build_map(),
     car = car.default_state(),
   }
-  car.apply_upgrades(State.car, 0, 0, true, true, 5)
+  car.apply_upgrades(State.car, 0, 0, true, true, 5, true)
   car.reset(State.car, { col = COLS / 2, row = ROWS / 2 })
 end
 

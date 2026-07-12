@@ -19,6 +19,9 @@ local ENGINE_VOL_STEP    = 0.1
 local BOOST_FLAME_TIME   = 0.8
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
+-- Rotating to within this angle of a full 180 mid-drift flips the drift
+-- boost into the opposite gear.
+local DRIFT_FLIP_GRACE   = math.pi / 6
 
 local M                  = {}
 
@@ -58,6 +61,10 @@ local function default_car()
     boost_time_remaining = 0,
     drift_enabled        = false,
     drift_boost_enabled  = false,
+    reverse_enabled      = false,
+    drift_dir            = 0,
+    drift_start_angle    = 0,
+    drift_flipped        = false,
     max_boosts           = 0,
     boosts               = 0,
     boost_flame_t        = 0,
@@ -76,6 +83,9 @@ function M.reset(car, spawn)
   car.vel_angle            = 0
   car.is_drifitng          = false
   car.drift_time           = 0
+  car.drift_dir            = 0
+  car.drift_start_angle    = 0
+  car.drift_flipped        = false
   car.boost_ready          = false
   car.boost_time_remaining = 0
   car.boosts               = car.max_boosts
@@ -84,12 +94,13 @@ function M.reset(car, spawn)
   car.skid_prev            = nil
 end
 
-function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks)
+function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks, reverse_enabled)
   car.accel               = ACCEL_BASE + accel_lvl * ACCEL_STEP
   car.top_vel             = TOP_VEL_BASE + top_speed_lvl * TOP_VEL_STEP
   car.drift_enabled       = drift_enabled or false
   car.drift_boost_enabled = drift_boost_enabled or false
   car.max_boosts          = boost_ranks or 0
+  car.reverse_enabled     = reverse_enabled or false
 end
 
 function M.pose(car)
@@ -105,11 +116,17 @@ function M.update(car, dt, map)
   local holding_right = input.held(input.RIGHT)
   local is_drifitng   = false
   if car.drift_enabled and input.held(input.BTN2) then is_drifitng = true end
+  -- A drift locks in the direction of travel it started with; vel may bleed
+  -- to 0 during the drift but never crosses to the other sign.
+  if is_drifitng and not car.is_drifitng then
+    car.drift_dir         = car.vel < 0 and -1 or 1
+    car.drift_start_angle = car.facing_angle
+  end
 
   local target_vel_angle = car.facing_angle
   if is_drifitng and (holding_left or holding_right) then
     local dir = holding_left and -1 or 1
-    target_vel_angle = car.facing_angle + (dir * 0.005 * car.vel)
+    target_vel_angle = car.facing_angle + (dir * 0.005 * math.abs(car.vel))
   end
 
   if is_drifitng then
@@ -123,38 +140,62 @@ function M.update(car, dt, map)
   local new_x        = util.clamp(car.x + vel_vec.x, 0, usagi.GAME_W - CAR_SIZE)
   local new_y        = util.clamp(car.y + vel_vec.y, 0, usagi.GAME_H - CAR_SIZE)
 
+  local function wall_decel(vel)
+    if vel < 0 then return math.min(0, vel + WALL_DECEL * dt) end
+    return math.max(0, vel - WALL_DECEL * dt)
+  end
+
   if road.on_road(map, new_x, new_y, CAR_SIZE, CAR_MARGIN) then
     car.x = new_x
     car.y = new_y
   elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
     car.x = new_x
-    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
+    car.vel = wall_decel(car.vel)
   elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
     car.y = new_y
-    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
+    car.vel = wall_decel(car.vel)
   else
-    car.vel = math.max(0, car.vel - WALL_DECEL * dt)
+    car.vel = wall_decel(car.vel)
   end
 
   local effective_top_vel = car.top_vel
+  local min_vel           = car.reverse_enabled and -effective_top_vel or 0
 
   if input.pressed(input.BTN3) and car.boosts > 0 then
-    car.vel = car.vel + OVERSPEED_IMPULSE
+    local boost_dir = car.vel < 0 and -1 or 1
+    if is_drifitng then boost_dir = car.drift_dir end
+    car.vel = car.vel + boost_dir * OVERSPEED_IMPULSE
     car.boosts = car.boosts - 1
     car.boost_flame_t = BOOST_FLAME_TIME
     sfx.play("boost")
   end
 
+  -- deccel is the braking rate (fighting the current direction of travel),
+  -- accel builds speed in the direction already headed -- symmetric for
+  -- forward and reverse.
   if car.vel > effective_top_vel then
     car.vel = math.max(effective_top_vel, car.vel - OVERSPEED_DECAY * dt)
+  elseif car.vel < min_vel then
+    car.vel = math.min(min_vel, car.vel + OVERSPEED_DECAY * dt)
   elseif input.held(input.BTN1) then
-    car.vel = util.clamp(car.vel + car.accel * dt, 0, effective_top_vel)
+    local rate = car.vel < 0 and car.deccel or car.accel
+    car.vel = util.clamp(car.vel + rate * dt, min_vel, effective_top_vel)
   else
-    car.vel = util.clamp(car.vel - car.deccel * dt, 0, effective_top_vel)
+    local rate = car.vel > 0 and car.deccel or car.accel
+    car.vel = util.clamp(car.vel - rate * dt, min_vel, effective_top_vel)
   end
 
   if is_drifitng then
-    car.vel = math.max(0, car.vel - car.drift_deccel * dt)
+    if car.vel > 0 then
+      car.vel = math.max(0, car.vel - car.drift_deccel * dt)
+    else
+      car.vel = math.min(0, car.vel + car.drift_deccel * dt)
+    end
+    if car.drift_dir < 0 then
+      car.vel = math.min(0, car.vel)
+    else
+      car.vel = math.max(0, car.vel)
+    end
   end
 
   if car.boost_flame_t > 0 then
@@ -167,39 +208,52 @@ function M.update(car, dt, map)
     if is_drifitng then
       rate = car.drift_turn_rate
     else
-      local t = util.clamp(car.vel / car.turn_ref_speed, 0, 1)
+      local t = util.clamp(math.abs(car.vel) / car.turn_ref_speed, 0, 1)
       rate = car.turn_rate_slow + (car.turn_rate_fast - car.turn_rate_slow) * t
     end
     car.facing_angle = angle.normalize(car.facing_angle + dir * rate * dt)
   end
 
   if is_drifitng then
-    car.is_drifitng = true
-    car.drift_time  = car.drift_time + dt
+    car.is_drifitng   = true
+    car.drift_time    = car.drift_time + dt
+    local turned      = angle.normalize(car.facing_angle - car.drift_start_angle)
+    car.drift_flipped = math.abs(turned - math.pi) < DRIFT_FLIP_GRACE
     if car.drift_time >= car.drift_threshold and not car.boost_ready and car.drift_boost_enabled then
       car.boost_ready = true
     end
   else
     if car.boost_ready then
       car.boost_time_remaining = car.boost_length
-      car.vel = math.min(car.vel + car.boost_value, car.top_vel)
+      local boost_dir = car.drift_dir
+      if car.drift_flipped then
+        -- The 180 carries the built-up speed into the opposite gear.
+        boost_dir = -car.drift_dir
+        car.vel   = -car.vel
+      end
+      if boost_dir < 0 then
+        car.vel = math.max(car.vel - car.boost_value, -car.top_vel)
+      else
+        car.vel = math.min(car.vel + car.boost_value, car.top_vel)
+      end
       car.boost_ready = false
       sfx.play("boost")
     end
-    car.is_drifitng = false
-    car.drift_time  = 0
+    car.is_drifitng   = false
+    car.drift_time    = 0
+    car.drift_flipped = false
   end
 
-  if is_drifitng and car.vel > 0 then
-    if not sfx.is_playing("squeal") and car.vel > SQUEEL_MIN_VEL then
+  if is_drifitng and car.vel ~= 0 then
+    if not sfx.is_playing("squeal") and math.abs(car.vel) > SQUEEL_MIN_VEL then
       sfx.play("squeal")
     end
   elseif sfx.is_playing("squeal") then
     sfx.stop("squeal")
   end
 
-  if car.vel > 0 then
-    local t   = util.clamp(car.vel / car.top_vel, 0, 1)
+  if car.vel ~= 0 then
+    local t   = util.clamp(math.abs(car.vel) / car.top_vel, 0, 1)
     local vol = ENGINE_MIN_VOL + (1 - ENGINE_MIN_VOL) * t
     if not sfx.is_playing("engine") or math.abs(vol - car.engine_vol) >= ENGINE_VOL_STEP then
       sfx.stop("engine")
@@ -257,7 +311,8 @@ end
 function M.draw(car)
   local car_tint = gfx.COLOR_WHITE
   if car.boost_ready then
-    car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
+    local ready_color = car.drift_flipped and gfx.COLOR_RED or gfx.COLOR_GREEN
+    car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or ready_color
   end
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end
