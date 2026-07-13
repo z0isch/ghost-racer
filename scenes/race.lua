@@ -146,6 +146,13 @@ function M.update(dt)
     local id    = State.active_track
     local tdata = track_data.TRACKS[id]
 
+    if not race.first_race and input.key_pressed(input.KEY_Q) then
+      sfx.stop("engine")
+      persist.save()
+      SceneGoto("buy")
+      return
+    end
+
     car.update(State.car, dt, tdata.map)
     race.time = race.time + dt
     ghost.record(race.time, car.pose(State.car))
@@ -246,6 +253,7 @@ function M.draw()
   elseif race.phase == "racing" then
     if not race.first_race then
       if ui.button("QUIT", 5, 5, { w = 50 }) then
+        sfx.stop("engine")
         persist.save()
         SceneGoto("buy")
       end

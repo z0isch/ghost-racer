@@ -132,6 +132,9 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
+  if not State.purchase_modal and not State.race_modal and input.key_pressed(input.KEY_SPACE) then
+    SceneGoto("race")
+  end
 end
 
 local function shop_button(item, x, y, w)
