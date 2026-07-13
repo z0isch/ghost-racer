@@ -84,6 +84,7 @@ local function finish_race()
   local cash_before = economy.track_cash_rate(id)
   local locked_id   = economy.next_locked_track()
   local was_ready   = locked_id ~= nil and economy.track_unlock_ready(locked_id)
+  local nirvana_was = economy.nirvana_ready()
   ghost.promote()
   local new_rank     = economy.track_rank(id)
   local cash_after   = economy.track_cash_rate(id)
@@ -92,20 +93,25 @@ local function finish_race()
   local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
 
   if first_lap or rank_changed or cash_up then
-    local show_unlock = locked_id ~= nil and not was_ready
+    local show_unlock  = locked_id ~= nil and not was_ready
         and economy.track_unlock_ready(locked_id)
-    State.race_modal = {
-      track_id    = id,
-      rank        = new_rank,
-      first_lap   = first_lap,
+    local show_nirvana = not nirvana_was and economy.nirvana_ready()
+    State.race_modal   = {
+      track_id     = id,
+      rank         = new_rank,
+      first_lap    = first_lap,
       -- nil unless the rank actually changed: title/body only show the
       -- rank-delta block then.
-      prev_rank   = rank_changed and prev_rank or nil,
-      show_unlock = show_unlock,
+      prev_rank    = rank_changed and prev_rank or nil,
+      -- Ids of the track that just became purchasable / the track selling
+      -- Nirvana, nil unless this lap flipped the gate. Ids rather than
+      -- booleans so the modal can name the shop to visit.
+      show_unlock  = show_unlock and locked_id or nil,
+      show_nirvana = show_nirvana and economy.nirvana_track() or nil,
       -- nil unless the track's ghost $/sec went up (requires an owned
       -- ghost). Merged into this same modal rather than a second popup.
-      cash_before = cash_up and cash_before or nil,
-      cash_after  = cash_up and cash_after or nil,
+      cash_before  = cash_up and cash_before or nil,
+      cash_after   = cash_up and cash_after or nil,
     }
   end
 

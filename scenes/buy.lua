@@ -75,14 +75,14 @@ local MODAL_INFO = {
     body      = function()
       return "RANK D\n\nTime: " ..
           format_duration(State.last_loop_time or 0) ..
-          "\n\nUnfortunately you have not escaped the endless loop.\nGo faster for a better rank."
+          "\n\nUnfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one..."
     end,
     draw_body = function(x, y, scale)
       local _, line_h = usagi.measure_text("RANK D")
       ui.rank_text("RANK D", "D", x, y, scale)
       ui.coin_text(
         "Time: " .. format_duration(State.last_loop_time or 0) ..
-        "\n\nUnfortunately you have not escaped the endless loop.\nGo faster for a better rank.",
+        "\n\nUnfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one...",
         x, y + line_h * scale * 2, scale, gfx.COLOR_LIGHT_GRAY)
     end,
   },
@@ -146,7 +146,9 @@ local function shop_button(item, x, y, w)
     local _, th = usagi.measure_text(label)
     local bh    = th * 2 + 4
     ui.label(label, x, y + math.floor((bh - th * 2) / 2))
-    local msg = "RANK " .. item.requires_rank .. " needed"
+    local msg = item.requires_rank_all
+        and ("RANK " .. item.requires_rank_all .. " on all tracks")
+        or ("RANK " .. item.requires_rank .. " needed")
     local mw  = usagi.measure_text(msg)
     ui.label(msg, x + w - mw, y + math.floor((bh - th) / 2), { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
     return false, bh
@@ -189,7 +191,8 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
 
   if not economy.track_unlock_ready(next_id) then
     local msg = track_data.TRACKS[next_id].unlock_needs_all_s
-        and "RANK S on all tracks" or "RANK A needed"
+        and "RANK S on all tracks"
+        or ("RANK " .. track_data.unlock_rank(State.loop) .. " needed")
     local mw  = usagi.measure_text(msg)
     local mx  = x + w + usagi.measure_text(label) - mw
     local my  = y + math.floor((bh - th) / 2)
@@ -197,7 +200,7 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
     return false, bh
   end
 
-  local cost       = track_data.TRACKS[next_id].unlock_cost
+  local cost       = track_data.unlock_cost(next_id, State.loop)
   local affordable = State.money >= cost
   local cost_text  = "$" .. tostring(cost)
   local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
@@ -289,8 +292,21 @@ function M.draw_race_modal()
     body_parts[#body_parts + 1] = string.format("$/sec: $%.2f -> $%.2f", info.cash_before, info.cash_after)
   end
 
+  -- New tracks are bought from the previous track's shop page, hence the -1.
+  -- Both messages only name the shop's track when the player isn't already
+  -- viewing it.
   if info.show_unlock then
-    body_parts[#body_parts + 1] = "New track available in the shop!"
+    local idx = track_data.get_track_index(info.show_unlock)
+    body_parts[#body_parts + 1] = track_data.get_track_index(State.active_track) == idx - 1
+        and string.format("Track #%d available in the shop!", idx)
+        or string.format("Track #%d available in\nTrack #%d's shop!", idx, idx - 1)
+  end
+
+  if info.show_nirvana then
+    body_parts[#body_parts + 1] = State.active_track == info.show_nirvana
+        and "Nirvana available in the shop!"
+        or string.format("Nirvana available in\nTrack #%d's shop!",
+          track_data.get_track_index(info.show_nirvana))
   end
 
   local body = table.concat(body_parts, "\n\n")
@@ -322,6 +338,7 @@ function M.draw_shop()
 
   local id      = State.active_track
   local idx     = track_data.get_track_index(id)
+  local order   = track_data.track_order(State.loop)
   local tdata   = track_data.TRACKS[id]
   local _, th_a = usagi.measure_text("A")
   local nav_y   = 50
@@ -329,12 +346,12 @@ function M.draw_shop()
 
   if idx > 1 then
     if ui.button("<", x, nav_y, { w = arrow_w }) then
-      State.active_track = track_data.TRACK_ORDER[idx - 1]
+      State.active_track = order[idx - 1]
     end
   end
-  if idx < #track_data.TRACK_ORDER and State.unlocked[track_data.TRACK_ORDER[idx + 1]] then
+  if idx < #order and State.unlocked[order[idx + 1]] then
     if ui.button(">", x + w - arrow_w, nav_y, { w = arrow_w }) then
-      State.active_track = track_data.TRACK_ORDER[idx + 1]
+      State.active_track = order[idx + 1]
     end
   end
 
@@ -369,13 +386,13 @@ function M.draw_shop()
   end
 
   local shop_y = info_y + th_a + 6
-  for _, item in ipairs(tdata.shop) do
+  for _, item in ipairs(track_data.shop(id, State.loop)) do
     local clicked, bh = shop_button(item, x, shop_y, w)
     if clicked then economy.try_buy(item.kind) end
     shop_y = shop_y + bh + gap
   end
 
-  local next_track = idx < #track_data.TRACK_ORDER and track_data.TRACK_ORDER[idx + 1] or nil
+  local next_track = idx < #order and order[idx + 1] or nil
   if next_track and not State.unlocked[next_track] then
     local clicked, bh = new_track_row(next_track, idx + 1, x, shop_y, w)
     if clicked and economy.try_unlock_track(next_track) then

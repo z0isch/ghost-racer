@@ -16,7 +16,7 @@ function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
 end
 
-M.TRACKS      = {
+M.TRACKS                = {
   track1 = {
     map         = track1,
     spawn       = { col = 5, row = 14 },
@@ -56,6 +56,22 @@ M.TRACKS      = {
         max       = 4,
         base_cost = 20,
         growth    = 1.6
+      },
+    },
+    -- Loop-1 prologue overrides: checkpoint-only income (no ghosts, no
+    -- coins), so ranks and prices are scaled way down. Values are
+    -- provisional - tune freely.
+    loop1       = {
+      ranks = { C = 1.0, B = 1.4, A = 2.2, S = 3.2 },
+      shop  = {
+        {
+          kind      = "accel",
+          label     = "Acceleration",
+          currency  = "cash",
+          max       = 4,
+          base_cost = 10,
+          growth    = 1.5
+        },
       },
     },
   },
@@ -113,6 +129,29 @@ M.TRACKS      = {
         growth    = 1.6
       },
     },
+    -- Loop-1 prologue overrides - provisional, tune freely.
+    loop1       = {
+      unlock_cost = 30,
+      ranks       = { C = 3.7, B = 4.0, A = 4.8, S = 6.0 },
+      shop        = {
+        {
+          kind      = "drift",
+          label     = "Drift",
+          currency  = "cash",
+          max       = 1,
+          base_cost = 90,
+          growth    = 1.6
+        },
+        {
+          kind      = "drift_boost",
+          label     = "Drift Boost",
+          currency  = "cash",
+          max       = 1,
+          base_cost = 150,
+          growth    = 1.6
+        },
+      },
+    },
   },
   track2 = {
     map         = track2,
@@ -161,6 +200,32 @@ M.TRACKS      = {
         max       = 5,
         base_cost = 2000,
         growth    = 1.3
+      },
+    },
+    -- Loop-1 prologue overrides - provisional, tune freely. Nirvana lives
+    -- here in loop 1 (Track 4 doesn't exist yet) and needs rank A on every
+    -- prologue track instead of S on this one.
+    loop1       = {
+      unlock_cost = 200,
+      ranks       = { C = 13.0, B = 14.5, A = 16.0, S = 20.0 },
+      shop        = {
+        {
+          kind      = "boost",
+          label     = "Boost",
+          currency  = "cash",
+          max       = 5,
+          base_cost = 300,
+          growth    = 1.3
+        },
+        {
+          kind              = "nirvana",
+          label             = "Nirvana",
+          currency          = "cash",
+          max               = 1,
+          base_cost         = 0,
+          growth            = 1,
+          requires_rank_all = "A"
+        },
       },
     },
   },
@@ -230,10 +295,46 @@ M.TRACKS      = {
   },
 }
 
-M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
+M.TRACK_ORDER           = { "track1", "basic", "track2", "track4" }
 
-function M.track_shop_item(track_id, kind)
-  for _, item in ipairs(M.TRACKS[track_id].shop) do
+-- Loop 1 is a pure-racing prologue: only the first three tracks exist, and
+-- Track 4 (along with ghosts, coins, and the idle economy) is hidden until
+-- loop 2. A prefix of TRACK_ORDER, so get_track_index works for both.
+local LOOP1_TRACK_ORDER = { "track1", "basic", "track2" }
+
+function M.track_order(loop)
+  return loop == 1 and LOOP1_TRACK_ORDER or M.TRACK_ORDER
+end
+
+-- Track fields below prefer the track's `loop1` override table during the
+-- loop-1 prologue. A nil loop always reads the base field.
+
+function M.shop(id, loop)
+  local tdata = M.TRACKS[id]
+  return loop == 1 and tdata.loop1 and tdata.loop1.shop or tdata.shop
+end
+
+function M.ranks(id, loop)
+  local tdata = M.TRACKS[id]
+  return loop == 1 and tdata.loop1 and tdata.loop1.ranks or tdata.ranks
+end
+
+function M.unlock_cost(id, loop)
+  local tdata = M.TRACKS[id]
+  if loop == 1 and tdata.loop1 and tdata.loop1.unlock_cost ~= nil then
+    return tdata.loop1.unlock_cost
+  end
+  return tdata.unlock_cost
+end
+
+-- Rank needed on the previous track to unlock the next one: B during the
+-- loop-1 prologue, A afterwards.
+function M.unlock_rank(loop)
+  return loop == 1 and "B" or "A"
+end
+
+function M.track_shop_item(track_id, kind, loop)
+  for _, item in ipairs(M.shop(track_id, loop)) do
     if item.kind == kind then return item end
   end
   return nil
@@ -265,15 +366,17 @@ function M.checkpoint_rect(cp)
 end
 
 -- Coins active for free from the start of a loop: the whole original
--- (pre-Nirvana) set once the player has looped at least once.
+-- (pre-Nirvana) set from loop 3 on, none before that.
 function M.free_coins(id, loop)
-  return (loop or 1) >= 2 and M.TRACKS[id].base_coins or 0
+  return (loop or 1) >= 3 and M.TRACKS[id].base_coins or 0
 end
 
--- Highest total coin count reachable on a track this loop: the original set
--- in loop 1, both sets in loop 2+.
+-- Highest total coin count reachable on a track this loop: no coins at all
+-- in the loop-1 prologue, the original set in loop 2, both sets in loop 3+.
 function M.max_coins(id, loop)
-  return (loop or 1) >= 2 and #M.TRACKS[id].coins or M.TRACKS[id].base_coins
+  loop = loop or 1
+  if loop == 1 then return 0 end
+  return loop >= 3 and #M.TRACKS[id].coins or M.TRACKS[id].base_coins
 end
 
 function M.default_track_state(id, loop)

@@ -117,8 +117,10 @@ function M.resync_car_and_ghosts()
 end
 
 -- Buying Nirvana ends the game... into a new loop: everything resets to a
--- fresh save except the loop counter, dismissed tutorials, and every track's
--- original coin set, which starts active for free (see track_data.free_coins).
+-- fresh save except the loop counter and dismissed tutorials. Loop 2 opens
+-- up the full game (all four tracks, ghosts, coins); from loop 3 on every
+-- track's original coin set starts active for free (see
+-- track_data.free_coins).
 function M.start_new_loop()
   local next_loop      = (State.loop or 1) + 1
   local finished_time  = State.loop_time or 0

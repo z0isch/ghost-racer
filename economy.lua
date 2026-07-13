@@ -12,7 +12,7 @@ local RANK_MULTS   = {
   A = 1.0,
   S = 2.0
 }
--- Ascending order of ranks above the D floor, checked against track_data.TRACKS[id].ranks.
+-- Ascending order of ranks above the D floor, checked against track_data.ranks(id, loop).
 local RANK_LETTERS = { "C", "B", "A", "S" }
 local RANK_ORDER   = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
@@ -58,7 +58,7 @@ end
 
 -- Rank earned by a $/sec rate on a given track. Below the lowest threshold is "D".
 function M.rank_for_rate(id, rate)
-  local thresholds = track_data.TRACKS[id].ranks
+  local thresholds = track_data.ranks(id, State.loop)
   local rank       = "D"
   if rate and rate > 0 then
     for _, letter in ipairs(RANK_LETTERS) do
@@ -91,22 +91,30 @@ function M.track_rank(id)
   return M.rank_for_rate(id, tstate and tstate.best_rate)
 end
 
--- True once a track's established rank has ever reached A or S.
-function M.a_rank_earned(id)
-  local rank = M.track_rank(id)
-  return rank == "A" or rank == "S"
+-- True once a track's established rank is at or above `letter`.
+function M.rank_at_least(id, letter)
+  return RANK_ORDER[M.track_rank(id)] >= RANK_ORDER[letter]
 end
 
--- True when a shop item's rank gate (`requires_rank`, e.g. Nirvana needing
--- rank S on Track 4) is met on the given track. Ungated items always pass.
+-- True when a shop item's rank gate is met: `requires_rank` checks the given
+-- track (e.g. Nirvana needing rank S on Track 4), `requires_rank_all` checks
+-- every track in this loop (e.g. loop-1 Nirvana needing rank A everywhere).
+-- Ungated items always pass.
 function M.shop_item_unlocked(id, item)
+  if item.requires_rank_all then
+    for _, tid in ipairs(track_data.track_order(State.loop)) do
+      if not M.rank_at_least(tid, item.requires_rank_all) then return false end
+    end
+    return true
+  end
   if not item.requires_rank then return true end
-  return RANK_ORDER[M.track_rank(id)] >= RANK_ORDER[item.requires_rank]
+  return M.rank_at_least(id, item.requires_rank)
 end
 
--- True when the rank requirement to unlock a track is met: rank A on the
--- previous track normally, or an S rank on every earlier track when the
--- track sets `unlock_needs_all_s`.
+-- True when the rank requirement to unlock a track is met: the loop's unlock
+-- rank (B in the loop-1 prologue, A afterwards) on the previous track
+-- normally, or an S rank on every earlier track when the track sets
+-- `unlock_needs_all_s`.
 function M.track_unlock_ready(id)
   local idx = track_data.get_track_index(id)
   if track_data.TRACKS[id].unlock_needs_all_s then
@@ -115,12 +123,28 @@ function M.track_unlock_ready(id)
     end
     return true
   end
-  return M.a_rank_earned(track_data.TRACK_ORDER[idx - 1])
+  return M.rank_at_least(track_data.TRACK_ORDER[idx - 1], track_data.unlock_rank(State.loop))
 end
 
--- First track in TRACK_ORDER the player hasn't unlocked yet, or nil.
+-- Track whose shop sells Nirvana this loop (Track 3 during the loop-1
+-- prologue, Track 4 afterwards), or nil.
+function M.nirvana_track()
+  for _, tid in ipairs(track_data.track_order(State.loop)) do
+    if track_data.track_shop_item(tid, "nirvana", State.loop) then return tid end
+  end
+  return nil
+end
+
+-- True once Nirvana's rank gate is met on the track that sells it.
+function M.nirvana_ready()
+  local tid = M.nirvana_track()
+  return tid ~= nil and M.shop_item_unlocked(tid, track_data.track_shop_item(tid, "nirvana", State.loop))
+end
+
+-- First track in this loop's track order the player hasn't unlocked yet, or
+-- nil. Track 4 doesn't exist in loop 1, so it's never offered there.
 function M.next_locked_track()
-  for _, tid in ipairs(track_data.TRACK_ORDER) do
+  for _, tid in ipairs(track_data.track_order(State.loop)) do
     if not State.unlocked[tid] then return tid end
   end
   return nil
@@ -165,7 +189,7 @@ end
 
 function M.upgrade_cost(kind)
   local id = State.active_track
-  local u  = track_data.track_shop_item(id, kind)
+  local u  = track_data.track_shop_item(id, kind, State.loop)
   if not u then return nil end
   if kind == "coins" then
     local free = track_data.free_coins(id, State.loop)
@@ -191,7 +215,7 @@ function M.try_buy(kind)
   local id   = State.active_track
   local cost = M.upgrade_cost(kind)
   if cost == nil then return end
-  if not M.shop_item_unlocked(id, track_data.track_shop_item(id, kind)) then return end
+  if not M.shop_item_unlocked(id, track_data.track_shop_item(id, kind, State.loop)) then return end
   if kind == "ghosts" and not State.tracks[id].ghost_line then return end
   if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end
@@ -231,7 +255,7 @@ function M.try_buy(kind)
 end
 
 function M.try_unlock_track(id)
-  local cost = track_data.TRACKS[id].unlock_cost
+  local cost = track_data.unlock_cost(id, State.loop)
   if not cost or State.money < cost then return end
   if not M.track_unlock_ready(id) then return end
   State.money        = State.money - cost
