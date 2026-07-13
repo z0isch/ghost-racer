@@ -16,10 +16,12 @@ local WALL_DECEL         = 750
 -- tile in a single frame.
 local MAX_MOVE_STEP      = 4
 local SQUEEL_MIN_VEL     = 80
+-- The engine loop plays on the music channel: unlike sfx voices,
+-- music.mutate can retune volume and pitch every frame without restarting
+-- the sample.
 local ENGINE_MIN_VOL     = 0.3
--- sfx voices can't have their volume changed while playing, so the engine
--- loop is restarted whenever the speed-based volume has moved this far.
-local ENGINE_VOL_STEP    = 0.1
+local ENGINE_MIN_PITCH   = 0.8
+local ENGINE_MAX_PITCH   = 1.4
 local BOOST_FLAME_TIME   = 0.8
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
@@ -72,7 +74,7 @@ local function default_car()
     max_boosts           = 0,
     boosts               = 0,
     boost_flame_t        = 0,
-    engine_vol           = 0,
+    engine_on            = false,
   }
 end
 
@@ -96,6 +98,14 @@ function M.reset(car, spawn)
   car.boost_flame_t        = 0
   car.skid_marks           = {}
   car.skid_prev            = nil
+end
+
+-- The engine doesn't expose music.is_playing, so callers that stop the
+-- engine loop outside of M.update (scene exits, race finish) must go through
+-- here to keep car.engine_on in sync.
+function M.stop_engine(car)
+  music.stop()
+  car.engine_on = false
 end
 
 function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks, reverse_enabled)
@@ -266,15 +276,17 @@ function M.update(car, dt, map)
   end
 
   if car.vel ~= 0 then
-    local t   = util.clamp(math.abs(car.vel) / car.top_vel, 0, 1)
-    local vol = ENGINE_MIN_VOL + (1 - ENGINE_MIN_VOL) * t
-    if not sfx.is_playing("engine") or math.abs(vol - car.engine_vol) >= ENGINE_VOL_STEP then
-      sfx.stop("engine")
-      sfx.play_ex("engine", vol, 1, 0)
-      car.engine_vol = vol
+    local t     = util.clamp(math.abs(car.vel) / car.top_vel, 0, 1)
+    local vol   = ENGINE_MIN_VOL + (1 - ENGINE_MIN_VOL) * t
+    local pitch = ENGINE_MIN_PITCH + (ENGINE_MAX_PITCH - ENGINE_MIN_PITCH) * t
+    if car.engine_on then
+      music.mutate(vol, pitch, 0)
+    else
+      music.play_ex("engine", vol, pitch, 0, true)
+      car.engine_on = true
     end
-  elseif sfx.is_playing("engine") then
-    sfx.stop("engine")
+  elseif car.engine_on then
+    M.stop_engine(car)
   end
 
   if car.boost_time_remaining > 0 then

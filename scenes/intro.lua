@@ -1,10 +1,14 @@
 local ui         = require "ui"
 local road       = require "road"
 local track_data = require "track_data"
+local car        = require "car"
 
 local M          = {}
 
 function M.enter()
+  -- Guarantees engine silence on every path in, including dev live-reload
+  -- and Reset, which keep the music channel playing across _init.
+  car.stop_engine(State.car)
 end
 
 function M.exit()

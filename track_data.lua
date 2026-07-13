@@ -55,7 +55,7 @@ M.TRACKS                = {
         currency  = "cash",
         max       = 4,
         base_cost = 20,
-        growth    = 1.6
+        growth    = 1.4
       },
     },
     -- Loop-1 prologue overrides: checkpoint-only income (no ghosts, no
@@ -70,7 +70,7 @@ M.TRACKS                = {
           currency  = "cash",
           max       = 4,
           base_cost = 10,
-          growth    = 1.5
+          growth    = 1.42
         },
       },
     },

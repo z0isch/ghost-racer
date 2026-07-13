@@ -75,7 +75,7 @@ local function finish_race()
   race.run_rate  = race.time > 0 and (race.raw_earned / race.time) or 0
   race.phase     = "finished"
   race.beat_left = FINISH_BEAT_SECS
-  sfx.stop("engine")
+  car.stop_engine(State.car)
   sfx.play("applause")
 
   local first_lap   = tstate.ghost_line == nil
@@ -153,7 +153,7 @@ function M.update(dt)
     local tdata = track_data.TRACKS[id]
 
     if not race.first_race and input.key_pressed(input.KEY_Q) then
-      sfx.stop("engine")
+      car.stop_engine(State.car)
       persist.save()
       SceneGoto("buy")
       return
@@ -259,7 +259,7 @@ function M.draw()
   elseif race.phase == "racing" then
     if not race.first_race then
       if ui.button("QUIT", 5, 5, { w = 50 }) then
-        sfx.stop("engine")
+        car.stop_engine(State.car)
         persist.save()
         SceneGoto("buy")
       end

@@ -8,6 +8,7 @@ local road        = require "road"
 local popups      = require "popups"
 local modal       = require "modal"
 local car_demo    = require "car_demo"
+local car         = require "car"
 
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
@@ -109,6 +110,9 @@ local demo_kind
 local loop_complete_was_playing = false
 
 function M.enter()
+  -- Guarantees engine silence on every path in, including dev live-reload
+  -- and Reset, which keep the music channel playing across _init.
+  car.stop_engine(State.car)
   ghost.reset_all_phases()
 end
 
