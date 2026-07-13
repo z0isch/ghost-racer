@@ -68,13 +68,13 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race        = State.race
-  local id          = State.active_track
-  local tstate      = State.tracks[id]
+  local race     = State.race
+  local id       = State.active_track
+  local tstate   = State.tracks[id]
 
-  race.run_rate     = race.time > 0 and (race.raw_earned / race.time) or 0
-  race.phase        = "finished"
-  race.beat_left    = FINISH_BEAT_SECS
+  race.run_rate  = race.time > 0 and (race.raw_earned / race.time) or 0
+  race.phase     = "finished"
+  race.beat_left = FINISH_BEAT_SECS
   sfx.stop("engine")
   sfx.play("applause")
 
@@ -127,7 +127,9 @@ function M.update(dt)
     local shown = math.ceil(countdown_time)
     if shown ~= countdown_shown and shown > 0 then
       countdown_shown = shown
-      sfx.play("start")
+      if shown == 3 then sfx.play("3") end
+      if shown == 2 then sfx.play("2") end
+      if shown == 1 then sfx.play("1") end
     end
     countdown_time = countdown_time - (dt * 2)
     if countdown_time <= 0 then

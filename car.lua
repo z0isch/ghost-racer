@@ -231,7 +231,7 @@ function M.update(car, dt, map)
     car.is_drifitng   = true
     car.drift_time    = car.drift_time + dt
     local turned      = angle.normalize(car.facing_angle - car.drift_start_angle)
-    car.drift_flipped = math.abs(turned - math.pi) < DRIFT_FLIP_GRACE
+    car.drift_flipped = car.reverse_enabled and math.abs(turned - math.pi) < DRIFT_FLIP_GRACE
     if car.drift_time >= car.drift_threshold and not car.boost_ready and car.drift_boost_enabled then
       car.boost_ready = true
     end
