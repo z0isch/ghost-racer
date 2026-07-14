@@ -71,6 +71,7 @@ local function finish_race()
   local race     = State.race
   local id       = State.active_track
   local tstate   = State.tracks[id]
+  local tdata    = track_data.TRACKS[id]
 
   race.run_rate  = race.time > 0 and (race.raw_earned / race.time) or 0
   race.phase     = "finished"
@@ -96,10 +97,18 @@ local function finish_race()
     local show_unlock  = locked_id ~= nil and not was_ready
         and economy.track_unlock_ready(locked_id)
     local show_nirvana = not nirvana_was and economy.nirvana_ready()
-    State.race_modal   = {
+    local coins_total  = road.active_coin_count(tstate.coins, tdata.coins)
+    local coins_got    = 0
+    for _ in pairs(race.coins_collected) do coins_got = coins_got + 1 end
+    State.race_modal = {
       track_id     = id,
       rank         = new_rank,
       first_lap    = first_lap,
+      time         = race.time,
+      -- Collected/total coin counts, nil unless the track has coins on it,
+      -- so the modal skips the coin stat entirely on coinless tracks.
+      coins_got    = coins_total > 0 and coins_got or nil,
+      coins_total  = coins_total > 0 and coins_total or nil,
       -- nil unless the rank actually changed: title/body only show the
       -- rank-delta block then.
       prev_rank    = rank_changed and prev_rank or nil,

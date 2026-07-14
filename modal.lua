@@ -11,7 +11,6 @@ local BUTTON_SCALE = 2
 local BUTTON_W     = 180
 local BUTTON_PAD_Y = 2 -- matches ui.button's vertical padding
 local PANEL_PAD    = 16
-local TITLE_Y      = 60
 local GAP          = 20 -- vertical space between title, body, and button
 
 local M            = {}
@@ -41,16 +40,22 @@ function M.draw(opts)
   local _, breaks   = body:gsub("\n", "")
   local bh          = (breaks + 1) * line_h * BODY_SCALE
 
-  local ty          = TITLE_Y
-  local by          = ty + line_h * TITLE_SCALE + GAP
-  local demo_y      = by + bh + GAP
-  local btn_y       = demo_y + (demo and demo.h + GAP or 0)
   local btn_h       = line_h * BUTTON_SCALE + BUTTON_PAD_Y * 2
+
+  -- Total content height, so the panel can be centered vertically no matter
+  -- how many body lines there are.
+  local content_h   = line_h * TITLE_SCALE + GAP + bh + GAP
+      + (demo and demo.h + GAP or 0) + btn_h
 
   local panel_w     = math.max(tw, bw, BUTTON_W, demo and demo.w or 0) + PANEL_PAD * 2
   local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
-  local panel_y     = ty - PANEL_PAD
-  local panel_h     = (btn_y + btn_h + PANEL_PAD) - panel_y
+  local panel_h     = content_h + PANEL_PAD * 2
+  local panel_y     = math.floor((usagi.GAME_H - panel_h) / 2)
+
+  local ty          = panel_y + PANEL_PAD
+  local by          = ty + line_h * TITLE_SCALE + GAP
+  local demo_y      = by + bh + GAP
+  local btn_y       = demo_y + (demo and demo.h + GAP or 0)
   gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)
   gfx.rect(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_WHITE)
 

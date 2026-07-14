@@ -277,6 +277,14 @@ function M.draw_race_modal()
 
   local body_parts   = {}
 
+  -- The run's raw inputs come first, right under the rank title: rank is
+  -- $/sec, so time and coins are the two levers the player pulls to raise it.
+  local stats = string.format("Time: %.1fs", info.time)
+  if info.coins_total then
+    stats = stats .. string.format("  %s %d/%d", ui.COIN_CHAR, info.coins_got, info.coins_total)
+  end
+  body_parts[#body_parts + 1] = stats
+
   if info.first_lap then
     body_parts[#body_parts + 1] = "Lap saved! Beat it to raise\nyour rank and pay rates."
   elseif rank_changed then

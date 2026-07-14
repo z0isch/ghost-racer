@@ -131,7 +131,7 @@ M.TRACKS                = {
     },
     -- Loop-1 prologue overrides - provisional, tune freely.
     loop1       = {
-      unlock_cost = 30,
+      unlock_cost = 28,
       ranks       = { C = 3.7, B = 4.0, A = 4.8, S = 6.0 },
       shop        = {
         {
