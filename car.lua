@@ -10,7 +10,7 @@ local TOP_VEL_BASE       = 200
 local TOP_VEL_STEP       = 15
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
-local WALL_DECEL         = 750
+local WALL_DECEL         = 500
 -- Movement is swept in substeps of at most this many pixels so a fast car
 -- (boost stacking, dt spike) can't jump its collision samples over a wall
 -- tile in a single frame.

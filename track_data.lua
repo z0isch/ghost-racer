@@ -24,7 +24,7 @@ M.TRACKS                = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
     coins       = {
-      { col = 18, row = 8 },
+      { col = 18, row = 9 },
       -- second set (new game loop) - positions are provisional, tune freely
       { col = 26, row = 9 },
     },
@@ -173,7 +173,7 @@ M.TRACKS                = {
       { col = 32, row = 19 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 22.0, A = 30.0, S = 35.0 },
+    ranks       = { C = 12.0, B = 22.0, A = 30.0, S = 33.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2500,
@@ -251,7 +251,7 @@ M.TRACKS                = {
       { col = 24, row = 20 },
     },
     base_coins         = 4,
-    ranks              = { C = 66.0, B = 85.0, A = 90.0, S = 115.0 },
+    ranks              = { C = 66.0, B = 85.0, A = 90.0, S = 113.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,
