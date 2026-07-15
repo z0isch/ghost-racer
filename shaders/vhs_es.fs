@@ -20,9 +20,9 @@ float hash(vec2 p) {
 
 // Bloom tuning: what counts as "bright", how far it spreads, how strong.
 const float BLOOM_LO       = 0.45;
-const float BLOOM_HI       = 0.85;
-const float BLOOM_RADIUS   = 1.6; // in game pixels; outer ring is 2x
-const float BLOOM_STRENGTH = 0.9;
+const float BLOOM_HI       = 0.95;
+const float BLOOM_RADIUS   = 1.1; // in game pixels; outer ring is 2x
+const float BLOOM_STRENGTH = 0.6;
 
 // Keep only what's bright enough to glow (soft knee, not a hard cut).
 vec3 bloom_tap(vec2 uv) {
