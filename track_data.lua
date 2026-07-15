@@ -5,6 +5,16 @@ local track4    = require "tile-map.track4"
 
 local M         = {}
 
+-- Reverse-driving prototype: horizontally mirrors every track (tile grid,
+-- checkpoints, coins, spawn) and puts the car in reverse gear (release gas
+-- to accelerate backwards). Spawn facing stays east, which lands facing away
+-- from checkpoint 1 on the mirrored layout. Everything downstream (ghosts,
+-- ranks, economy) runs unchanged on the mirrored data, so don't flip this on
+-- a save that has forward ghost laps -- they'd clip through mirrored walls
+-- and skew idle income. Snapshot via Dev: Save State and test on a fresh
+-- save.
+M.REVERSE_MODE  = false
+
 M.tile_size     = track1.tilewidth
 
 -- Coin-pickup radius (px) granted by each level of the "magnet" upgrade.
@@ -19,7 +29,7 @@ end
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
 -- by price (plus drift_boost needing drift owned - see economy.try_buy).
-M.UPGRADES              = {
+M.UPGRADES           = {
   {
     kind      = "accel",
     label     = "Acceleration",
@@ -59,7 +69,7 @@ M.UPGRADES              = {
 
 -- Loop-1 prologue variant: checkpoint-only economy, so prices are scaled way
 -- down, and no magnet (coins don't exist until loop 2).
-local LOOP1_UPGRADES    = {
+local LOOP1_UPGRADES = {
   {
     kind      = "accel",
     label     = "Acceleration",
@@ -101,7 +111,7 @@ function M.upgrade_item(kind, loop)
   return nil
 end
 
-M.TRACKS                = {
+M.TRACKS = {
   track1 = {
     map         = track1,
     spawn       = { col = 5, row = 14 },
@@ -306,6 +316,44 @@ M.TRACKS                = {
     },
   },
 }
+
+-- Left-right flip of a Tiled map's single tile layer. Tiles are flat color
+-- fills (see road.tile_colors), so mirroring the grid needs no per-tile
+-- sprite flipping. Returns a copy; the required map modules stay pristine.
+local function mirror_map(map)
+  local src    = map.layers[1].data
+  local mw, mh = map.width, map.height
+  local data   = {}
+  for row = 0, mh - 1 do
+    for col = 0, mw - 1 do
+      data[row * mw + col + 1] = src[row * mw + (mw - 1 - col) + 1]
+    end
+  end
+  local mirrored = {}
+  for k, v in pairs(map) do mirrored[k] = v end
+  mirrored.layers = { { data = data } }
+  return mirrored
+end
+
+local function mirror_track(tdata)
+  local mw          = tdata.map.width
+  tdata.map         = mirror_map(tdata.map)
+  tdata.spawn       = { col = mw - 1 - tdata.spawn.col, row = tdata.spawn.row }
+  local checkpoints = {}
+  for i, cp in ipairs(tdata.checkpoints) do
+    checkpoints[i] = { col = mw - cp.col - cp.w, row = cp.row, w = cp.w, h = cp.h }
+  end
+  tdata.checkpoints = checkpoints
+  local coins       = {}
+  for i, coin in ipairs(tdata.coins) do
+    coins[i] = { col = mw - 1 - coin.col, row = coin.row }
+  end
+  tdata.coins = coins
+end
+
+if M.REVERSE_MODE then
+  for _, tdata in pairs(M.TRACKS) do mirror_track(tdata) end
+end
 
 M.TRACK_ORDER           = { "track1", "basic", "track2", "track4" }
 

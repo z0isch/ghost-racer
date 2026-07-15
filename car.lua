@@ -127,7 +127,7 @@ function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_bo
   car.drift_enabled       = drift_enabled or false
   car.drift_boost_enabled = drift_boost_enabled or false
   car.max_boosts          = boost_ranks or 0
-  car.reverse_enabled     = reverse_enabled or false
+  car.reverse_enabled     = reverse_enabled or track_data.REVERSE_MODE
 end
 
 function M.pose(car)
