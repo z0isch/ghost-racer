@@ -224,14 +224,41 @@ local function draw_help()
   end
 end
 
+local COUNTDOWN_COLORS = {
+  [3] = gfx.COLOR_PINK,
+  [2] = gfx.COLOR_BLUE,
+  [1] = gfx.COLOR_YELLOW,
+}
+
 local function draw_countdown()
   dim.draw(usagi.GAME_W, usagi.GAME_H)
-  local text   = tostring(math.ceil(countdown_time))
+  local n      = math.ceil(countdown_time)
+  local text   = tostring(n)
   local scale  = 12
   local tw, th = usagi.measure_text(text)
   local x      = math.floor((usagi.GAME_W - tw * scale) / 2)
   local y      = math.floor((usagi.GAME_H - th * scale) / 2)
-  gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_WHITE, 1)
+  ui.neon_text(text, x, y, scale, {
+    colors = { COUNTDOWN_COLORS[n] or gfx.COLOR_WHITE },
+    shadow = gfx.COLOR_DARK_PURPLE,
+    wobble = 0.1,
+  })
+end
+
+local GO_FLASH_SECS = 0.6
+
+local function draw_go_flash()
+  local text   = "GO!"
+  local scale  = 10
+  local tw, th = usagi.measure_text(text)
+  local x      = math.floor((usagi.GAME_W - tw * scale) / 2)
+  local y      = math.floor((usagi.GAME_H - th * scale) / 2)
+  local alpha  = 1 - (State.race.time / GO_FLASH_SECS) ^ 2
+  ui.neon_text(text, x, y, scale, {
+    shadow = gfx.COLOR_DARK_PURPLE,
+    wobble = 0.12,
+    alpha  = alpha,
+  })
 end
 
 function M.draw()
@@ -266,6 +293,9 @@ function M.draw()
   elseif race.phase == "countdown" then
     draw_countdown()
   elseif race.phase == "racing" then
+    if race.time < GO_FLASH_SECS then
+      draw_go_flash()
+    end
     if not race.first_race then
       if ui.button("QUIT", 5, 5, { w = 50 }) then
         car.stop_engine(State.car)

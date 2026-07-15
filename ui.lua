@@ -3,6 +3,8 @@
 -- ui.label draws scaled/colored text at (x, y).
 -- ui.rank_text draws text in the animated per-rank style (wave + color).
 -- ui.coin_text draws text with every COIN_CHAR in yellow.
+-- ui.neon_text draws headline text in the neon style (alternating colors,
+-- drop shadow, per-character wobble + wave).
 
 local PAD_X = 4
 local PAD_Y = 2
@@ -43,6 +45,37 @@ M.theme = {
   dim      = gfx.COLOR_DARK_GRAY,
   dim_text = gfx.COLOR_LIGHT_GRAY,
 }
+
+local NEON_COLORS = { gfx.COLOR_PINK, gfx.COLOR_BLUE }
+local NEON_WOBBLE = 0.06  -- rad, per-character rotation amplitude
+local NEON_WOBBLE_SPEED = 2.2
+local NEON_WOBBLE_PHASE = 0.9
+
+-- Draws headline `text` one character at a time: alternating neon colors, a
+-- hard drop shadow, a slight rotation wobble, and an optional vertical wave.
+-- opts: colors (palette list), shadow (color), wave_amp (px), wave_speed,
+--       wave_phase, wobble (rad), alpha. Returns the drawn width.
+function M.neon_text(text, x, y, scale, opts)
+  opts = opts or {}
+  local colors     = opts.colors or NEON_COLORS
+  local shadow     = opts.shadow or gfx.COLOR_BLACK
+  local wave_amp   = opts.wave_amp or 0
+  local wave_speed = opts.wave_speed or WAVE_SPEED
+  local wave_phase = opts.wave_phase or WAVE_PHASE
+  local wobble     = opts.wobble or NEON_WOBBLE
+  local alpha      = opts.alpha or 1
+  local off        = math.max(1, math.floor(scale / 2))
+  local w          = 0
+  for i = 1, #text do
+    local ch   = text:sub(i, i)
+    local cy   = y + math.sin(usagi.elapsed * wave_speed + i * wave_phase) * wave_amp
+    local rot  = math.sin(usagi.elapsed * NEON_WOBBLE_SPEED + i * NEON_WOBBLE_PHASE) * wobble
+    gfx.text_ex(ch, x + w + off, cy + off, scale, rot, shadow, alpha)
+    gfx.text_ex(ch, x + w, cy, scale, rot, colors[(i - 1) % #colors + 1], alpha)
+    w = w + usagi.measure_text(ch) * scale
+  end
+  return w
+end
 
 -- Draws `text` in the animated style of `rank`: per-character sine wave with
 -- amplitude rising by rank, rank color (rainbow cycle for S). Returns the

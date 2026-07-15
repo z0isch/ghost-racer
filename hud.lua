@@ -14,6 +14,7 @@ function M.draw()
   local cash_w       = usagi.measure_text(money_text) * scale
   local cash_x       = (usagi.GAME_W - cash_w) / 2
 
+  gfx.text_ex(money_text, cash_x + 1, bal_y + 1, scale, 0, gfx.COLOR_BLACK, 1)
   gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
 
   if economy.owns_any_ghost() then

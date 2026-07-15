@@ -26,22 +26,20 @@ function M.draw()
   local tx         = math.floor((usagi.GAME_W - tw) / 2)
   local ty         = math.floor(usagi.GAME_H / 3 - th * scale / 2)
 
-  local wave_amp   = 10
-  local wave_speed = 4
-  local wave_gap   = 0.5
-  local cx         = tx
-  for i = 1, #title do
-    local ch = title:sub(i, i)
-    local cw = usagi.measure_text(ch) * scale
-    local cy = ty + math.floor(wave_amp * math.sin(usagi.elapsed * wave_speed + i * wave_gap))
-    gfx.text_ex(ch, cx, cy, scale, 0, gfx.COLOR_INDIGO, 1)
-    cx = cx + cw
-  end
+  ui.neon_text(title, tx, ty, scale, {
+    shadow = gfx.COLOR_DARK_PURPLE,
+    wave_amp = 10,
+    wave_speed = 4,
+    wave_phase = 0.5,
+  })
 
   if State.loop >= 2 then
     local tag = "LOOP " .. State.loop
     local tw2 = usagi.measure_text(tag) * 2
-    gfx.text_ex(tag, math.floor((usagi.GAME_W - tw2) / 2), ty + th * scale + 12, 2, 0, gfx.COLOR_INDIGO, 1)
+    ui.neon_text(tag, math.floor((usagi.GAME_W - tw2) / 2), ty + th * scale + 12, 2, {
+      colors = { gfx.COLOR_LIGHT_GRAY },
+      shadow = gfx.COLOR_DARK_PURPLE,
+    })
   end
 
   local w      = 200

@@ -35,7 +35,10 @@ function M.draw()
     local text  = string.format("$%.0f", p.amount)
     local tw    = usagi.measure_text(text) * scale
     local px    = math.floor(p.x - tw / 2)
-    gfx.text_ex(text, px, py, scale, 0, gfx.COLOR_GREEN, alpha)
+    -- seed the wiggle with spawn position so pops don't wobble in unison
+    local rot   = math.sin(usagi.elapsed * 6 + p.x) * 0.08
+    gfx.text_ex(text, px + 1, py + 1, scale, rot, gfx.COLOR_BLACK, alpha)
+    gfx.text_ex(text, px, py, scale, rot, gfx.COLOR_GREEN, alpha)
   end
 end
 

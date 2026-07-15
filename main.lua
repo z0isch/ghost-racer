@@ -34,6 +34,7 @@ function _init()
     end)
   end
   --persist.start_new_loop()
+  gfx.shader_set("vhs")
   -- enter initial scene without triggering exit on a previous scene
   scenes[State.mode].enter()
 end
@@ -44,5 +45,7 @@ function _update(dt)
 end
 
 function _draw()
+  gfx.shader_uniform("u_time", usagi.elapsed)
+  gfx.shader_uniform("u_resolution", { usagi.GAME_W, usagi.GAME_H })
   scenes[State.mode].draw()
 end
