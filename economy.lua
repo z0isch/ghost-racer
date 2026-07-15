@@ -187,9 +187,17 @@ function M.lap_cash_rate(line)
   return pay / period
 end
 
+-- Shop item definition for `kind` in the current context: global car
+-- upgrades first (track-independent), then the active track's shop
+-- (ghosts/coins/nirvana).
+function M.shop_item(kind)
+  return track_data.upgrade_item(kind, State.loop)
+      or track_data.track_shop_item(State.active_track, kind, State.loop)
+end
+
 function M.upgrade_cost(kind)
   local id = State.active_track
-  local u  = track_data.track_shop_item(id, kind, State.loop)
+  local u  = M.shop_item(kind)
   if not u then return nil end
   if kind == "coins" then
     local free = track_data.free_coins(id, State.loop)
@@ -215,7 +223,7 @@ function M.try_buy(kind)
   local id   = State.active_track
   local cost = M.upgrade_cost(kind)
   if cost == nil then return end
-  if not M.shop_item_unlocked(id, track_data.track_shop_item(id, kind, State.loop)) then return end
+  if not M.shop_item_unlocked(id, M.shop_item(kind)) then return end
   if kind == "ghosts" and not State.tracks[id].ghost_line then return end
   if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end

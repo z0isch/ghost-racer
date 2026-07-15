@@ -16,6 +16,91 @@ function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
 end
 
+-- Car/player upgrades sold in the global UPGRADES column of the buy scene,
+-- available on every track from the start. Later upgrades are gated purely
+-- by price (plus drift_boost needing drift owned - see economy.try_buy).
+M.UPGRADES              = {
+  {
+    kind      = "accel",
+    label     = "Acceleration",
+    max       = 4,
+    base_cost = 20,
+    growth    = 1.4
+  },
+  {
+    kind      = "drift",
+    label     = "Drift",
+    max       = 1,
+    base_cost = 700,
+    growth    = 1.6
+  },
+  {
+    kind      = "drift_boost",
+    label     = "Drift Boost",
+    max       = 1,
+    base_cost = 800,
+    growth    = 1.6
+  },
+  {
+    kind      = "boost",
+    label     = "Boost",
+    max       = 5,
+    base_cost = 2000,
+    growth    = 1.3
+  },
+  {
+    kind      = "magnet",
+    label     = "Coin Magnet",
+    max       = 3,
+    base_cost = 11000,
+    growth    = 1.3
+  },
+}
+
+-- Loop-1 prologue variant: checkpoint-only economy, so prices are scaled way
+-- down, and no magnet (coins don't exist until loop 2).
+local LOOP1_UPGRADES    = {
+  {
+    kind      = "accel",
+    label     = "Acceleration",
+    max       = 4,
+    base_cost = 10,
+    growth    = 1.42
+  },
+  {
+    kind      = "drift",
+    label     = "Drift",
+    max       = 1,
+    base_cost = 90,
+    growth    = 1.6
+  },
+  {
+    kind      = "drift_boost",
+    label     = "Drift Boost",
+    max       = 1,
+    base_cost = 150,
+    growth    = 1.6
+  },
+  {
+    kind      = "boost",
+    label     = "Boost",
+    max       = 5,
+    base_cost = 300,
+    growth    = 1.3
+  },
+}
+
+function M.upgrades(loop)
+  return loop == 1 and LOOP1_UPGRADES or M.UPGRADES
+end
+
+function M.upgrade_item(kind, loop)
+  for _, item in ipairs(M.upgrades(loop)) do
+    if item.kind == kind then return item end
+  end
+  return nil
+end
+
 M.TRACKS                = {
   track1 = {
     map         = track1,
@@ -49,30 +134,14 @@ M.TRACKS                = {
         base_cost = 25,
         growth    = 1.6
       },
-      {
-        kind      = "accel",
-        label     = "Acceleration",
-        currency  = "cash",
-        max       = 4,
-        base_cost = 20,
-        growth    = 1.4
-      },
     },
     -- Loop-1 prologue overrides: checkpoint-only income (no ghosts, no
-    -- coins), so ranks and prices are scaled way down. Values are
+    -- coins - the shop is empty and car upgrades live in the global
+    -- UPGRADES column), so ranks are scaled way down. Values are
     -- provisional - tune freely.
     loop1       = {
       ranks = { C = 1.0, B = 1.4, A = 2.2, S = 3.2 },
-      shop  = {
-        {
-          kind      = "accel",
-          label     = "Acceleration",
-          currency  = "cash",
-          max       = 4,
-          base_cost = 10,
-          growth    = 1.42
-        },
-      },
+      shop  = {},
     },
   },
   basic = {
@@ -112,45 +181,12 @@ M.TRACKS                = {
         base_cost = 400,
         growth    = 1.3
       },
-      {
-        kind      = "drift",
-        label     = "Drift",
-        currency  = "cash",
-        max       = 1,
-        base_cost = 700,
-        growth    = 1.6
-      },
-      {
-        kind      = "drift_boost",
-        label     = "Drift Boost",
-        currency  = "cash",
-        max       = 1,
-        base_cost = 800,
-        growth    = 1.6
-      },
     },
     -- Loop-1 prologue overrides - provisional, tune freely.
     loop1       = {
       unlock_cost = 28,
       ranks       = { C = 3.7, B = 4.0, A = 4.8, S = 6.0 },
-      shop        = {
-        {
-          kind      = "drift",
-          label     = "Drift",
-          currency  = "cash",
-          max       = 1,
-          base_cost = 90,
-          growth    = 1.6
-        },
-        {
-          kind      = "drift_boost",
-          label     = "Drift Boost",
-          currency  = "cash",
-          max       = 1,
-          base_cost = 150,
-          growth    = 1.6
-        },
-      },
+      shop        = {},
     },
   },
   track2 = {
@@ -193,14 +229,6 @@ M.TRACKS                = {
         base_cost = 1100,
         growth    = 1.3
       },
-      {
-        kind      = "boost",
-        label     = "Boost",
-        currency  = "cash",
-        max       = 5,
-        base_cost = 2000,
-        growth    = 1.3
-      },
     },
     -- Loop-1 prologue overrides - provisional, tune freely. Nirvana lives
     -- here in loop 1 (Track 4 doesn't exist yet) and needs rank A on every
@@ -209,14 +237,6 @@ M.TRACKS                = {
       unlock_cost = 200,
       ranks       = { C = 13.0, B = 14.5, A = 16.0, S = 20.0 },
       shop        = {
-        {
-          kind      = "boost",
-          label     = "Boost",
-          currency  = "cash",
-          max       = 5,
-          base_cost = 300,
-          growth    = 1.3
-        },
         {
           kind              = "nirvana",
           label             = "Nirvana",
@@ -272,14 +292,6 @@ M.TRACKS                = {
         label     = "Coin",
         currency  = "cash",
         base_cost = 10000,
-        growth    = 1.3
-      },
-      {
-        kind      = "magnet",
-        label     = "Coin Magnet",
-        currency  = "cash",
-        max       = 3,
-        base_cost = 11000,
         growth    = 1.3
       },
       {
@@ -341,6 +353,8 @@ function M.track_shop_item(track_id, kind, loop)
 end
 
 function M.kind_max(kind)
+  local upgrade = M.upgrade_item(kind)
+  if upgrade then return upgrade.max end
   for _, tid in ipairs(M.TRACK_ORDER) do
     local item = M.track_shop_item(tid, kind)
     if item then return item.max end

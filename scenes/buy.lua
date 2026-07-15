@@ -141,10 +141,14 @@ function M.update(dt)
   end
 end
 
-local function shop_button(item, x, y, w)
-  local kind  = item.kind
-  local label = item.label
-  local cost  = economy.upgrade_cost(kind)
+-- One shop row: label left, cost button right. opts.cost_w widens the cost
+-- button (the upgrades column needs room for 5-digit prices).
+local function shop_button(item, x, y, w, opts)
+  opts         = opts or {}
+  local cost_w = opts.cost_w or SHOP_COST_W
+  local kind   = item.kind
+  local label  = item.label
+  local cost   = economy.upgrade_cost(kind)
 
   if not economy.shop_item_unlocked(State.active_track, item) then
     local _, th = usagi.measure_text(label)
@@ -181,8 +185,8 @@ local function shop_button(item, x, y, w)
 
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
-  local bx       = x + w - SHOP_COST_W
-  local btn_opts = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
+  local bx       = x + w - cost_w
+  local btn_opts = { w = cost_w, disabled = not affordable, text = cost_color, dim_text = cost_color }
   local clicked  = ui.button(cost_text, bx, y, btn_opts)
   return clicked, bh
 end
@@ -279,7 +283,7 @@ function M.draw_race_modal()
 
   -- The run's raw inputs come first, right under the rank title: rank is
   -- $/sec, so time and coins are the two levers the player pulls to raise it.
-  local stats = string.format("Time: %.1fs", info.time)
+  local stats        = string.format("Time: %.1fs", info.time)
   if info.coins_total then
     stats = stats .. string.format("  %s %d/%d", ui.COIN_CHAR, info.coins_got, info.coins_total)
   end
@@ -411,6 +415,20 @@ function M.draw_shop()
       State.active_track = next_track
     end
     shop_y = shop_y + bh + gap
+  end
+
+  -- Global car-upgrades column, mirrored on the right edge. Wider cost
+  -- buttons than the track shop so 5-digit prices fit.
+  local uw     = 230
+  local ux     = usagi.GAME_W - uw - 20
+  local header = "Car Upgrades"
+  local hw     = usagi.measure_text(header) * 2
+  gfx.text_ex(header, ux + math.floor((uw - hw) / 2), nav_y + 10, 2, 0, gfx.COLOR_WHITE, 1)
+  local uy = nav_y + th_a * 2 + 16
+  for _, item in ipairs(track_data.upgrades(State.loop)) do
+    local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })
+    if clicked then economy.try_buy(item.kind) end
+    uy = uy + bh + gap
   end
 
   local race_x = math.floor((usagi.GAME_W - w) / 2)
