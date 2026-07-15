@@ -10,7 +10,16 @@ local TOP_VEL_BASE       = 200
 local TOP_VEL_STEP       = 15
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
+-- Wall feel: contact at or above MIN_BOUNCE_VEL px/s of blocked motion
+-- rebounds the car at WALL_RESTITUTION times its impact speed and costs it
+-- impact * WALL_LOSS_FACTOR of forward speed. Softer contact just bleeds
+-- speed at WALL_DECEL scaled by how head-on it is, so the car can sit flush
+-- against a wall without jitter while a shallow scrape at speed stays cheap.
 local WALL_DECEL         = 500
+local WALL_RESTITUTION   = 0.001
+local WALL_LOSS_FACTOR   = 0.8
+local MIN_BOUNCE_VEL     = 40
+local BOUNCE_DECAY       = 550
 -- Movement is swept in substeps of at most this many pixels so a fast car
 -- (boost stacking, dt spike) can't jump its collision samples over a wall
 -- tile in a single frame.
@@ -43,6 +52,8 @@ local function default_car()
     x                    = 0,
     y                    = 0,
     vel                  = 0,
+    bounce_x             = 0,
+    bounce_y             = 0,
     top_vel              = TOP_VEL_BASE,
     facing_angle         = 0,
     vel_angle            = 0,
@@ -85,6 +96,8 @@ function M.reset(car, spawn)
   car.x                    = spawn.col * ts
   car.y                    = spawn.row * ts
   car.vel                  = 0
+  car.bounce_x             = 0
+  car.bounce_y             = 0
   car.facing_angle         = 0
   car.vel_angle            = 0
   car.is_drifitng          = false
@@ -151,17 +164,24 @@ function M.update(car, dt, map)
 
   local drift_factor = is_drifitng and 1.1 or 1
   local vel_vec      = util.vec_from_angle(car.vel_angle, drift_factor * car.vel * dt)
+  local move_x       = vel_vec.x + car.bounce_x * dt
+  local move_y       = vel_vec.y + car.bounce_y * dt
 
-  local function wall_decel(vel)
-    if vel < 0 then return math.min(0, vel + WALL_DECEL * dt) end
-    return math.max(0, vel - WALL_DECEL * dt)
+  -- Reduces vel toward 0 by amount, never crossing zero.
+  local function bleed_vel(amount)
+    if car.vel < 0 then
+      car.vel = math.min(0, car.vel + amount)
+    else
+      car.vel = math.max(0, car.vel - amount)
+    end
   end
 
-  local max_axis = math.max(math.abs(vel_vec.x), math.abs(vel_vec.y))
+  local max_axis = math.max(math.abs(move_x), math.abs(move_y))
   local steps    = math.max(1, math.ceil(max_axis / MAX_MOVE_STEP))
-  local step_x   = vel_vec.x / steps
-  local step_y   = vel_vec.y / steps
-  local hit_wall = false
+  local step_x   = move_x / steps
+  local step_y   = move_y / steps
+  local hit_x    = false
+  local hit_y    = false
   for _ = 1, steps do
     local new_x = util.clamp(car.x + step_x, 0, usagi.GAME_W - CAR_SIZE)
     local new_y = util.clamp(car.y + step_y, 0, usagi.GAME_H - CAR_SIZE)
@@ -170,16 +190,46 @@ function M.update(car, dt, map)
       car.y = new_y
     elseif road.on_road(map, new_x, car.y, CAR_SIZE, CAR_MARGIN) then
       car.x = new_x
-      hit_wall = true
+      hit_y = true
     elseif road.on_road(map, car.x, new_y, CAR_SIZE, CAR_MARGIN) then
       car.y = new_y
-      hit_wall = true
+      hit_x = true
     else
-      hit_wall = true
+      hit_x = true
+      hit_y = true
       break
     end
   end
-  if hit_wall then car.vel = wall_decel(car.vel) end
+
+  if (hit_x or hit_y) and dt > 0 then
+    -- Impact is the part of the car's motion the wall blocked; it scales both
+    -- the rebound and the speed cost, so a shallow scrape stays nearly free
+    -- while a square hit costs real speed.
+    local vx       = move_x / dt
+    local vy       = move_y / dt
+    local impact_x = hit_x and vx or 0
+    local impact_y = hit_y and vy or 0
+    local impact   = math.sqrt(impact_x * impact_x + impact_y * impact_y)
+    if impact >= MIN_BOUNCE_VEL then
+      -- -(1 + r) first cancels the motion into the wall, then adds the
+      -- rebound, so the car leaves at WALL_RESTITUTION times its impact
+      -- speed even though car.vel keeps pointing at the wall.
+      if hit_x then car.bounce_x = -(1 + WALL_RESTITUTION) * vx end
+      if hit_y then car.bounce_y = -(1 + WALL_RESTITUTION) * vy end
+      bleed_vel(impact * WALL_LOSS_FACTOR)
+    else
+      local speed = math.sqrt(vx * vx + vy * vy)
+      local frac  = speed > 0 and impact / speed or 0
+      bleed_vel(WALL_DECEL * frac * dt)
+    end
+  end
+
+  local bounce_mag = math.sqrt(car.bounce_x * car.bounce_x + car.bounce_y * car.bounce_y)
+  if bounce_mag > 0 then
+    local scale  = math.max(0, bounce_mag - BOUNCE_DECAY * dt) / bounce_mag
+    car.bounce_x = car.bounce_x * scale
+    car.bounce_y = car.bounce_y * scale
+  end
 
   local effective_top_vel = car.top_vel
   local min_vel           = car.reverse_enabled and -effective_top_vel or 0
