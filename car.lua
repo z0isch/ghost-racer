@@ -32,6 +32,15 @@ local ENGINE_MIN_VOL     = 0.3
 local ENGINE_MIN_PITCH   = 0.8
 local ENGINE_MAX_PITCH   = 1.4
 local BOOST_FLAME_TIME   = 0.8
+local HEADLIGHT_LEN      = 20
+local HEADLIGHT_HALF     = 10
+local HEADLIGHT_FLICKER  = 1
+-- Distance from car center to the headlight bulb.
+local HEADLIGHT_OFFSET   = 2
+local TAILLIGHT_LEN      = 10
+local TAILLIGHT_HALF     = 6
+local TAILLIGHT_FLICKER  = 0.2
+local TAILLIGHT_OFFSET   = 4
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
 -- Rotating to within this angle of a full 180 mid-drift flips the drift
@@ -390,6 +399,43 @@ function M.draw(car)
     car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or ready_color
   end
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
+end
+
+-- Shared light-cone renderer: apex sits `offset` px from the car center
+-- along `beam`, then three stacked cones fade from wide outer wash to hot
+-- core, topped with a glow bulb.
+local function draw_light_cone(car, beam, offset, flicker, layers, glow_color)
+  local base  = util.vec_from_angle(beam, offset)
+  local bx    = car.x + 8 + base.x
+  local by    = car.y + 8 + base.y
+  local pulse = 0.85 + 0.15 * math.sin(usagi.elapsed * flicker)
+  for _, l in ipairs(layers) do
+    local tip = util.vec_from_angle(beam, l.len * pulse)
+    local off = util.vec_from_angle(beam + math.pi / 2, l.half)
+    gfx.tri_fill(
+      bx, by,
+      bx + tip.x - off.x, by + tip.y - off.y,
+      bx + tip.x + off.x, by + tip.y + off.y,
+      l.color, l.alpha)
+  end
+  gfx.circ_fill(bx, by, 2, glow_color, 0.6)
+  gfx.px(bx, by, gfx.COLOR_TRUE_WHITE, 1)
+end
+
+function M.draw_headlights(car)
+  draw_light_cone(car, car.facing_angle, HEADLIGHT_OFFSET, HEADLIGHT_FLICKER, {
+    { len = HEADLIGHT_LEN,       half = HEADLIGHT_HALF,       color = gfx.COLOR_YELLOW, alpha = 0.1 },
+    { len = HEADLIGHT_LEN * 0.7, half = HEADLIGHT_HALF * 0.6, color = gfx.COLOR_PEACH,  alpha = 0.15 },
+    { len = HEADLIGHT_LEN * 0.4, half = HEADLIGHT_HALF * 0.3, color = gfx.COLOR_WHITE,  alpha = 0.2 },
+  }, gfx.COLOR_PINK)
+end
+
+function M.draw_taillights(car)
+  draw_light_cone(car, car.facing_angle + math.pi, TAILLIGHT_OFFSET, TAILLIGHT_FLICKER, {
+    { len = TAILLIGHT_LEN,       half = TAILLIGHT_HALF,       color = gfx.COLOR_RED,    alpha = 0.15 },
+    { len = TAILLIGHT_LEN * 0.7, half = TAILLIGHT_HALF * 0.6, color = gfx.COLOR_ORANGE, alpha = 0.15 },
+    { len = TAILLIGHT_LEN * 0.4, half = TAILLIGHT_HALF * 0.3, color = gfx.COLOR_PINK,   alpha = 0.2 },
+  }, gfx.COLOR_RED)
 end
 
 function M.draw_flames(car)

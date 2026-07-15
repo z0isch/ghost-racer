@@ -134,6 +134,8 @@ function _draw()
   gfx.clear(gfx.COLOR_INDIGO)
   gates.draw(State.gates, State.car)
   car.draw_skid_marks(State.car)
+  car.draw_headlights(State.car)
+  car.draw_taillights(State.car)
   car.draw_flames(State.car)
   car.draw(State.car)
 end
