@@ -432,7 +432,7 @@ function M.draw_shop()
   end
 
   local race_x = math.floor((usagi.GAME_W - w) / 2)
-  if ui.button("RACE", race_x, usagi.GAME_H - 40, { w = w, scale = 3 }) then
+  if ui.button("RACE", race_x, usagi.GAME_H - 60, { w = w, scale = 3 }) then
     SceneGoto("race")
   end
 end
