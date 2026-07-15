@@ -43,9 +43,11 @@ local TAILLIGHT_FLICKER  = 0.2
 local TAILLIGHT_OFFSET   = 4
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
--- Rotating to within this angle of a full 180 mid-drift flips the drift
--- boost into the opposite gear.
-local DRIFT_FLIP_GRACE   = math.pi / 6
+-- Double-tapping BTN2 within FLIP_TAP_WINDOW spins the car 180 over
+-- FLIP_DURATION while it keeps sliding along its original line, then swaps
+-- gears: forward at v becomes reverse at v in the same travel direction.
+local FLIP_TAP_WINDOW    = 0.3
+local FLIP_DURATION      = 0.3
 
 local M                  = {}
 
@@ -89,8 +91,10 @@ local function default_car()
     drift_boost_enabled  = false,
     reverse_enabled      = false,
     drift_dir            = 0,
-    drift_start_angle    = 0,
-    drift_flipped        = false,
+    flip_tap_t           = 0,
+    flip_t               = 0,
+    flip_from            = 0,
+    flip_dir             = 1,
     max_boosts           = 0,
     boosts               = 0,
     boost_flame_t        = 0,
@@ -112,8 +116,8 @@ function M.reset(car, spawn)
   car.is_drifitng          = false
   car.drift_time           = 0
   car.drift_dir            = 0
-  car.drift_start_angle    = 0
-  car.drift_flipped        = false
+  car.flip_tap_t           = 0
+  car.flip_t               = 0
   car.boost_ready          = false
   car.boost_time_remaining = 0
   car.boosts               = car.max_boosts
@@ -150,13 +154,39 @@ end
 function M.update(car, dt, map)
   local holding_left  = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
-  local is_drifitng   = false
-  if car.drift_enabled and input.held(input.BTN2) then is_drifitng = true end
+
+  if car.flip_tap_t > 0 then car.flip_tap_t = math.max(0, car.flip_tap_t - dt) end
+  if input.pressed(input.BTN2) and car.flip_t <= 0 and car.reverse_enabled then
+    if car.flip_tap_t > 0 then
+      -- Second tap inside the window: spin toward whichever way the player
+      -- is steering (defaults right).
+      car.flip_t     = FLIP_DURATION
+      car.flip_from  = car.facing_angle
+      car.flip_dir   = holding_left and -1 or 1
+      car.flip_tap_t = 0
+    else
+      car.flip_tap_t = FLIP_TAP_WINDOW
+    end
+  end
+
+  if car.flip_t > 0 then
+    car.flip_t       = math.max(0, car.flip_t - dt)
+    local progress   = 1 - car.flip_t / FLIP_DURATION
+    car.facing_angle = angle.normalize(car.flip_from + car.flip_dir * progress * math.pi)
+    if car.flip_t <= 0 then
+      -- Spin finished: swap gears. Travel continues in the original
+      -- direction, now driven in reverse (or forward if it was reversing).
+      car.vel = -car.vel
+    end
+  end
+  local flipping = car.flip_t > 0
+
+  local is_drifitng = false
+  if car.drift_enabled and input.held(input.BTN2) and not flipping then is_drifitng = true end
   -- A drift locks in the direction of travel it started with; vel may bleed
   -- to 0 during the drift but never crosses to the other sign.
   if is_drifitng and not car.is_drifitng then
-    car.drift_dir         = car.vel < 0 and -1 or 1
-    car.drift_start_angle = car.facing_angle
+    car.drift_dir = car.vel < 0 and -1 or 1
   end
 
   local target_vel_angle = car.facing_angle
@@ -167,6 +197,10 @@ function M.update(car, dt, map)
 
   if is_drifitng then
     car.vel_angle = angle.lerp(car.vel_angle, target_vel_angle, car.drift_slide * dt)
+  elseif flipping then
+    -- Mid-spin the car keeps sliding along its pre-flip line; the 180 is a
+    -- gear change, not a U-turn.
+    car.vel_angle = car.flip_from
   else
     car.vel_angle = car.facing_angle
   end
@@ -284,7 +318,7 @@ function M.update(car, dt, map)
     car.boost_flame_t = math.max(0, car.boost_flame_t - dt)
   end
 
-  if holding_left or holding_right then
+  if (holding_left or holding_right) and not flipping then
     local dir = holding_left and -1 or 1
     local rate
     if is_drifitng then
@@ -297,23 +331,15 @@ function M.update(car, dt, map)
   end
 
   if is_drifitng then
-    car.is_drifitng   = true
-    car.drift_time    = car.drift_time + dt
-    local turned      = angle.normalize(car.facing_angle - car.drift_start_angle)
-    car.drift_flipped = car.reverse_enabled and math.abs(turned - math.pi) < DRIFT_FLIP_GRACE
+    car.is_drifitng = true
+    car.drift_time  = car.drift_time + dt
     if car.drift_time >= car.drift_threshold and not car.boost_ready and car.drift_boost_enabled then
       car.boost_ready = true
     end
   else
     if car.boost_ready then
       car.boost_time_remaining = car.boost_length
-      local boost_dir = car.drift_dir
-      if car.drift_flipped then
-        -- The 180 carries the built-up speed into the opposite gear.
-        boost_dir = -car.drift_dir
-        car.vel   = -car.vel
-      end
-      if boost_dir < 0 then
+      if car.drift_dir < 0 then
         car.vel = math.max(car.vel - car.boost_value, -car.top_vel)
       else
         car.vel = math.min(car.vel + car.boost_value, car.top_vel)
@@ -321,9 +347,8 @@ function M.update(car, dt, map)
       car.boost_ready = false
       sfx.play("boost")
     end
-    car.is_drifitng   = false
-    car.drift_time    = 0
-    car.drift_flipped = false
+    car.is_drifitng = false
+    car.drift_time  = 0
   end
 
   if is_drifitng and car.vel ~= 0 then
@@ -395,8 +420,7 @@ end
 function M.draw(car)
   local car_tint = gfx.COLOR_WHITE
   if car.boost_ready then
-    local ready_color = car.drift_flipped and gfx.COLOR_RED or gfx.COLOR_GREEN
-    car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or ready_color
+    car_tint = util.flash(usagi.elapsed, 8) and gfx.COLOR_WHITE or gfx.COLOR_GREEN
   end
   gfx.spr_ex(2, car.x, car.y, false, false, car.facing_angle - math.pi / 2, car_tint, 1)
 end

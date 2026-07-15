@@ -8,9 +8,12 @@ local ROWS           = GAME_H / TILE_SIZE
 
 -- --- gates (prototype; extract to gates.lua if it's fun) --------------------
 -- A gate is a 1-tile-wide strip that is solid wall unless the car is driving
--- in its required gear: green ("forward") gates open only for a car moving
--- forward, red ("reverse") only for one reversing. Rather than teaching
--- car.lua about gates, blocking
+-- in its required pose: green ("forward") gates open only for a car
+-- traveling hood-first, red ("reverse") only for one traveling trunk-first.
+-- Pose comes from actual travel vs facing, not gear sign, so a car that has
+-- spun 180 mid-drift or mid-flip and is still sliding its original line
+-- already counts as reversing. Rather than teaching car.lua about gates,
+-- blocking
 -- gates are stamped into the map as wall tiles around car.update and restored
 -- after, so the existing wall collision/decel applies unchanged. A car
 -- overlapping a gate is exempt from blocking, so if you stop on one you can
@@ -50,8 +53,16 @@ local function on_gate_tiles(gate, c)
 end
 
 function gates.blocks(gate, c)
-  local correct = (gate.mode == "forward" and c.vel > 0)
-      or (gate.mode == "reverse" and c.vel < 0)
+  -- Judged along the gate's crossing axis (x for vertical strips, y for
+  -- horizontal): hood-first when nose and actual travel point the same way
+  -- through the gate, trunk-first when opposite. Sideways slide doesn't
+  -- count, so a mid-drift or mid-flip 180 reads as reversing as soon as the
+  -- nose swings past the gate plane, even though vel is still positive.
+  local travel  = c.vel * (gate.vertical and math.cos(c.vel_angle) or math.sin(c.vel_angle))
+  local nose    = gate.vertical and math.cos(c.facing_angle) or math.sin(c.facing_angle)
+  local through = travel * nose
+  local correct = (gate.mode == "forward" and through > 0)
+      or (gate.mode == "reverse" and through < 0)
   if correct then return false end
   return not on_gate_tiles(gate, c)
 end
