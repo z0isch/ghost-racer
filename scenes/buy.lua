@@ -9,6 +9,7 @@ local popups      = require "popups"
 local modal       = require "modal"
 local car_demo    = require "car_demo"
 local car         = require "car"
+local gates       = require "gates"
 
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
@@ -224,6 +225,10 @@ function M.draw()
   road.draw_track(tdata.map)
   dim.draw(usagi.GAME_W, usagi.GAME_H)
 
+  -- Nil car: backdrop preview, every gate at the neutral "open" alpha.
+  if tdata.gates and gates.enabled(State.car) then
+    gates.draw(tdata.gates, nil)
+  end
   local checkpoints = tdata.checkpoints
   for i, cp in ipairs(checkpoints) do
     road.draw_checkpoint(cp, i, true, #checkpoints)

@@ -13,7 +13,7 @@ local M         = {}
 -- a save that has forward ghost laps -- they'd clip through mirrored walls
 -- and skew idle income. Snapshot via Dev: Save State and test on a fresh
 -- save.
-M.REVERSE_MODE  = false
+M.REVERSE_MODE  = true
 
 M.tile_size     = track1.tilewidth
 
@@ -118,6 +118,10 @@ M.TRACKS = {
     checkpoints = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
+    gates       = {
+      { col = 10, row = 8, len = 7, vertical = true, mode = "reverse" },
+      { col = 26, row = 8, len = 7, vertical = true, mode = "forward" },
+    },
     coins       = {
       { col = 18, row = 9 },
       -- second set (new game loop) - positions are provisional, tune freely
@@ -160,6 +164,10 @@ M.TRACKS = {
     checkpoints = {
       { col = 35, row = 6, w = 4, h = 11 },
       { col = 1,  row = 6, w = 4, h = 11 },
+    },
+    gates       = {
+      { col = 34, row = 6,  len = 5, vertical = true, mode = "reverse" },
+      { col = 26, row = 12, len = 5, vertical = true, mode = "forward" },
     },
     coins       = {
       { col = 18, row = 7 },
@@ -349,6 +357,20 @@ local function mirror_track(tdata)
     coins[i] = { col = mw - 1 - coin.col, row = coin.row }
   end
   tdata.coins = coins
+  if tdata.gates then
+    local gates = {}
+    for i, g in ipairs(tdata.gates) do
+      -- Mode is untouched: hood-first vs trunk-first is mirror-invariant.
+      gates[i] = {
+        col      = g.vertical and mw - 1 - g.col or mw - g.col - g.len,
+        row      = g.row,
+        len      = g.len,
+        vertical = g.vertical,
+        mode     = g.mode,
+      }
+    end
+    tdata.gates = gates
+  end
 end
 
 if M.REVERSE_MODE then

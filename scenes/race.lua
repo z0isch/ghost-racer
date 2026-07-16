@@ -4,6 +4,7 @@ local hud              = require "hud"
 local car              = require "car"
 local road             = require "road"
 local ghost            = require "ghost"
+local gates            = require "gates"
 local economy          = require "economy"
 local popups           = require "popups"
 local track_data       = require "track_data"
@@ -168,7 +169,14 @@ function M.update(dt)
       return
     end
 
+    local gate_walls
+    if tdata.gates and gates.enabled(State.car) then
+      gate_walls = gates.apply_walls(tdata.gates, State.car, tdata.map)
+    end
     car.update(State.car, dt, tdata.map)
+    if gate_walls then
+      gates.restore_walls(tdata.map, gate_walls)
+    end
     race.time = race.time + dt
     ghost.record(race.time, car.pose(State.car))
 
@@ -267,6 +275,9 @@ function M.draw()
   road.draw_track(tdata.map)
   local race = State.race
   if race.phase ~= "finished" then
+    if tdata.gates and gates.enabled(State.car) then
+      gates.draw(tdata.gates, State.car)
+    end
     local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
     for i = active, #checkpoints do
