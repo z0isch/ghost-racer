@@ -10,6 +10,7 @@ local modal       = require "modal"
 local car_demo    = require "car_demo"
 local car         = require "car"
 local gates       = require "gates"
+local persist     = require "persist"
 
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
@@ -77,15 +78,20 @@ local MODAL_INFO = {
     body      = function()
       return "RANK D\n\nTime: " ..
           format_duration(State.last_loop_time or 0) ..
+          "\n+ ¥" .. persist.LOOP_REWARD ..
           "\n\nUnfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one..."
     end,
     draw_body = function(x, y, scale)
       local _, line_h = usagi.measure_text("RANK D")
+      local lh        = line_h * scale
       ui.rank_text("RANK D", "D", x, y, scale)
+      ui.coin_text("Time: " .. format_duration(State.last_loop_time or 0),
+        x, y + lh * 2, scale, gfx.COLOR_LIGHT_GRAY)
+      ui.coin_text("+ ¥" .. persist.LOOP_REWARD,
+        x, y + lh * 3, scale, gfx.COLOR_YELLOW)
       ui.coin_text(
-        "Time: " .. format_duration(State.last_loop_time or 0) ..
-        "\n\nUnfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one...",
-        x, y + line_h * scale * 2, scale, gfx.COLOR_LIGHT_GRAY)
+        "Unfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one...",
+        x, y + lh * 5, scale, gfx.COLOR_LIGHT_GRAY)
     end,
   },
 }
@@ -95,7 +101,7 @@ local MODAL_INFO = {
 local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
-  if kind == "nirvana" then SceneGoto("intro") end
+  if kind == "nirvana" then SceneGoto("skill_tree") end
 end
 
 local M = {}

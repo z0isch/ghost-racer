@@ -1,8 +1,13 @@
 local track_data = require "track_data"
 local car        = require "car"
 local ghost      = require "ghost"
+local skill_tree = require "skill_tree"
 
 local M          = {}
+
+-- ¥ granted for completing a loop, paid into the skill tree by
+-- start_new_loop. Exposed so the Loop Complete modal copy can't drift.
+M.LOOP_REWARD    = 100
 
 local function default_state()
   return {
@@ -14,6 +19,7 @@ local function default_state()
     seen_modals  = {},
     accel        = 0,
     top_speed    = 0,
+    skill_tree   = skill_tree.new(),
     drift        = 0,
     drift_boost  = 0,
     boost        = 0,
@@ -46,7 +52,9 @@ local function progression_of_state()
     loop_time    = State.loop_time,
     seen_modals  = State.seen_modals,
     accel        = State.accel,
-    top_speed    = State.top_speed,
+    -- top_speed is a derived cache of the skill tree, not saved; the tree is
+    -- the single source of truth. fx is transient render state, also dropped.
+    skill_tree   = { points = State.skill_tree.points, ranks = State.skill_tree.ranks },
     drift        = State.drift,
     drift_boost  = State.drift_boost,
     boost        = State.boost,
@@ -68,7 +76,6 @@ local function apply_progression(loaded)
   State.seen_modals = loaded.seen_modals or {}
 
   State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
-  State.top_speed   = math.min(loaded.top_speed or 0, track_data.kind_max("top_speed") or 0)
   State.drift       = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
   State.drift_boost = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
   State.boost       = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
@@ -105,6 +112,24 @@ local function apply_progression(loaded)
       end
     end
   end
+
+  -- No rank clamping: the defs' `max` only gates future buys, and the game is
+  -- unreleased. fx is transient render state, always rebuilt empty.
+  if loaded.skill_tree then
+    State.skill_tree.points = loaded.skill_tree.points or 0
+    State.skill_tree.ranks  = loaded.skill_tree.ranks or {}
+  end
+  State.skill_tree.fx = {}
+
+  M.rederive_skill_effects()
+end
+
+-- State.top_speed is a cache derived from the skill tree; the tree is the
+-- single source of truth. Re-derive after any rank change or load, before
+-- resync_car_and_ghosts pushes it into the car.
+function M.rederive_skill_effects()
+  local ctx       = skill_tree.apply_all(State.skill_tree, {})
+  State.top_speed = ctx.top_speed or 0
 end
 
 -- Re-syncs car tuning and ghost sims after progression fields change out
@@ -122,22 +147,29 @@ end
 -- track's original coin set starts active for free (see
 -- track_data.free_coins).
 function M.start_new_loop()
-  local next_loop      = (State.loop or 1) + 1
-  local finished_time  = State.loop_time or 0
-  local seen_help      = State.seen_help
-  local seen_modals    = State.seen_modals
-  State                = default_state()
-  State.loop           = next_loop
-  State.seen_help      = seen_help
-  State.seen_modals    = seen_modals
+  local next_loop         = (State.loop or 1) + 1
+  local finished_time     = State.loop_time or 0
+  local seen_help         = State.seen_help
+  local seen_modals       = State.seen_modals
+  local tree              = State.skill_tree
+  State                   = default_state()
+  State.loop              = next_loop
+  State.seen_help         = seen_help
+  State.seen_modals       = seen_modals
+  -- Carry the skill tree across the reset (like seen_help) and pay the loop
+  -- reward atomically with the rollover. fx is transient, rebuilt empty.
+  State.skill_tree        = tree
+  State.skill_tree.fx     = {}
+  State.skill_tree.points = State.skill_tree.points + M.LOOP_REWARD
   -- Not part of default_state/progression - only read once by the "Well
   -- Done!" modal that's about to show, reporting on the loop that just ended.
-  State.last_loop_time = finished_time
-  State.tracks.track1  = track_data.default_track_state("track1", next_loop)
+  State.last_loop_time    = finished_time
+  State.tracks.track1     = track_data.default_track_state("track1", next_loop)
   -- The ending modal always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
-  State.purchase_modal = "nirvana"
+  State.purchase_modal    = "nirvana"
   ghost.clear_all_sims()
+  M.rederive_skill_effects()
   M.resync_car_and_ghosts()
   M.save()
 end
@@ -153,6 +185,11 @@ function M.load()
     apply_progression(loaded)
   end
   State.mode = loaded and "buy" or "intro"
+  -- State.mode isn't persisted, so quitting at the forced skill-tree screen
+  -- would otherwise reload into buy and skip the gate. Resume the gate.
+  if loaded and State.loop >= 2 and skill_tree.rank(State.skill_tree, "top_speed") == 0 then
+    State.mode = "skill_tree"
+  end
 end
 
 -- Dev-only: writes the current progression state as JSON to

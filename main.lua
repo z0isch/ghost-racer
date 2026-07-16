@@ -1,9 +1,10 @@
-local persist = require "persist"
-local buy     = require "scenes.buy"
-local race    = require "scenes.race"
-local intro   = require "scenes.intro"
+local persist     = require "persist"
+local buy         = require "scenes.buy"
+local race        = require "scenes.race"
+local intro       = require "scenes.intro"
+local skill_tree  = require "scenes.skill_tree"
 
-local scenes  = { buy = buy, race = race, intro = intro }
+local scenes  = { buy = buy, race = race, intro = intro, skill_tree = skill_tree }
 
 function SceneGoto(mode)
   local prev = State.mode

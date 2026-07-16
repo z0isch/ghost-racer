@@ -154,7 +154,7 @@ M.TRACKS = {
     -- UPGRADES column), so ranks are scaled way down. Values are
     -- provisional - tune freely.
     loop1       = {
-      ranks = { C = 1.0, B = 1.4, A = 2.2, S = 3.2 },
+      ranks = { C = 1.0, B = 1.27, A = 1.5, S = 3 },
       shop  = {},
     },
   },
@@ -179,7 +179,7 @@ M.TRACKS = {
       { col = 20, row = 14 },
     },
     base_coins  = 3,
-    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 13.0 },
+    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 12.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
@@ -203,7 +203,7 @@ M.TRACKS = {
     -- Loop-1 prologue overrides - provisional, tune freely.
     loop1       = {
       unlock_cost = 28,
-      ranks       = { C = 3.7, B = 4.0, A = 4.8, S = 6.0 },
+      ranks       = { C = 2.8, B = 3.2, A = 3.5, S = 6.0 },
       shop        = {},
     },
   },
@@ -227,7 +227,7 @@ M.TRACKS = {
       { col = 32, row = 19 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 22.0, A = 30.0, S = 33.0 },
+    ranks       = { C = 12.0, B = 18.0, A = 30.0, S = 33.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2500,
@@ -253,7 +253,7 @@ M.TRACKS = {
     -- prologue track instead of S on this one.
     loop1       = {
       unlock_cost = 200,
-      ranks       = { C = 13.0, B = 14.5, A = 16.0, S = 20.0 },
+      ranks       = { C = 10.0, B = 11.0, A = 12.0, S = 20.0 },
       shop        = {
         {
           kind              = "nirvana",

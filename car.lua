@@ -6,10 +6,14 @@ local CAR_SIZE           = 16
 local CAR_MARGIN         = 3
 local ACCEL_BASE         = 30
 local ACCEL_STEP         = 10
-local TOP_VEL_BASE       = 200
-local TOP_VEL_STEP       = 15
+local TOP_VEL_BASE       = 150
+local TOP_VEL_STEP       = 50
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
+-- Boosts can push vel above top_vel, but never past top_vel + OVERSPEED_MAX.
+-- This is the hard global speed cap: OVERSPEED_DECAY still bleeds anything
+-- above top_vel back down, this just stops stacked boosts from running away.
+local OVERSPEED_MAX      = 100
 -- Wall feel: contact at or above MIN_BOUNCE_VEL px/s of blocked motion
 -- rebounds the car at WALL_RESTITUTION times its impact speed and costs it
 -- impact * WALL_LOSS_FACTOR of forward speed. Softer contact just bleeds
@@ -275,12 +279,13 @@ function M.update(car, dt, map)
   end
 
   local effective_top_vel = car.top_vel
+  local max_vel           = effective_top_vel + OVERSPEED_MAX
   local min_vel           = car.reverse_enabled and -effective_top_vel or 0
 
   if input.pressed(input.BTN3) and car.boosts > 0 then
     local boost_dir = car.vel < 0 and -1 or 1
     if is_drifitng then boost_dir = car.drift_dir end
-    car.vel = car.vel + boost_dir * OVERSPEED_IMPULSE
+    car.vel = util.clamp(car.vel + boost_dir * OVERSPEED_IMPULSE, -max_vel, max_vel)
     car.boosts = car.boosts - 1
     car.boost_flame_t = BOOST_FLAME_TIME
     sfx.play("boost")
