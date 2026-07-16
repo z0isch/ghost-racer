@@ -159,7 +159,7 @@ function M.track_raw_cash_rate(id)
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
   local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
-  return tstate.ghosts * (pay / period)
+  return tstate.ghosts * (pay / period) * ghost.SPEED_MULT
 end
 
 function M.track_cash_rate(id)

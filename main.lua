@@ -14,8 +14,8 @@ end
 
 function _config()
   return {
-    name        = "Usagi Test",
-    game_id     = "com.usagi.drift",
+    name        = "Ghost Loop",
+    game_id     = "com.usagi.ghost.loop",
     game_width  = 640,
     game_height = 352,
   }

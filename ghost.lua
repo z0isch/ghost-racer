@@ -4,10 +4,15 @@ local track_data     = require "track_data"
 local CAR_SIZE       = 16
 local GHOST_ALPHA    = 0.6
 local LAP_PAUSE      = 0.6
+-- Dev tuning knob for the future "ghost tempo" upgrade: scales how fast sim
+-- ghosts replay their lap (and therefore how fast they bank money). Edit and
+-- hot-reload to try values; 1.0 is the real economy. Race ghosts unaffected.
+local SPEED_MULT     = 1.0
 
 local M              = {}
 
 M.LAP_PAUSE          = LAP_PAUSE
+M.SPEED_MULT         = SPEED_MULT
 
 local sim_time       = 0
 local track_sim      = {}
@@ -140,7 +145,7 @@ end
 -- Advance sim_time and detect ghost crossings for all unlocked tracks.
 -- Results are queued; call collect_crossings() to drain them.
 function M.update(dt)
-  sim_time = sim_time + dt
+  sim_time = sim_time + dt * SPEED_MULT
   for _, id in ipairs(track_data.TRACK_ORDER) do
     if State.unlocked[id] and State.tracks[id] then
       local tstate = State.tracks[id]
