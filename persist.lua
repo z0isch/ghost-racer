@@ -7,7 +7,7 @@ local M          = {}
 local function default_state()
   return {
     mode         = "buy",
-    money        = 100000000,
+    money        = 0,
     seen_help    = false,
     loop         = 1,
     loop_time    = 0,

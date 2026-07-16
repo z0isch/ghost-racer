@@ -13,7 +13,7 @@ local M         = {}
 -- a save that has forward ghost laps -- they'd clip through mirrored walls
 -- and skew idle income. Snapshot via Dev: Save State and test on a fresh
 -- save.
-M.REVERSE_MODE  = true
+M.REVERSE_MODE  = false
 
 M.tile_size     = track1.tilewidth
 
