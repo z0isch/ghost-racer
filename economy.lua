@@ -214,7 +214,7 @@ function M.upgrade_cost(kind)
   local u  = M.shop_item(kind)
   if not u then return nil end
   if kind == "coins" then
-    local free = track_data.free_coins(id, State.loop)
+    local free = track_data.start_coin_floor(id, State.loop, State.start_coins)
     if State.tracks[id].coins >= track_data.max_coins(id, State.loop) then return nil end
     return math.floor(u.base_cost * (u.growth ^ (State.tracks[id].coins - free)))
   end
@@ -288,7 +288,7 @@ function M.try_unlock_track(id)
   State.money        = State.money - cost
   State.unlocked[id] = true
   if not State.tracks[id] then
-    State.tracks[id] = track_data.default_track_state(id, State.loop)
+    State.tracks[id] = track_data.default_track_state(id, State.loop, State.start_coins)
   end
   ghost.rebuild_sim(id)
   persist.save()

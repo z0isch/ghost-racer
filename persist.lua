@@ -19,6 +19,7 @@ local function default_state()
     seen_modals  = {},
     accel        = 0,
     top_speed    = 0,
+    start_coins  = 0,
     skill_tree   = skill_tree.new(),
     drift        = 0,
     drift_boost  = 0,
@@ -52,8 +53,9 @@ local function progression_of_state()
     loop_time    = State.loop_time,
     seen_modals  = State.seen_modals,
     accel        = State.accel,
-    -- top_speed is a derived cache of the skill tree, not saved; the tree is
-    -- the single source of truth. fx is transient render state, also dropped.
+    -- top_speed / start_coins are derived caches of the skill tree, not
+    -- saved; the tree is the single source of truth. fx is transient render
+    -- state, also dropped.
     skill_tree   = { points = State.skill_tree.points, ranks = State.skill_tree.ranks },
     drift        = State.drift,
     drift_boost  = State.drift_boost,
@@ -107,8 +109,9 @@ local function apply_progression(loaded)
         ts.ghost_line  = lt.ghost_line
         ts.best_rate   = lt.best_rate
         ts.ghosts      = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-        ts.coins       = math.max(track_data.free_coins(id, State.loop),
-          math.min(lt.coins or 0, track_data.max_coins(id, State.loop)))
+        -- Only the ceiling here; the start_coins floor needs the skill tree,
+        -- which loads below - rederive_skill_effects raises to it at the end.
+        ts.coins       = math.min(lt.coins or 0, track_data.max_coins(id, State.loop))
         ts.checkpoints = math.max(1,
           math.min(lt.checkpoints or 1, #track_data.TRACKS[id].checkpoints))
       end
@@ -126,12 +129,19 @@ local function apply_progression(loaded)
   M.rederive_skill_effects()
 end
 
--- State.top_speed is a cache derived from the skill tree; the tree is the
--- single source of truth. Re-derive after any rank change or load, before
--- resync_car_and_ghosts pushes it into the car.
+-- State.top_speed / State.start_coins are caches derived from the skill
+-- tree; the tree is the single source of truth. Re-derive after any rank
+-- change or load, before resync_car_and_ghosts pushes results into the car
+-- and ghost sims. The coin floor is applied live to existing tracks so a
+-- rank bought at the loop gate takes effect that loop, not the next.
 function M.rederive_skill_effects()
-  local ctx       = skill_tree.apply_all(State.skill_tree, {})
-  State.top_speed = ctx.top_speed or 0
+  local ctx         = skill_tree.apply_all(State.skill_tree, {})
+  State.top_speed   = ctx.top_speed or 0
+  State.start_coins = ctx.start_coins or 0
+  for id, ts in pairs(State.tracks) do
+    ts.coins = math.max(ts.coins,
+      track_data.start_coin_floor(id, State.loop, State.start_coins))
+  end
 end
 
 -- Re-syncs car tuning and ghost sims after progression fields change out
@@ -145,9 +155,8 @@ end
 
 -- Buying Nirvana ends the game... into a new loop: everything resets to a
 -- fresh save except the loop counter and dismissed tutorials. Loop 2 opens
--- up the full game (all four tracks, ghosts, coins); from loop 3 on every
--- track's original coin set starts active for free (see
--- track_data.free_coins).
+-- up the full game (all four tracks, ghosts, coins); head-start coins come
+-- from the skill tree's Head Start ranks (see track_data.start_coin_floor).
 function M.start_new_loop()
   local next_loop         = (State.loop or 1) + 1
   local finished_time     = State.loop_time or 0

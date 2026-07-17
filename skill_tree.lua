@@ -1,8 +1,8 @@
--- Skill tree prototype: permanent meta-upgrades bought between loops with a
--- currency separate from race $. Pure module - owns node defs, tree state,
--- purchase rules, and drawing. Run `usagi dev skill_tree_dev.lua` to try it.
--- Wiring into the real game (earning SP, applying ctx) is deliberately
--- deferred; see docs/plan-skill-tree-prototype.md.
+-- Skill tree: permanent meta-upgrades bought between loops with a currency
+-- separate from race $. Pure module - owns node defs, tree state, purchase
+-- rules, and drawing. Run `usagi dev skill_tree_dev.lua` to try it. The game
+-- earns ¥ via persist.LOOP_REWARD and consumes apply ctx in
+-- persist.rederive_skill_effects.
 
 local M     = {}
 
@@ -32,7 +32,7 @@ M.NODES     = {
   {
     id        = "start_coins",
     label     = "Head Start",
-    desc      = "Start with +1 coin on the track.\nEasy money!",
+    desc      = "Start with +1 coin on every track.\nEasy money!",
     max       = 3,
     base_cost = 100,
     growth    = 1.5,
