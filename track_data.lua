@@ -162,8 +162,8 @@ M.TRACKS = {
     map         = basic_map,
     spawn       = { col = 1, row = 9 },
     checkpoints = {
-      { col = 35, row = 6, w = 4, h = 11 },
-      { col = 1,  row = 6, w = 4, h = 11 },
+      { col = 33, row = 12, w = 2, h = 5 },
+      { col = 1,  row = 6,  w = 4, h = 11 },
     },
     gates       = {
       { col = 34, row = 6,  len = 5, vertical = true, mode = "reverse" },
@@ -171,7 +171,7 @@ M.TRACKS = {
     },
     coins       = {
       { col = 18, row = 7 },
-      { col = 34, row = 13 },
+      { col = 30, row = 14 },
       { col = 10, row = 16 },
       -- second set (new game loop) - positions are provisional, tune freely
       { col = 6,  row = 8 },
@@ -184,6 +184,13 @@ M.TRACKS = {
     pay         = 15,
     unlock_cost = 250,
     shop        = {
+      {
+        kind      = "checkpoints",
+        label     = "Checkpoint",
+        currency  = "cash",
+        base_cost = 400,
+        growth    = 1.3
+      },
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -204,15 +211,23 @@ M.TRACKS = {
     loop1       = {
       unlock_cost = 28,
       ranks       = { C = 2.8, B = 3.2, A = 3.5, S = 6.0 },
-      shop        = {},
+      shop        = {
+        {
+          kind      = "checkpoints",
+          label     = "Checkpoint",
+          currency  = "cash",
+          base_cost = 30,
+          growth    = 1.3
+        },
+      },
     },
   },
   track2 = {
     map         = track2,
     spawn       = { col = 7, row = 3 },
     checkpoints = {
-      { col = 34, row = 6,  w = 5, h = 4 },
-      { col = 10, row = 14, w = 7, h = 2 },
+      { col = 34, row = 14, w = 5, h = 2 },
+      { col = 8,  row = 16, w = 2, h = 5 },
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
     coins       = {
@@ -232,6 +247,13 @@ M.TRACKS = {
     pay         = 45,
     unlock_cost = 2500,
     shop        = {
+      {
+        kind      = "checkpoints",
+        label     = "Checkpoint",
+        currency  = "cash",
+        base_cost = 1200,
+        growth    = 1.3
+      },
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -255,6 +277,13 @@ M.TRACKS = {
       unlock_cost = 200,
       ranks       = { C = 10.0, B = 11.0, A = 12.0, S = 20.0 },
       shop        = {
+        {
+          kind      = "checkpoints",
+          label     = "Checkpoint",
+          currency  = "cash",
+          base_cost = 120,
+          growth    = 1.3
+        },
         {
           kind              = "nirvana",
           label             = "Nirvana",
@@ -297,6 +326,13 @@ M.TRACKS = {
     -- rank A on the previous one (see economy.track_unlock_ready).
     unlock_needs_all_s = true,
     shop               = {
+      {
+        kind      = "checkpoints",
+        label     = "Checkpoint",
+        currency  = "cash",
+        base_cost = 10000,
+        growth    = 1.3
+      },
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -465,10 +501,11 @@ end
 
 function M.default_track_state(id, loop)
   return {
-    ghost_line = nil,
-    best_rate  = nil,
-    ghosts     = 0,
-    coins      = M.free_coins(id, loop),
+    ghost_line  = nil,
+    best_rate   = nil,
+    ghosts      = 0,
+    coins       = M.free_coins(id, loop),
+    checkpoints = 1,
   }
 end
 

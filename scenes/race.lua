@@ -74,7 +74,8 @@ local function finish_race()
   local tstate   = State.tracks[id]
   local tdata    = track_data.TRACKS[id]
 
-  race.run_rate  = race.time > 0 and (race.raw_earned / race.time) or 0
+  race.run_rate  = race.time > 0
+      and (race.raw_earned / race.time) * economy.cp_fraction(id) or 0
   race.phase     = "finished"
   race.beat_left = FINISH_BEAT_SECS
   car.stop_engine(State.car)
@@ -217,7 +218,7 @@ function M.update(dt)
         y      = car_rect.y,
       })
       race.next_checkpoint = race.next_checkpoint + 1
-      if race.next_checkpoint > #tdata.checkpoints then
+      if race.next_checkpoint > economy.owned_cps(id) then
         finish_race()
       end
     end
@@ -280,8 +281,9 @@ function M.draw()
     end
     local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
+    local owned       = economy.owned_cps(id)
     for i = active, #checkpoints do
-      road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints)
+      road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints, i > owned)
     end
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins, race.coins_collected)

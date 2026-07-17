@@ -103,12 +103,14 @@ local function apply_progression(loaded)
         if not State.tracks[id] then
           State.tracks[id] = track_data.default_track_state(id, State.loop)
         end
-        local ts      = State.tracks[id]
-        ts.ghost_line = lt.ghost_line
-        ts.best_rate  = lt.best_rate
-        ts.ghosts     = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-        ts.coins      = math.max(track_data.free_coins(id, State.loop),
+        local ts       = State.tracks[id]
+        ts.ghost_line  = lt.ghost_line
+        ts.best_rate   = lt.best_rate
+        ts.ghosts      = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
+        ts.coins       = math.max(track_data.free_coins(id, State.loop),
           math.min(lt.coins or 0, track_data.max_coins(id, State.loop)))
+        ts.checkpoints = math.max(1,
+          math.min(lt.checkpoints or 1, #track_data.TRACKS[id].checkpoints))
       end
     end
   end

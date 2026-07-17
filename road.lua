@@ -11,6 +11,9 @@ local tile_colors            = {
 
 local CHECKPOINT_LABEL_SCALE = 2
 local GHOST_ALPHA            = 0.6
+-- Number alpha for an un-owned (not-yet-bought) checkpoint: dimmer than a
+-- faded future-owned one, so it reads as "exists, not yours yet".
+local LOCKED_LABEL_ALPHA     = 0.2
 
 local M                      = {}
 
@@ -49,14 +52,18 @@ function M.draw_track(map)
   end
 end
 
-function M.draw_checkpoint(cp, n, faded, total)
+function M.draw_checkpoint(cp, n, faded, total, locked)
   local rect          = track_data.checkpoint_rect(cp)
   local outline_color = gfx.COLOR_DARK_GREEN
-  if not faded then
+  if locked then
+    -- Exists on the course but not yet bought: transparent grey outline and a
+    -- dim number, no fill - reads as "exists, not yours yet".
+    outline_color = gfx.COLOR_DARK_GRAY
+  elseif not faded then
     outline_color = gfx.COLOR_DARK_GRAY
     gfx.rect_fill(rect.x, rect.y, rect.w, rect.h, gfx.COLOR_DARK_GREEN)
   end
-  gfx.rect(rect.x, rect.y, rect.w, rect.h, outline_color)
+  gfx.rect(rect.x, rect.y, rect.w, rect.h, outline_color, locked and LOCKED_LABEL_ALPHA or 1)
 
   if total and total <= 1 then return end
 
@@ -64,7 +71,13 @@ function M.draw_checkpoint(cp, n, faded, total)
   local tw, th = usagi.measure_text(label)
   local tx     = math.floor(rect.x + (rect.w - tw * CHECKPOINT_LABEL_SCALE) / 2)
   local ty     = math.floor(rect.y + (rect.h - th * CHECKPOINT_LABEL_SCALE) / 2)
-  gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK, faded and GHOST_ALPHA or 1)
+  local alpha  = 1
+  if locked then
+    alpha = LOCKED_LABEL_ALPHA
+  elseif faded then
+    alpha = GHOST_ALPHA
+  end
+  gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK, alpha)
 end
 
 function M.active_coin_count(unlocked, coins)

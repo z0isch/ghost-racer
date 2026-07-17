@@ -44,6 +44,12 @@ local MODAL_INFO = {
           " pay cash whenever you or a ghost drives\nthrough them."
     end,
   },
+  checkpoints = {
+    title = "Checkpoint Unlocked!",
+    body  = function()
+      return "The race now runs to the newest\ncheckpoint - a longer course\nwith a higher rank ceiling!"
+    end,
+  },
   drift = {
     title = "Drift Unlocked!",
     body  = function()
@@ -237,7 +243,7 @@ function M.draw()
   end
   local checkpoints = tdata.checkpoints
   for i, cp in ipairs(checkpoints) do
-    road.draw_checkpoint(cp, i, true, #checkpoints)
+    road.draw_checkpoint(cp, i, true, #checkpoints, i > economy.owned_cps(id))
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins)
   ghost.draw_sim(GHOST_ALPHA)

@@ -25,6 +25,18 @@ function M.track_pay(id)
   return track_data.TRACKS[id].pay
 end
 
+-- Owned checkpoint count on a track, clamped to what exists.
+function M.owned_cps(id)
+  local tstate = State.tracks[id]
+  local total  = #track_data.TRACKS[id].checkpoints
+  return math.min(tstate and tstate.checkpoints or 1, total)
+end
+
+-- Fraction of the course owned; scales every measured rate before ranking.
+function M.cp_fraction(id)
+  return M.owned_cps(id) / #track_data.TRACKS[id].checkpoints
+end
+
 -- $ paid per checkpoint/coin at a given rank mult, scaled by mult over the D
 -- floor so D rank keeps base pay and each rank above it multiplies it (with
 -- the current RANK_MULTS: C 2x, B 3x, A 5x, S 10x) - a constant 1/RANK_MULTS.D
@@ -74,10 +86,11 @@ end
 function M.live_race_rate()
   local race      = State.race
   local id        = State.active_track
-  local tdata     = track_data.TRACKS[id]
-  local remaining = #tdata.checkpoints - race.next_checkpoint + 1
+  local owned     = M.owned_cps(id)
+  local remaining = owned - race.next_checkpoint + 1
   local earned    = race.raw_earned + remaining * M.track_pay(id)
-  return race.time > 0 and (earned / race.time) or math.huge
+  local raw       = race.time > 0 and (earned / race.time) or math.huge
+  return raw * M.cp_fraction(id)
 end
 
 function M.rank_mult(id, rate)
@@ -158,7 +171,7 @@ function M.track_raw_cash_rate(id)
   if period <= 0 then return 0 end
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
-  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
+  local pay     = (ghost.crossed_cp_count(id) + (pickups and #pickups or 0)) * tdata.pay
   return tstate.ghosts * (pay / period) * ghost.SPEED_MULT
 end
 
@@ -179,11 +192,12 @@ end
 function M.lap_cash_rate(line)
   local period = ghost.loop_period(line)
   if period <= 0 then return 0 end
-  local tdata   = track_data.TRACKS[State.active_track]
-  local tstate  = State.tracks[State.active_track]
-  local radius  = track_data.magnet_radius(State.magnet)
-  local pickups = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins, radius)
-  local pay     = (#tdata.checkpoints + (pickups and #pickups or 0)) * tdata.pay
+  local tdata     = track_data.TRACKS[State.active_track]
+  local tstate    = State.tracks[State.active_track]
+  local radius    = track_data.magnet_radius(State.magnet)
+  local pickups   = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins, radius)
+  local crossings = ghost.compute_cp_crossings(line, tdata.checkpoints)
+  local pay       = (#crossings + (pickups and #pickups or 0)) * tdata.pay
   return pay / period
 end
 
@@ -204,6 +218,11 @@ function M.upgrade_cost(kind)
     if State.tracks[id].coins >= track_data.max_coins(id, State.loop) then return nil end
     return math.floor(u.base_cost * (u.growth ^ (State.tracks[id].coins - free)))
   end
+  if kind == "checkpoints" then
+    local owned = State.tracks[id].checkpoints
+    if owned >= #track_data.TRACKS[id].checkpoints then return nil end
+    return math.floor(u.base_cost * (u.growth ^ (owned - 1)))
+  end
   local lvl
   if kind == "ghosts" then
     lvl = State.tracks[id][kind]
@@ -217,7 +236,7 @@ end
 -- Kinds that show a one-time explainer modal in the buy scene the first time
 -- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true }
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, checkpoints = true }
 
 function M.try_buy(kind)
   local id   = State.active_track
@@ -228,7 +247,7 @@ function M.try_buy(kind)
   if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
-  if kind == "ghosts" or kind == "coins" then
+  if kind == "ghosts" or kind == "coins" or kind == "checkpoints" then
     local was_first_ghost  = kind == "ghosts" and State.tracks[id][kind] == 0
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if was_first_ghost then

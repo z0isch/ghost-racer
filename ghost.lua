@@ -50,11 +50,16 @@ local function compute_cp_crossings(line, checkpoints)
       next_cp            = next_cp + 1
     end
   end
-  for ci = next_cp, #checkpoints do
-    local rect    = track_data.checkpoint_rect(checkpoints[ci])
-    crossings[ci] = { t = 0, x = rect.x + rect.w / 2, y = rect.y + rect.h / 2 }
-  end
   return crossings
+end
+
+M.compute_cp_crossings = compute_cp_crossings
+
+-- Checkpoints the stored line genuinely crosses, building the sim if needed.
+function M.crossed_cp_count(id)
+  local ts = get_track_sim(id)
+  if not ts.ghost_cp_crossings then M.rebuild_sim(id) end
+  return ts.ghost_cp_crossings and #ts.ghost_cp_crossings or 0
 end
 
 -- Whether a sample point `s` (the car's top-left corner) overlaps a coin's
