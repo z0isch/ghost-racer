@@ -226,6 +226,11 @@ M.TRACKS = {
       { col = 8,  row = 16, w = 2, h = 5 },
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
+    gates       = {
+      { col = 14, row = 1,  len = 5, vertical = true, mode = "reverse" },
+      { col = 29, row = 1,  len = 5, vertical = true, mode = "forward" },
+      { col = 33, row = 16, len = 5, vertical = true, mode = "reverse" },
+    },
     coins       = {
       { col = 36, row = 11 },
       { col = 10, row = 18 },
@@ -495,14 +500,26 @@ function M.checkpoint_rect(cp)
   return { x = cp.col * ts, y = cp.row * ts, w = cp.w * ts, h = cp.h * ts }
 end
 
+-- Coins the shop will sell on a track this loop: none in the loop-1
+-- prologue, base_coins afterwards. Head Start freebies never change this -
+-- they sit on top of the buyable set, not inside it.
+function M.buyable_coins(id, loop)
+  loop = loop or 1
+  if loop == 1 then return 0 end
+  return M.TRACKS[id].base_coins
+end
+
 -- Coins active for free from the start: one per Head Start (start_coins)
--- skill rank, capped at what the track can hold this loop.
+-- skill rank, filling only the authored slots left over after the buyable
+-- set so buying the full base_coins is always possible.
 function M.start_coin_floor(id, loop, start_coins)
-  return math.min(start_coins or 0, M.max_coins(id, loop))
+  local spare = M.max_coins(id, loop) - M.buyable_coins(id, loop)
+  return math.max(0, math.min(start_coins or 0, spare))
 end
 
 -- Highest total coin count reachable on a track this loop: no coins at all
--- in the loop-1 prologue, the original set in loop 2, both sets in loop 3+.
+-- in the loop-1 prologue, the base set in loop 2, the full authored list in
+-- loop 3+ (the slots beyond base_coins are reachable only via Head Start).
 function M.max_coins(id, loop)
   loop = loop or 1
   if loop == 1 then return 0 end

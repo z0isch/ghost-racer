@@ -214,9 +214,10 @@ function M.upgrade_cost(kind)
   local u  = M.shop_item(kind)
   if not u then return nil end
   if kind == "coins" then
-    local free = track_data.start_coin_floor(id, State.loop, State.start_coins)
-    if State.tracks[id].coins >= track_data.max_coins(id, State.loop) then return nil end
-    return math.floor(u.base_cost * (u.growth ^ (State.tracks[id].coins - free)))
+    local free   = track_data.start_coin_floor(id, State.loop, State.start_coins)
+    local bought = State.tracks[id].coins - free
+    if bought >= track_data.buyable_coins(id, State.loop) then return nil end
+    return math.floor(u.base_cost * (u.growth ^ bought))
   end
   if kind == "checkpoints" then
     local owned = State.tracks[id].checkpoints

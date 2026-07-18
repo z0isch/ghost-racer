@@ -33,7 +33,7 @@ M.NODES     = {
     id        = "start_coins",
     label     = "Head Start",
     desc      = "Start with +1 coin on every track.\nEasy money!",
-    max       = 3,
+    max       = 1,
     base_cost = 100,
     growth    = 1.5,
     pos       = { x = 340, y = 140 },
