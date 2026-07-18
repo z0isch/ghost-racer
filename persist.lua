@@ -11,26 +11,27 @@ M.LOOP_REWARD    = 100
 
 local function default_state()
   return {
-    mode         = "buy",
-    money        = 0,
-    seen_help    = false,
-    loop         = 1,
-    loop_time    = 0,
-    seen_modals  = {},
-    accel        = 0,
-    top_speed    = 0,
-    start_coins  = 0,
-    skill_tree   = skill_tree.new(),
-    drift        = 0,
-    drift_boost  = 0,
-    boost        = 0,
-    nirvana      = 0,
-    magnet       = 0,
-    active_track = "track1",
-    unlocked     = { track1 = true },
-    tracks       = { track1 = track_data.default_track_state("track1", 1) },
-    car          = car.default_state(),
-    race         = {
+    mode               = "buy",
+    money              = 10000000,
+    seen_help          = false,
+    loop               = 1,
+    loop_time          = 0,
+    seen_modals        = {},
+    accel              = 0,
+    top_speed          = 0,
+    start_coins        = 0,
+    unlock_checkpoints = false,
+    skill_tree         = skill_tree.new(),
+    drift              = 0,
+    drift_boost        = 0,
+    boost              = 0,
+    nirvana            = 0,
+    magnet             = 0,
+    active_track       = "track1",
+    unlocked           = { track1 = true },
+    tracks             = { track1 = track_data.default_track_state("track1", 1) },
+    car                = car.default_state(),
+    race               = {
       next_checkpoint = 1,
       time            = 0,
       phase           = "countdown",
@@ -53,9 +54,9 @@ local function progression_of_state()
     loop_time    = State.loop_time,
     seen_modals  = State.seen_modals,
     accel        = State.accel,
-    -- top_speed / start_coins are derived caches of the skill tree, not
-    -- saved; the tree is the single source of truth. fx is transient render
-    -- state, also dropped.
+    -- top_speed / start_coins / unlock_checkpoints are derived caches of the
+    -- skill tree, not saved; the tree is the single source of truth. fx is
+    -- transient render state, also dropped.
     skill_tree   = { points = State.skill_tree.points, ranks = State.skill_tree.ranks },
     drift        = State.drift,
     drift_boost  = State.drift_boost,
@@ -129,18 +130,23 @@ local function apply_progression(loaded)
   M.rederive_skill_effects()
 end
 
--- State.top_speed / State.start_coins are caches derived from the skill
--- tree; the tree is the single source of truth. Re-derive after any rank
--- change or load, before resync_car_and_ghosts pushes results into the car
--- and ghost sims. The coin floor is applied live to existing tracks so a
--- rank bought at the loop gate takes effect that loop, not the next.
+-- State.top_speed / State.start_coins / State.unlock_checkpoints are caches
+-- derived from the skill tree; the tree is the single source of truth.
+-- Re-derive after any rank change or load, before resync_car_and_ghosts
+-- pushes results into the car and ghost sims. The coin floor and checkpoint
+-- unlock are applied live to existing tracks so a rank bought at the loop
+-- gate takes effect that loop, not the next.
 function M.rederive_skill_effects()
-  local ctx         = skill_tree.apply_all(State.skill_tree, {})
-  State.top_speed   = ctx.top_speed or 0
-  State.start_coins = ctx.start_coins or 0
+  local ctx                = skill_tree.apply_all(State.skill_tree, {})
+  State.top_speed          = ctx.top_speed or 0
+  State.start_coins        = ctx.start_coins or 0
+  State.unlock_checkpoints = ctx.unlock_checkpoints or false
   for id, ts in pairs(State.tracks) do
     ts.coins = math.max(ts.coins,
       track_data.start_coin_floor(id, State.loop, State.start_coins))
+    if State.unlock_checkpoints then
+      ts.checkpoints = #track_data.TRACKS[id].checkpoints
+    end
   end
 end
 

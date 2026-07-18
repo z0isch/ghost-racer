@@ -289,6 +289,9 @@ function M.try_unlock_track(id)
   State.unlocked[id] = true
   if not State.tracks[id] then
     State.tracks[id] = track_data.default_track_state(id, State.loop, State.start_coins)
+    -- Applies the skill tree's floors (Checkpoint Pass, coin floor) to the
+    -- fresh track state.
+    persist.rederive_skill_effects()
   end
   ghost.rebuild_sim(id)
   persist.save()

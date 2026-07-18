@@ -45,6 +45,19 @@ M.NODES     = {
     apply     = function(ctx, rank)
       ctx.start_coins = (ctx.start_coins or 0) + rank
     end,
+  },
+  {
+    id        = "unlock_checkpoints",
+    label     = "TSA Pre-check",
+    desc      = "All checkpoints unlocked\nNo more taking out the liquids for you!",
+    max       = 1,
+    base_cost = 100,
+    growth    = 1,
+    pos       = { x = 340, y = 212 },
+    links     = { "top_speed" },
+    apply     = function(ctx, _rank)
+      ctx.unlock_checkpoints = true
+    end,
   }
 }
 

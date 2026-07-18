@@ -420,9 +420,13 @@ function M.draw_shop()
 
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(track_data.shop(id, State.loop)) do
-    local clicked, bh = shop_button(item, x, shop_y, w)
-    if clicked then economy.try_buy(item.kind) end
-    shop_y = shop_y + bh + gap
+    -- Checkpoint Pass (skill tree) grants every checkpoint outright, so
+    -- there's nothing left for this row to sell.
+    if not (item.kind == "checkpoints" and State.unlock_checkpoints) then
+      local clicked, bh = shop_button(item, x, shop_y, w)
+      if clicked then economy.try_buy(item.kind) end
+      shop_y = shop_y + bh + gap
+    end
   end
 
   local next_track = idx < #order and order[idx + 1] or nil
