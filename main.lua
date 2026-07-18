@@ -46,8 +46,15 @@ end
 local AUTOSAVE_PERIOD = 5
 local autosave_left   = AUTOSAVE_PERIOD
 
+-- Scenes where the loop clock runs. The garage and title screens sit between
+-- loops (start_new_loop zeroes loop_time), so time spent there doesn't count
+-- against the new loop's rank.
+local LOOP_CLOCK_MODES = { buy = true, race = true }
+
 function _update(dt)
-  State.loop_time = (State.loop_time or 0) + dt
+  if LOOP_CLOCK_MODES[State.mode] then
+    State.loop_time = (State.loop_time or 0) + dt
+  end
   autosave_left = autosave_left - dt
   if autosave_left <= 0 then
     autosave_left = AUTOSAVE_PERIOD

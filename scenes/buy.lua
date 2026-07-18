@@ -89,13 +89,21 @@ local MODAL_INFO = {
     end,
     draw_body = function(x, y, scale)
       local rank      = State.last_loop_rank or "D"
-      local _, line_h = usagi.measure_text("RANK " .. rank)
+      local rank_line = "RANK " .. rank
+      local time_line = "Time: " .. format_duration(State.last_loop_time or 0)
+      local cash_line = "+ ¥" .. persist.LOOP_REWARD
+      local _, line_h = usagi.measure_text(rank_line)
       local lh        = line_h * scale
-      ui.rank_text("RANK " .. rank, rank, x, y, scale * 2)
-      ui.coin_text("Time: " .. format_duration(State.last_loop_time or 0),
-        x, y + lh * 2, scale, gfx.COLOR_LIGHT_GRAY)
-      ui.coin_text("+ ¥" .. persist.LOOP_REWARD,
-        x, y + lh * 3, scale, gfx.COLOR_YELLOW)
+      -- The panel is centered on the screen, so centering on GAME_W centers
+      -- within the panel too.
+      local function center_x(text, s)
+        return math.floor((usagi.GAME_W - usagi.measure_text(text) * s) / 2)
+      end
+      ui.rank_text(rank_line, rank, center_x(rank_line, scale * 2), y, scale * 2)
+      ui.coin_text(time_line, center_x(time_line, scale),
+        y + lh * 2, scale, gfx.COLOR_LIGHT_GRAY)
+      ui.coin_text(cash_line, center_x(cash_line, scale),
+        y + lh * 3, scale, gfx.COLOR_YELLOW)
       ui.coin_text(
         "Unfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA.",
         x, y + lh * 5, scale, gfx.COLOR_LIGHT_GRAY)
@@ -118,15 +126,17 @@ end
 local function draw_loop_status()
   if State.loop == 1 then return end
   local rank      = track_data.loop_rank_for_time(State.loop_time or 0)
-  local scale     = 2
-  local margin    = 8
+  local scale     = 3
+  local gap       = 4
   local time_text = format_duration(State.loop_time or 0)
   local tw, th    = usagi.measure_text(time_text)
-  local tx        = usagi.GAME_W - tw * scale - margin
-  gfx.text_ex(time_text, tx + 1, 7, scale, 0, gfx.COLOR_BLACK, 1)
-  gfx.text_ex(time_text, tx, 6, scale, 0, gfx.COLOR_WHITE, 1)
+  local block_h   = th * scale * 2 + gap
+  local ty        = math.floor((usagi.GAME_H - block_h) / 2)
+  local tx        = math.floor((usagi.GAME_W - tw * scale) / 2)
+  gfx.text_ex(time_text, tx + 1, ty + 1, scale, 0, gfx.COLOR_BLACK, 1)
+  gfx.text_ex(time_text, tx, ty, scale, 0, gfx.COLOR_WHITE, 1)
   local rw = usagi.measure_text(rank) * scale
-  ui.rank_text(rank, rank, usagi.GAME_W - rw - margin - 20, 6 + th * scale + 4, scale)
+  ui.rank_text(rank, rank, math.floor((usagi.GAME_W - rw) / 2), ty + th * scale + gap, scale)
 end
 
 local M = {}

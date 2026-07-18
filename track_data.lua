@@ -267,7 +267,7 @@ M.TRACKS = {
     -- prologue track instead of S on this one.
     loop1       = {
       unlock_cost = 200,
-      ranks       = { C = 10.0, B = 11.0, A = 12.0, S = 20.0 },
+      ranks       = { C = 9.5, B = 10.5, A = 11.5, S = 20.0 },
       shop        = {
         {
           kind      = "checkpoints",

@@ -12,7 +12,7 @@ M.LOOP_REWARD    = 100
 local function default_state()
   return {
     mode               = "buy",
-    money              = 10000000,
+    money              = 0,
     seen_help          = false,
     loop               = 1,
     loop_time          = 0,
