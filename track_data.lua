@@ -34,21 +34,21 @@ M.UPGRADES           = {
     kind      = "accel",
     label     = "Acceleration",
     max       = 4,
-    base_cost = 20,
+    base_cost = 15,
     growth    = 1.4
   },
   {
     kind      = "drift",
     label     = "Drift",
     max       = 1,
-    base_cost = 700,
+    base_cost = 600,
     growth    = 1.6
   },
   {
     kind      = "drift_boost",
     label     = "Drift Boost",
     max       = 1,
-    base_cost = 800,
+    base_cost = 700,
     growth    = 1.6
   },
   {
@@ -144,7 +144,7 @@ M.TRACKS = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 25,
+        base_cost = 18,
         growth    = 1.6
       },
     },
@@ -153,7 +153,7 @@ M.TRACKS = {
     -- UPGRADES column), so ranks are scaled way down. Values are
     -- provisional - tune freely.
     loop1       = {
-      ranks = { C = 1.0, B = 1.27, A = 1.5, S = 3 },
+      ranks = { C = 1.0, B = 1.2, A = 1.5, S = 3 },
       shop  = {},
     },
   },
@@ -175,7 +175,7 @@ M.TRACKS = {
       { col = 6,  row = 8 },
     },
     base_coins  = 3,
-    ranks       = { C = 5.0, B = 7.8, A = 8.2, S = 12.0 },
+    ranks       = { C = 5.0, B = 6.5, A = 8.4, S = 12.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
@@ -184,7 +184,7 @@ M.TRACKS = {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 400,
+        base_cost = 300,
         growth    = 1.3
       },
       {
@@ -199,7 +199,7 @@ M.TRACKS = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 400,
+        base_cost = 300,
         growth    = 1.3
       },
     },
@@ -234,16 +234,16 @@ M.TRACKS = {
       { col = 20, row = 3 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 18.0, A = 30.0, S = 33.0 },
+    ranks       = { C = 12.0, B = 18.0, A = 30.0, S = 33.5 },
     label       = "Track 3",
     pay         = 45,
-    unlock_cost = 2500,
+    unlock_cost = 2000,
     shop        = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 1200,
+        base_cost = 1000,
         growth    = 1.3
       },
       {
@@ -258,7 +258,7 @@ M.TRACKS = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 1100,
+        base_cost = 1000,
         growth    = 1.3
       },
     },
@@ -267,7 +267,7 @@ M.TRACKS = {
     -- prologue track instead of S on this one.
     loop1       = {
       unlock_cost = 200,
-      ranks       = { C = 9.5, B = 10.5, A = 11.5, S = 20.0 },
+      ranks       = { C = 5, B = 8, A = 10.5, S = 20.0 },
       shop        = {
         {
           kind      = "checkpoints",
@@ -306,7 +306,7 @@ M.TRACKS = {
       { col = 10, row = 7 },
     },
     base_coins         = 4,
-    ranks              = { C = 66.0, B = 85.0, A = 90.0, S = 113.0 },
+    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 113.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,
@@ -318,7 +318,7 @@ M.TRACKS = {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 10000,
+        base_cost = 9000,
         growth    = 1.3
       },
       {
@@ -333,7 +333,7 @@ M.TRACKS = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 10000,
+        base_cost = 9000,
         growth    = 1.3
       },
       {
