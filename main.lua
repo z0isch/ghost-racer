@@ -40,8 +40,19 @@ function _init()
   scenes[State.mode].enter()
 end
 
+-- Progression only saves on discrete events (buys, race enter/finish), so
+-- the ticking loop clock would rewind to the last event on reload. A
+-- periodic save keeps it at most one period stale.
+local AUTOSAVE_PERIOD = 5
+local autosave_left   = AUTOSAVE_PERIOD
+
 function _update(dt)
   State.loop_time = (State.loop_time or 0) + dt
+  autosave_left = autosave_left - dt
+  if autosave_left <= 0 then
+    autosave_left = AUTOSAVE_PERIOD
+    persist.save()
+  end
   scenes[State.mode].update(dt)
 end
 

@@ -278,7 +278,7 @@ M.TRACKS = {
         },
         {
           kind              = "nirvana",
-          label             = "Nirvana",
+          label             = "Nirvana?",
           currency          = "cash",
           max               = 1,
           base_cost         = 0,
@@ -338,7 +338,7 @@ M.TRACKS = {
       },
       {
         kind          = "nirvana",
-        label         = "Nirvana",
+        label         = "Nirvana?",
         currency      = "cash",
         max           = 1,
         base_cost     = 0,
@@ -437,6 +437,28 @@ end
 -- loop-1 prologue, A afterwards.
 function M.unlock_rank(loop)
   return loop == 1 and "B" or "A"
+end
+
+-- Loop-completion rank: seconds of loop time a finished loop must come in
+-- under to earn each letter. Tuning knobs only - change freely.
+local LOOP_RANK_TIMES = { S = 90, A = 240, B = 300, C = 600 }
+local LOOP_RANK_ORDER = { "S", "A", "B", "C" }
+
+-- Rank a loop time is pacing toward right now: what finishing at `seconds`
+-- would rate, before the loop-1 pin below. The buy screen shows this as the
+-- provisional rank.
+function M.loop_rank_for_time(seconds)
+  for _, letter in ipairs(LOOP_RANK_ORDER) do
+    if seconds <= LOOP_RANK_TIMES[letter] then return letter end
+  end
+  return "D"
+end
+
+-- Rank actually awarded for finishing a loop in `seconds`. Loop 1 is the
+-- scripted prologue and always rates D, no matter how fast it goes.
+function M.loop_rank(loop, seconds)
+  if loop == 1 then return "D" end
+  return M.loop_rank_for_time(seconds)
 end
 
 function M.track_shop_item(track_id, kind, loop)

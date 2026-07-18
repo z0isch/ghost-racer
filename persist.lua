@@ -166,6 +166,7 @@ end
 function M.start_new_loop()
   local next_loop         = (State.loop or 1) + 1
   local finished_time     = State.loop_time or 0
+  local finished_rank     = track_data.loop_rank(State.loop or 1, finished_time)
   local seen_help         = State.seen_help
   local seen_modals       = State.seen_modals
   local tree              = State.skill_tree
@@ -181,6 +182,7 @@ function M.start_new_loop()
   -- Not part of default_state/progression - only read once by the "Well
   -- Done!" modal that's about to show, reporting on the loop that just ended.
   State.last_loop_time    = finished_time
+  State.last_loop_rank    = finished_rank
   State.tracks.track1     = track_data.default_track_state("track1", next_loop)
   -- The ending modal always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.

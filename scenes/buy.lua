@@ -82,21 +82,22 @@ local MODAL_INFO = {
     rainbow   = true,
     button    = "OKAY",
     body      = function()
-      return "RANK D\n\nTime: " ..
+      return "RANK " .. (State.last_loop_rank or "D") .. "\n\nTime: " ..
           format_duration(State.last_loop_time or 0) ..
           "\n+ ¥" .. persist.LOOP_REWARD ..
-          "\n\nUnfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one..."
+          "\n\nUnfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA."
     end,
     draw_body = function(x, y, scale)
-      local _, line_h = usagi.measure_text("RANK D")
+      local rank      = State.last_loop_rank or "D"
+      local _, line_h = usagi.measure_text("RANK " .. rank)
       local lh        = line_h * scale
-      ui.rank_text("RANK D", "D", x, y, scale)
+      ui.rank_text("RANK " .. rank, rank, x, y, scale * 2)
       ui.coin_text("Time: " .. format_duration(State.last_loop_time or 0),
         x, y + lh * 2, scale, gfx.COLOR_LIGHT_GRAY)
       ui.coin_text("+ ¥" .. persist.LOOP_REWARD,
         x, y + lh * 3, scale, gfx.COLOR_YELLOW)
       ui.coin_text(
-        "Unfortunately you have not escaped the endless loop.\nMaybe you'll have more luck on the next one...",
+        "Unfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA.",
         x, y + lh * 5, scale, gfx.COLOR_LIGHT_GRAY)
     end,
   },
@@ -108,6 +109,24 @@ local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
   if kind == "nirvana" then SceneGoto("skill_tree") end
+end
+
+-- Live clock for the current loop and the provisional rank - what finishing
+-- right now would rate. Ticking pressure: finish before the next threshold
+-- slips away. Hidden during the loop-1 prologue, where the awarded rank is
+-- pinned to D and the clock would only confuse.
+local function draw_loop_status()
+  if State.loop == 1 then return end
+  local rank      = track_data.loop_rank_for_time(State.loop_time or 0)
+  local scale     = 2
+  local margin    = 8
+  local time_text = format_duration(State.loop_time or 0)
+  local tw, th    = usagi.measure_text(time_text)
+  local tx        = usagi.GAME_W - tw * scale - margin
+  gfx.text_ex(time_text, tx + 1, 7, scale, 0, gfx.COLOR_BLACK, 1)
+  gfx.text_ex(time_text, tx, 6, scale, 0, gfx.COLOR_WHITE, 1)
+  local rw = usagi.measure_text(rank) * scale
+  ui.rank_text(rank, rank, usagi.GAME_W - rw - margin - 20, 6 + th * scale + 4, scale)
 end
 
 local M = {}
@@ -249,6 +268,7 @@ function M.draw()
   ghost.draw_sim(GHOST_ALPHA)
   popups.draw()
   hud.draw()
+  draw_loop_status()
   if State.race_modal then
     M.draw_race_modal()
   elseif State.purchase_modal then
