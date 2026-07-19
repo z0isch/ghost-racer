@@ -11,7 +11,7 @@ local track_data       = require "track_data"
 local persist          = require "persist"
 local modal            = require "modal"
 
-local GHOST_RACE_ALPHA = 0.05
+local GHOST_RACE_ALPHA = 0
 local FINISH_BEAT_SECS = .2
 
 -- $/sec is compared at cent precision so the modal only fires when the

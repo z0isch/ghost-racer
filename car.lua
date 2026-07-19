@@ -6,7 +6,7 @@ local CAR_SIZE           = 16
 local CAR_MARGIN         = 3
 local ACCEL_BASE         = 30
 local ACCEL_STEP         = 10
-local TOP_VEL_BASE       = 150
+local TOP_VEL_BASE       = 120
 local TOP_VEL_STEP       = 50
 local OVERSPEED_IMPULSE  = 100
 local OVERSPEED_DECAY    = 100
@@ -75,7 +75,7 @@ local function default_car()
     turn_rate_slow       = 2.0,
     turn_rate_fast       = 1.0,
     turn_ref_speed       = TOP_VEL_BASE,
-    drift_turn_rate      = 3.6,
+    drift_turn_rate      = 3.2,
     drift_slide          = math.pi / 8,
     drift_deccel         = 200,
     accel                = ACCEL_BASE,
@@ -498,7 +498,7 @@ function M.draw_boosts(car)
   for b = 1, car.boosts do
     local a = usagi.elapsed * BOOST_ORBIT_SPEED + (b - 1) * slot
     local p = util.vec_from_angle(a, BOOST_ORBIT_RADIUS)
-    gfx.circ_fill(cx + p.x, cy + p.y, 3, gfx.COLOR_ORANGE, 1)
+    gfx.circ_fill(cx + p.x, cy + p.y, 1, gfx.COLOR_ORANGE, 0.66)
   end
 end
 

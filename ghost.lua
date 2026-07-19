@@ -2,7 +2,7 @@ local angle          = require "angle"
 local track_data     = require "track_data"
 
 local CAR_SIZE       = 16
-local GHOST_ALPHA    = 0.6
+local GHOST_ALPHA    = 0.2
 local LAP_PAUSE      = 0.6
 -- Dev tuning knob for the future "ghost tempo" upgrade: scales how fast sim
 -- ghosts replay their lap (and therefore how fast they bank money). Edit and

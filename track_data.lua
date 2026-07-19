@@ -62,7 +62,7 @@ M.UPGRADES           = {
     kind      = "magnet",
     label     = "Coin Magnet",
     max       = 3,
-    base_cost = 11000,
+    base_cost = 5000,
     growth    = 1.3
   },
 }
@@ -311,7 +311,7 @@ M.TRACKS = {
       { col = 10, row = 7 },
     },
     base_coins         = 4,
-    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 113.0 },
+    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 105.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,
