@@ -239,12 +239,21 @@ end
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
 local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, checkpoints = true }
 
+-- Ghosts replay the track's recorded lap, so they stay locked behind one
+-- completed race everywhere. Checkpoints only carry that lock on Track 2
+-- during the first loop, where it teaches the race-then-buy rhythm.
+function M.needs_first_race(id, kind)
+  if State.tracks[id].ghost_line then return false end
+  if kind == "ghosts" then return true end
+  return kind == "checkpoints" and State.loop == 1 and track_data.get_track_index(id) == 2
+end
+
 function M.try_buy(kind)
   local id   = State.active_track
   local cost = M.upgrade_cost(kind)
   if cost == nil then return end
   if not M.shop_item_unlocked(id, M.shop_item(kind)) then return end
-  if kind == "ghosts" and not State.tracks[id].ghost_line then return end
+  if M.needs_first_race(id, kind) then return end
   if kind == "drift_boost" and State.drift == 0 then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost

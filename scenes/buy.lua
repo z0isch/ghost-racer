@@ -192,22 +192,25 @@ local function shop_button(item, x, y, w, opts)
   local label  = item.label
   local cost   = economy.upgrade_cost(kind)
 
+  local locked_msg
   if not economy.shop_item_unlocked(State.active_track, item) then
+    locked_msg = item.requires_rank_all
+        and ("RANK " .. item.requires_rank_all .. " on all tracks")
+        or ("RANK " .. item.requires_rank .. " needed")
+  elseif economy.needs_first_race(State.active_track, kind) then
+    locked_msg = "Complete 1 race"
+  end
+  if locked_msg then
     local _, th = usagi.measure_text(label)
     local bh    = th * 2 + 4
     ui.label(label, x, y + math.floor((bh - th * 2) / 2))
-    local msg = item.requires_rank_all
-        and ("RANK " .. item.requires_rank_all .. " on all tracks")
-        or ("RANK " .. item.requires_rank .. " needed")
-    local mw  = usagi.measure_text(msg)
-    ui.label(msg, x + w - mw, y + math.floor((bh - th) / 2), { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
+    local mw = usagi.measure_text(locked_msg)
+    local mx = x + w + usagi.measure_text(label) - mw
+    ui.label(locked_msg, mx, y + math.floor((bh - th) / 2), { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
     return false, bh
   end
 
   local affordable = cost ~= nil and (cost == 0 or State.money >= cost)
-  if kind == "ghosts" and not State.tracks[State.active_track].ghost_line then
-    affordable = false
-  end
   if kind == "drift_boost" and State.drift == 0 then
     affordable = false
   end
