@@ -232,7 +232,7 @@ M.TRACKS = {
       { col = 33, row = 16, len = 5, vertical = true, mode = "reverse" },
     },
     coins       = {
-      { col = 36, row = 11 },
+      { col = 36, row = 6 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 3,  row = 11 },
