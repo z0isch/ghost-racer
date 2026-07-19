@@ -34,21 +34,21 @@ M.UPGRADES           = {
     kind      = "accel",
     label     = "Acceleration",
     max       = 4,
-    base_cost = 15,
+    base_cost = 10,
     growth    = 1.4
   },
   {
     kind      = "drift",
     label     = "Drift",
     max       = 1,
-    base_cost = 600,
+    base_cost = 400,
     growth    = 1.6
   },
   {
     kind      = "drift_boost",
     label     = "Drift Boost",
     max       = 1,
-    base_cost = 700,
+    base_cost = 500,
     growth    = 1.6
   },
   {
@@ -62,7 +62,7 @@ M.UPGRADES           = {
     kind      = "magnet",
     label     = "Coin Magnet",
     max       = 3,
-    base_cost = 5000,
+    base_cost = 4000,
     growth    = 1.3
   },
 }
@@ -74,21 +74,21 @@ local LOOP1_UPGRADES = {
     kind      = "accel",
     label     = "Acceleration",
     max       = 4,
-    base_cost = 10,
-    growth    = 1.42
+    base_cost = 5,
+    growth    = 1.45
   },
   {
     kind      = "drift",
     label     = "Drift",
     max       = 1,
-    base_cost = 90,
+    base_cost = 60,
     growth    = 1.6
   },
   {
     kind      = "drift_boost",
     label     = "Drift Boost",
     max       = 1,
-    base_cost = 150,
+    base_cost = 80,
     growth    = 1.6
   },
   {
@@ -127,7 +127,7 @@ M.TRACKS = {
       { col = 26, row = 9 },
     },
     base_coins  = 1,
-    ranks       = { C = 1.0, B = 2.15, A = 2.75, S = 4.4 },
+    ranks       = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
     label       = "Track 1",
     pay         = 5,
     unlock_cost = nil,
@@ -153,7 +153,7 @@ M.TRACKS = {
     -- UPGRADES column), so ranks are scaled way down. Values are
     -- provisional - tune freely.
     loop1       = {
-      ranks = { C = 1.0, B = 1.2, A = 1.5, S = 3 },
+      ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
       shop  = {},
     },
   },
@@ -175,7 +175,7 @@ M.TRACKS = {
       { col = 6,  row = 8 },
     },
     base_coins  = 3,
-    ranks       = { C = 5.0, B = 6.5, A = 8.4, S = 12.0 },
+    ranks       = { C = 5.0, B = 6.5, A = 8.4, S = 11.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 250,
@@ -206,7 +206,7 @@ M.TRACKS = {
     -- Loop-1 prologue overrides - provisional, tune freely.
     loop1       = {
       unlock_cost = 28,
-      ranks       = { C = 2.8, B = 3.2, A = 3.5, S = 6.0 },
+      ranks       = { C = 2.5, B = 2.7, A = 3, S = 6.0 },
       shop        = {
         {
           kind      = "checkpoints",
@@ -239,7 +239,7 @@ M.TRACKS = {
       { col = 20, row = 3 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 18.0, A = 30.0, S = 32.0 },
+    ranks       = { C = 12.0, B = 18.0, A = 25.0, S = 31.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2000,
