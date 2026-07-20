@@ -26,19 +26,10 @@ local ZONE_STEPS        = 8
 local needle_pos        = 0 -- smoothed bar fraction, 0 (D floor) .. 1 (pegged)
 local last_time         = nil
 local last_phase        = nil
--- Transient juice layered on top of needle_pos, separate from the honest
--- value: jump_offset spikes on a collect and decays back to 0 for the
--- overshoot pop; arrow_flash drives the arrow's matching flash + scale-pop.
--- A miss snaps needle_pos down directly without touching either.
-local jump_offset       = 0
+-- A collect flashes the arrow (arrow_flash), decaying back to 0, as a small
+-- celebration on top of needle_pos -- the needle itself only ever shows the
+-- honest value. A miss snaps needle_pos down directly without touching it.
 local arrow_flash       = 0
-local JUMP_POP          = 0.05 -- overshoot spike, in bar fractions
--- A cheap coin/checkpoint moves the honest needle only a hair, so on its own
--- the pop would barely read. Below this delta, extra overshoot is blended in
--- (up to JUMP_POP_BOOST at delta 0) so even the smallest collect still pops.
-local SMALL_JUMP_REF    = 0.01
-local JUMP_POP_BOOST    = 0.01
-local JUMP_DECAY        = 0.01 -- overshoot decay rate, bar-fractions/sec (~0.25s taper off the peak pop)
 local ARROW_FLASH_DECAY = 10   -- flash decay rate, 1/sec
 -- Park the needle at the D floor until the car has covered this fraction of the
 -- owned course, sidestepping the 0/0 projection singularity at the start; then
@@ -94,7 +85,6 @@ local function draw_bar()
   if race.phase ~= last_phase then
     if race.phase == "countdown" then
       needle_pos  = 0
-      jump_offset = 0
       arrow_flash = 0
     end
     last_phase = race.phase
@@ -110,7 +100,6 @@ local function draw_bar()
   -- SWEEP. Between collects the needle still eases toward pace-driven target
   -- changes at SWEEP speed.
   local jumped = #(race.events_this_frame or {}) > 0
-  local pre_jump_pos = needle_pos
 
   if jumped or race.phase == "finished" then
     needle_pos = target
@@ -124,32 +113,19 @@ local function draw_bar()
     end
   end
 
-  -- Decay first, then apply this frame's spike on top -- otherwise a fresh
-  -- spike gets knocked down by the same-frame decay step before it's ever
-  -- drawn (JUMP_DECAY * dt alone can exceed JUMP_POP), so the overshoot never
-  -- actually rendered.
-  jump_offset = math.max(0, jump_offset - JUMP_DECAY * dt)
   arrow_flash = math.max(0, arrow_flash - ARROW_FLASH_DECAY * dt)
 
-  -- On finish, snap straight to the earned rank: kill any transient pop still
-  -- decaying from a coin grabbed right before the line, so the bar lands on the
-  -- final value at once instead of overshooting and easing down onto it.
+  -- On finish, snap straight to the earned rank and drop any lingering collect
+  -- flash so the bar simply lands on the final value.
   if race.phase == "finished" then
-    jump_offset = 0
     arrow_flash = 0
   end
 
   if jumped then
-    local delta = math.abs(target - pre_jump_pos)
-    local boost = math.max(0, SMALL_JUMP_REF - delta) / SMALL_JUMP_REF
-    jump_offset = JUMP_POP + JUMP_POP_BOOST * boost
     arrow_flash = 1
   end
 
-  -- needle_pos stays the honest baseline the meter's zone/letter state reads;
-  -- jump_offset is only composited into what's drawn below, so the overshoot
-  -- pop never corrupts the tracked value.
-  local display_pos = math.min(1, needle_pos + jump_offset)
+  local display_pos = math.min(1, needle_pos)
 
   -- One shadow rect under the whole bar, then the zone segments on top with
   -- their edges snapped to whole pixels: the half-transparent tiles must butt
@@ -192,9 +168,9 @@ local function draw_bar()
   end
 
   -- Arrow riding the top edge of the bar, plus a line across it. A collect's
-  -- jump_offset/arrow_flash decay rides underneath as a scale-pop + a yellow
-  -- flash that fades to the plain white arrow; a miss (no jump_offset) draws
-  -- it plain, reading as a clean drop rather than a celebration.
+  -- arrow_flash decay rides underneath as a scale-pop + a yellow flash that
+  -- fades to the plain white arrow; a miss (no flash) draws it plain, reading
+  -- as a clean drop rather than a celebration.
   local nx  = bar_x(left, display_pos)
   local pop = 1 + arrow_flash * 0.9
   gfx.line_ex(nx + 1, top + 1, nx + 1, top + BAR_H + 1, 1, gfx.COLOR_BLACK, 0.5)

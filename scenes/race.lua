@@ -18,11 +18,6 @@ local GHOST_RACE_ALPHA      = 0
 -- purely a beat to let the player read that final landing spot.
 local FINISH_BEAT_SECS      = .5
 
--- Coins grabbed within this many tiles of the final checkpoint skip the meter
--- bump: the needle is about to snap to the earned rank on finish, so a pop this
--- late has no room to read and only muddies the landing.
-local FINISH_SUPPRESS_TILES = 6
-
 -- $/sec is compared at cent precision so the modal only fires when the
 -- displayed "$%.2f -> $%.2f" values actually differ.
 local function cents(v)
@@ -213,21 +208,6 @@ function M.update(dt)
 
     local pay = economy.player_pay(id)
 
-    -- A coin grabbed as the car closes on the final checkpoint would pop the
-    -- meter just as the race ends and needle_pos snaps to the earned rank -- the
-    -- bump has no room to read and only muddies the finish. Suppress the pop for
-    -- collects within FINISH_SUPPRESS_TILES of that last checkpoint (nearest-edge
-    -- distance from the car, so it's 0 at overlap and grows as it approaches).
-    local finishing = false
-    if race.next_checkpoint == economy.owned_cps(id) then
-      local r   = track_data.checkpoint_rect(tdata.checkpoints[race.next_checkpoint])
-      local cx  = car_rect.x + car.SIZE / 2
-      local cy  = car_rect.y + car.SIZE / 2
-      local dx  = math.max(r.x - cx, 0, cx - (r.x + r.w))
-      local dy  = math.max(r.y - cy, 0, cy - (r.y + r.h))
-      finishing = dx * dx + dy * dy <= (FINISH_SUPPRESS_TILES * track_data.tile_size) ^ 2
-    end
-
     for ci = 1, road.active_coin_count(State.tracks[id].coins, tdata.coins) do
       local coin = tdata.coins[ci]
       local overlap
@@ -242,9 +222,7 @@ function M.update(dt)
         race.coins_collected[ci] = true
         State.money              = State.money + pay
         race.raw_earned          = race.raw_earned + tdata.pay
-        if not finishing then
-          table.insert(race.events_this_frame, "collect")
-        end
+        table.insert(race.events_this_frame, "collect")
         sfx.play("coin")
         popups.spawn({
           amount = pay,
