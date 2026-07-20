@@ -80,16 +80,17 @@ function M.rank_for_rate(id, rate)
   return rank
 end
 
--- Live $/sec for the run in progress, as if the remaining checkpoints were
--- crossed right now. Counting the pending payouts makes the HUD rank converge
--- on the result-screen rank instead of trailing a payout behind it.
+-- Live $/sec for the run in progress: earnings actually banked so far, plus
+-- the final checkpoint pre-credited. The race ends the moment that checkpoint
+-- is crossed, so the credit converts to real earnings exactly at the finish
+-- line and the HUD rank converges on the result-screen rank. Intermediate
+-- checkpoints and coins only count once collected, so the rank climbs as you
+-- earn and decays as time passes.
 function M.live_race_rate()
-  local race      = State.race
-  local id        = State.active_track
-  local owned     = M.owned_cps(id)
-  local remaining = owned - race.next_checkpoint + 1
-  local earned    = race.raw_earned + remaining * M.track_pay(id)
-  local raw       = race.time > 0 and (earned / race.time) or math.huge
+  local race   = State.race
+  local id     = State.active_track
+  local earned = race.raw_earned + M.track_pay(id)
+  local raw    = race.time > 0 and (earned / race.time) or math.huge
   return raw * M.cp_fraction(id)
 end
 

@@ -77,6 +77,17 @@ function M.neon_text(text, x, y, scale, opts)
   return w
 end
 
+-- Solid draw color for a rank, for callers that need a plain color rather
+-- than styled text (e.g. the HUD rank meter's zone segments). S cycles the
+-- rainbow; `i` offsets the cycle so adjacent segments shimmer independently.
+function M.rank_color(rank, i)
+  local style = RANK_STYLE[rank]
+  if style.rainbow then
+    return RAINBOW[((i or 0) + math.floor(usagi.elapsed * RAINBOW_SPEED)) % #RAINBOW + 1]
+  end
+  return style.color
+end
+
 -- Draws `text` in the animated style of `rank`: per-character sine wave with
 -- amplitude rising by rank, rank color (rainbow cycle for S). Returns the
 -- drawn width so callers can lay out mixed-style lines.
