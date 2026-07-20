@@ -1,4 +1,5 @@
 local persist     = require "persist"
+local reference   = require "reference"
 local buy         = require "scenes.buy"
 local race        = require "scenes.race"
 local intro       = require "scenes.intro"
@@ -32,6 +33,16 @@ function _init()
     end)
     usagi.menu_item("Dev: Load State", function()
       persist.dev_load_snapshot()
+    end)
+    -- Force the just-finished lap to become this track's reference line, even
+    -- if it wasn't the fastest (finish a race first, then pick this from the
+    -- garage). Auto-capture on finish already keeps the fastest full-course lap.
+    usagi.menu_item("Dev: Save Reference Lap", function()
+      if State.race and State.race.phase == "finished" then
+        reference.force_capture(State.active_track, State.race.recording, State.race.time)
+      else
+        print("[ref] finish a lap first, then Save Reference Lap")
+      end
     end)
   end
   --persist.start_new_loop()

@@ -1,3 +1,7 @@
+1st loop easy
+2nd loop hard
+3rd loop easy
+
 - steering assist?
 - teleport to ghost?
 - extra friction around the 180 point?
