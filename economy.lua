@@ -1,12 +1,12 @@
-local ghost        = require "ghost"
-local track_data   = require "track_data"
-local popups       = require "popups"
-local car          = require "car"
-local persist      = require "persist"
-local reference    = require "reference"
+local ghost              = require "ghost"
+local track_data         = require "track_data"
+local popups             = require "popups"
+local car                = require "car"
+local persist            = require "persist"
+local reference          = require "reference"
 
 -- Rank multipliers, tuning knobs only - change freely.
-local RANK_MULTS   = {
+local RANK_MULTS         = {
   D = 0.2,
   C = 0.4,
   B = 0.6,
@@ -14,12 +14,17 @@ local RANK_MULTS   = {
   S = 2.0
 }
 -- Ascending order of ranks above the D floor, checked against track_data.ranks(id, loop).
-local RANK_LETTERS = { "C", "B", "A", "S" }
-local RANK_ORDER   = { D = 0, C = 1, B = 2, A = 3, S = 4 }
+local RANK_LETTERS       = { "C", "B", "A", "S" }
+local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
-local M            = {}
+-- The current-speed estimate of remaining time is padded by this factor so the
+-- meter leans conservative: better to under-promise and let the player beat the
+-- bar than to promise a rank and rob it at the finish.
+local FINISH_FUDGE       = 1.08
 
-M.RANK_MULTS       = RANK_MULTS
+local M                  = {}
+
+M.RANK_MULTS             = RANK_MULTS
 
 -- $ awarded per checkpoint/coin on a given track.
 function M.track_pay(id)
@@ -86,25 +91,45 @@ end
 -- the race only ends once each has been crossed in order -- so they're priced
 -- in for the whole race rather than at the crossing; race.lua mutes their
 -- collect-juice to match, so no pop fires there), divided by the projected
--- time to reach the owned finish. The reference line's pace shape supplies
--- that projection: real_time * t_N / t_ref(s_live) stretches the elapsed time
--- by how far ahead of / behind the reference's pace the car is at its current
--- arc position. Coins aren't guaranteed, so raw_earned still jumps the
--- instant one is collected while proj_time moves smoothly -- that's the only
--- remaining source of a pop. Returns nil before there's anything to project
--- from (no reference, no elapsed time, or car not yet mapped onto the line).
+-- time to reach the owned finish. That time is projected against the
+-- reference's pace shape: t_ref is the reference's own time to reach the car's
+-- current arc position, so time/t_ref is the run's pace ratio versus the
+-- reference, and the remaining reference time scaled by that ratio is the time
+-- left. This reads s_live's *position* (via t_ref) rather than its time
+-- derivative, so an off-line projection wobble nudges the estimate instead of
+-- spiking it -- the earlier arc-speed model differentiated s_live and took a
+-- min against the average, which turned every off-line stall into a sharp dip.
+-- Padded by FINISH_FUDGE (on the remaining term only, so it vanishes at the
+-- finish) so it leans conservative: the bar rises toward the true finish rank
+-- rather than peeking a rank high and dropping at the line. Coins aren't
+-- guaranteed, so raw_earned still jumps the instant one is collected while
+-- proj_time moves smoothly -- that's the only remaining source of a pop.
+-- Returns nil before there's anything to project from (no reference, no elapsed
+-- time, or car not yet mapped onto the line).
 function M.projected_rate()
   local race = State.race
   local id   = State.active_track
   if not race or not race.time or race.time <= 0 then return nil end
+  local owned     = M.owned_cps(id)
+  local s_N, t_N  = reference.owned_finish(owned)
+  if not s_N or s_N <= 0 or not t_N or t_N <= 0 then return nil end
+  if not race.s_live or race.s_live <= 0 then return nil end
   if not race.t_ref or race.t_ref <= 0 then return nil end
-  local owned  = M.owned_cps(id)
-  local _, t_N = reference.owned_finish(owned)
-  if not t_N then return nil end
-  local proj_time = race.time * t_N / race.t_ref
+
+  -- Project the finish time against the reference's pace shape: t_ref is the
+  -- reference's own time to reach the car's current arc position, so
+  -- time/t_ref is the run's pace ratio versus the reference. The remaining
+  -- reference time (t_N - t_ref) scaled by that ratio is the projected time
+  -- left; padding only that term by FINISH_FUDGE leans the estimate
+  -- conservative while vanishing at the finish (t_ref -> t_N), so the bar
+  -- rises into the true rank with no end-of-race snap. No derivative of
+  -- s_live is taken, so an off-line projection wobble can't spike the pace.
+  local remaining = math.max(0, t_N - race.t_ref)
+  local proj_time = race.time + FINISH_FUDGE * race.time * remaining / race.t_ref
   if proj_time <= 0 then return nil end
+
   local pending_cps = math.max(0, owned - race.next_checkpoint + 1)
-  local expected     = race.raw_earned + pending_cps * track_data.TRACKS[id].pay
+  local expected    = race.raw_earned + pending_cps * track_data.TRACKS[id].pay
   return expected * M.cp_fraction(id) / proj_time
 end
 

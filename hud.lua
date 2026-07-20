@@ -15,9 +15,12 @@ local BAR_H             = 22  -- thickness
 local LETTER_SCALE      = 3
 -- Room above the bar for the arrow that rides its top edge.
 local ARROW_ROOM        = 14
--- Max arrow speed in bar-fractions/sec: quick enough to track any real
--- rate change, but never teleporting.
-local SWEEP             = 3
+-- Max arrow speed in bar-fractions/sec for pace-driven target changes (a
+-- collect bypasses this and snaps straight to target, below). Kept low on
+-- purpose so the needle drifts toward pace changes rather than chasing the
+-- projection's every wobble -- momentary arc-speed dips can't yank it far
+-- before they reverse, so between collects it reads as a steady climb.
+local SWEEP             = 1.5
 -- Segments drawn per zone; also the shimmer stride for the S rainbow.
 local ZONE_STEPS        = 8
 local needle_pos        = 0 -- smoothed bar fraction, 0 (D floor) .. 1 (pegged)
@@ -71,13 +74,13 @@ local function draw_bar()
 
   local target
   if race.phase == "finished" then
-    -- The real earned result. The live projection has already converged here
-    -- (t_ref -> t_N at the owned finish), so there's no end-of-race snap.
+    -- The real earned result. The live projection converges here as the
+    -- remaining arc length goes to zero, so there's no end-of-race snap.
     target = bar_fraction(race.run_rate)
   else
-    -- Projected finish rank, driven by the reference's pace shape. Parked at
-    -- the D floor through the countdown and a short warmup (no elapsed time /
-    -- no projection yet), then it sweeps up honestly.
+    -- Projected finish rank from the car's current arc-speed. Parked at the
+    -- D floor through the countdown and a short warmup (no elapsed time / no
+    -- projection yet), then it sweeps up honestly.
     local rate = economy.projected_rate()
     if not rate or economy.race_progress() < WARMUP then
       target = 0
@@ -102,12 +105,14 @@ local function draw_bar()
 
   -- A collect this frame snaps needle_pos straight to the new honest value
   -- instead of creeping there under the SWEEP cap, so it reads as a pop
-  -- rather than a crawl. Between collects the needle still eases toward
-  -- pace-driven target changes at SWEEP speed.
+  -- rather than a crawl. The finish teleports too: the earned rank is final,
+  -- so it lands on the true value at once rather than easing in under the low
+  -- SWEEP. Between collects the needle still eases toward pace-driven target
+  -- changes at SWEEP speed.
   local jumped = #(race.events_this_frame or {}) > 0
   local pre_jump_pos = needle_pos
 
-  if jumped then
+  if jumped or race.phase == "finished" then
     needle_pos = target
   else
     local diff = target - needle_pos
@@ -125,6 +130,14 @@ local function draw_bar()
   -- actually rendered.
   jump_offset = math.max(0, jump_offset - JUMP_DECAY * dt)
   arrow_flash = math.max(0, arrow_flash - ARROW_FLASH_DECAY * dt)
+
+  -- On finish, snap straight to the earned rank: kill any transient pop still
+  -- decaying from a coin grabbed right before the line, so the bar lands on the
+  -- final value at once instead of overshooting and easing down onto it.
+  if race.phase == "finished" then
+    jump_offset = 0
+    arrow_flash = 0
+  end
 
   if jumped then
     local delta = math.abs(target - pre_jump_pos)

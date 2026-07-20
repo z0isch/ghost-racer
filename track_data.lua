@@ -311,7 +311,7 @@ M.TRACKS = {
       { col = 10, row = 7 },
     },
     base_coins         = 4,
-    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 105.0 },
+    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 98.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,

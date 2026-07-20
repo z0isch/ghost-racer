@@ -13,7 +13,10 @@ local modal            = require "modal"
 local reference        = require "reference"
 
 local GHOST_RACE_ALPHA = 0
-local FINISH_BEAT_SECS = .2
+-- Held on the finished phase before cutting to the buy scene. The rank meter's
+-- needle teleports straight to the earned rank on finish (hud.lua), so this is
+-- purely a beat to let the player read that final landing spot.
+local FINISH_BEAT_SECS = .5
 
 -- $/sec is compared at cent precision so the modal only fires when the
 -- displayed "$%.2f -> $%.2f" values actually differ.
@@ -71,14 +74,14 @@ local function dismiss_help()
 end
 
 local function finish_race()
-  local race     = State.race
-  local id       = State.active_track
-  local tstate   = State.tracks[id]
-  local tdata    = track_data.TRACKS[id]
+  local race    = State.race
+  local id      = State.active_track
+  local tstate  = State.tracks[id]
+  local tdata   = track_data.TRACKS[id]
 
-  race.run_rate  = race.time > 0
+  race.run_rate = race.time > 0
       and (race.raw_earned / race.time) * economy.cp_fraction(id) or 0
-  race.phase     = "finished"
+  race.phase    = "finished"
 
   -- Dev builds keep the fastest full-course lap per track as the reference
   -- line for the rank meter's arc-length ruler. No-op in release.
@@ -192,7 +195,10 @@ function M.update(dt)
     race.time = race.time + dt
     local pose = car.pose(State.car)
     ghost.record(race.time, pose)
-    -- Map the car onto the reference line for the rank meter's projection.
+    -- Map the car onto the reference line for the rank meter's projection:
+    -- s_live is the car's arc position, t_ref the reference's own time to reach
+    -- it. The projection reads t_ref's position, not a time derivative of
+    -- s_live, so no smoothing of a per-frame speed is needed here.
     if reference.has() then
       race.s_live, race.t_ref = reference.locate(pose.x, pose.y)
     end
