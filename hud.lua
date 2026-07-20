@@ -100,15 +100,11 @@ local function draw_bar()
   local dt = last_time and math.min(usagi.elapsed - last_time, 0.1) or 0
   last_time = usagi.elapsed
 
-  -- A collect/miss this frame snaps needle_pos straight to the new honest
-  -- value instead of creeping there under the SWEEP cap, so it reads as a
-  -- pop/drop rather than a crawl. Between events the needle still eases
-  -- toward pace-driven target changes at SWEEP speed.
-  local up_jump = false
-  for _, ev in ipairs(race.events_this_frame or {}) do
-    if ev == "collect" then up_jump = true end
-  end
-  local jumped       = up_jump or #(race.events_this_frame or {}) > 0
+  -- A collect this frame snaps needle_pos straight to the new honest value
+  -- instead of creeping there under the SWEEP cap, so it reads as a pop
+  -- rather than a crawl. Between collects the needle still eases toward
+  -- pace-driven target changes at SWEEP speed.
+  local jumped = #(race.events_this_frame or {}) > 0
   local pre_jump_pos = needle_pos
 
   if jumped then
@@ -130,7 +126,7 @@ local function draw_bar()
   jump_offset = math.max(0, jump_offset - JUMP_DECAY * dt)
   arrow_flash = math.max(0, arrow_flash - ARROW_FLASH_DECAY * dt)
 
-  if up_jump then
+  if jumped then
     local delta = math.abs(target - pre_jump_pos)
     local boost = math.max(0, SMALL_JUMP_REF - delta) / SMALL_JUMP_REF
     jump_offset = JUMP_POP + JUMP_POP_BOOST * boost

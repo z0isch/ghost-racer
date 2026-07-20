@@ -21,12 +21,6 @@ local M            = {}
 
 M.RANK_MULTS       = RANK_MULTS
 
--- Fraction of an unresolved earn-event's pay counted toward the live
--- projection before it's actually collected/crossed. Keeps the meter's
--- resting baseline below the ceiling (so collecting reads as an up-jump)
--- while staying fairly predictive. See docs/rank-meter-collection-jump-plan.md.
-local DISCOUNT     = 0.5
-
 -- $ awarded per checkpoint/coin on a given track.
 function M.track_pay(id)
   return track_data.TRACKS[id].pay
@@ -87,51 +81,30 @@ function M.rank_for_rate(id, rate)
   return rank
 end
 
--- Projected finish $/sec for the run in progress. The numerator is honest:
--- money already earned, plus a DISCOUNT-weighted share of what's still ahead
--- (remaining owned checkpoints + remaining uncollected/unpassed coins), except
--- the final checkpoint which is counted at full value (see below) --
--- collecting moves an item's pay from discounted to full, so the needle jumps
--- up; passing a coin uncollected drops it out of "ahead" entirely, so the
--- needle drops. At the owned finish nothing is ahead, so expected ==
--- raw_earned and this converges exactly to run_rate. The reference line's
--- pace shape projects the finish time: real_time * t_N / t_ref(s_live)
--- stretches the elapsed time by how far ahead of / behind the reference's
--- pace the car is at its current arc position. Returns nil before there's
--- anything to project from (no reference, no elapsed time, or car not yet
--- mapped onto the line).
+-- Projected finish $/sec for the run in progress: money already earned plus
+-- every owned-but-uncrossed checkpoint's pay (all of them are guaranteed --
+-- the race only ends once each has been crossed in order -- so they're priced
+-- in for the whole race rather than at the crossing; race.lua mutes their
+-- collect-juice to match, so no pop fires there), divided by the projected
+-- time to reach the owned finish. The reference line's pace shape supplies
+-- that projection: real_time * t_N / t_ref(s_live) stretches the elapsed time
+-- by how far ahead of / behind the reference's pace the car is at its current
+-- arc position. Coins aren't guaranteed, so raw_earned still jumps the
+-- instant one is collected while proj_time moves smoothly -- that's the only
+-- remaining source of a pop. Returns nil before there's anything to project
+-- from (no reference, no elapsed time, or car not yet mapped onto the line).
 function M.projected_rate()
   local race = State.race
   local id   = State.active_track
   if not race or not race.time or race.time <= 0 then return nil end
   if not race.t_ref or race.t_ref <= 0 then return nil end
-  local owned    = M.owned_cps(id)
-  local _, t_N   = reference.owned_finish(owned)
+  local owned  = M.owned_cps(id)
+  local _, t_N = reference.owned_finish(owned)
   if not t_N then return nil end
   local proj_time = race.time * t_N / race.t_ref
   if proj_time <= 0 then return nil end
-  local tdata = track_data.TRACKS[id]
-
-  local cps_ahead   = owned - (race.next_checkpoint - 1)
-  local coins       = math.min(State.tracks[id].coins, #tdata.coins)
-  local coins_ahead = 0
-  for ci = 1, coins do
-    if not race.coins_collected[ci] and not race.coins_missed[ci] then
-      coins_ahead = coins_ahead + 1
-    end
-  end
-
-  -- The final owned checkpoint is guaranteed (the race only ends when it's
-  -- crossed) and lands on the finish line, so it's counted at full value while
-  -- earlier checkpoints and coins stay discounted. That keeps the resting
-  -- baseline below the ceiling for mid-race up-jumps, yet the last checkpoint's
-  -- pay is already in the projection before it's crossed -- so paying out at
-  -- the finish causes no end-of-race pop (race.lua likewise skips its collect
-  -- juice for that crossing).
-  local final_ahead = cps_ahead > 0 and 1 or 0
-  local discounted  = (cps_ahead - final_ahead + coins_ahead) * tdata.pay
-  local guaranteed  = final_ahead * tdata.pay
-  local expected    = race.raw_earned + DISCOUNT * discounted + guaranteed
+  local pending_cps = math.max(0, owned - race.next_checkpoint + 1)
+  local expected     = race.raw_earned + pending_cps * track_data.TRACKS[id].pay
   return expected * M.cp_fraction(id) / proj_time
 end
 

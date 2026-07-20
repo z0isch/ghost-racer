@@ -198,59 +198,18 @@ end
 -- reference; nil when no reference exists (the meter hides in that case).
 local ruler = nil
 
--- Non-cursor-mutating projection of a single point onto the full reference
--- line: scans every segment, unlike M.locate's windowed cursor scan, so it
--- never disturbs the forward-only search used live during the race.
-local function project_full(points, cum, x, y)
-  local n = #points
-  if n < 2 then return 0 end
-  local best_d2, best_s
-  for i = 1, n - 1 do
-    local a, b     = points[i], points[i + 1]
-    local abx, aby = b.x - a.x, b.y - a.y
-    local seg2     = abx * abx + aby * aby
-    local ft       = 0
-    if seg2 > 0 then
-      ft = ((x - a.x) * abx + (y - a.y) * aby) / seg2
-      if ft < 0 then ft = 0 elseif ft > 1 then ft = 1 end
-    end
-    local px, py = a.x + abx * ft, a.y + aby * ft
-    local dx, dy = x - px, y - py
-    local d2     = dx * dx + dy * dy
-    if not best_d2 or d2 < best_d2 then
-      best_d2, best_s = d2, cum[i] + ft * (cum[i + 1] - cum[i])
-    end
-  end
-  return best_s
-end
-
--- Arc-length position of every coin on `id`'s course, projected once onto the
--- reference line so the rank meter can tell a passed-uncollected coin from
--- one still ahead. Indexed by the coin's position in
--- track_data.TRACKS[id].coins.
-local function project_coin_arcs(id, points, cum)
-  local arcs = {}
-  for i, coin in ipairs(track_data.TRACKS[id].coins) do
-    local rect = track_data.coin_rect(coin)
-    arcs[i]    = project_full(points, cum, rect.x + rect.w / 2, rect.y + rect.h / 2)
-  end
-  return arcs
-end
-
--- Load the active track's reference and prime the ruler (cumulative arc lengths
--- + a forward-only search cursor + projected coin arcs). Call on race enter.
--- Clears the ruler when no reference is recorded for the track.
+-- Load the active track's reference and prime the ruler (cumulative arc
+-- lengths + a forward-only search cursor). Call on race enter. Clears the
+-- ruler when no reference is recorded for the track.
 function M.begin(id)
   ruler      = nil
   local data = M.load(id, cur_loop())
   if not data then return end
-  local cum = cumulative(data.points)
   ruler = {
     points      = data.points,
-    cum         = cum,
+    cum         = cumulative(data.points),
     checkpoints = data.checkpoints,
     cursor      = 1,
-    coin_arcs   = project_coin_arcs(id, data.points, cum),
   }
 end
 
@@ -266,12 +225,6 @@ function M.owned_finish(n)
   local cp = ruler.checkpoints[n]
   if not cp then return nil end
   return cp.s, cp.t
-end
-
--- Arc-length position of coin `ci` (index into the track's coins list) on the
--- current race's reference line, or nil with no ruler.
-function M.coin_arc(ci)
-  return ruler and ruler.coin_arcs[ci]
 end
 
 -- Map the live car at (x,y) onto the reference line and advance the forward-only

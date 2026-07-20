@@ -15,11 +15,6 @@ local reference        = require "reference"
 local GHOST_RACE_ALPHA = 0
 local FINISH_BEAT_SECS = .2
 
--- Arc-length slack past a coin's reference-line position before it's counted
--- as missed, so a slightly-late magnet grab still reads as a collect rather
--- than a drop-then-jump (see docs/rank-meter-collection-jump-plan.md).
-local COIN_MISS_MARGIN = 24
-
 -- $/sec is compared at cent precision so the modal only fires when the
 -- displayed "$%.2f -> $%.2f" values actually differ.
 local function cents(v)
@@ -52,7 +47,6 @@ function M.enter()
     phase           = State.seen_help and "countdown" or "help",
     raw_earned      = 0,
     coins_collected = {},
-    coins_missed    = {},
     first_race      = not State.seen_help,
   }
   ghost.reset_recording()
@@ -148,9 +142,9 @@ function M.update(dt)
     economy.bank(ev)
   end
 
-  -- Reset every frame regardless of phase, so a collect/miss event from the
-  -- frame a race finishes on doesn't linger and keep re-triggering the hud's
-  -- jump pop on every subsequent "finished" frame.
+  -- Reset every frame regardless of phase, so a collect event from the frame
+  -- a race finishes on doesn't linger and keep re-triggering the hud's jump
+  -- pop on every subsequent "finished" frame.
   race.events_this_frame = {}
 
   if race.phase == "help" then
@@ -228,14 +222,6 @@ function M.update(dt)
           x      = coin.col * track_data.tile_size + track_data.tile_size / 2,
           y      = coin.row * track_data.tile_size,
         })
-      elseif not race.coins_collected[ci] and not race.coins_missed[ci] and not overlap then
-        -- Out of pickup range (the same overlap test used for collection) and
-        -- past the coin's arc position by a margin: it's not coming back.
-        local s_arc = reference.coin_arc(ci)
-        if s_arc and race.s_live and race.s_live > s_arc + COIN_MISS_MARGIN then
-          race.coins_missed[ci] = true
-          table.insert(race.events_this_frame, "miss")
-        end
       end
     end
 
@@ -243,14 +229,10 @@ function M.update(dt)
     if cp and util.rect_overlap(car_rect, track_data.checkpoint_rect(cp)) then
       State.money     = State.money + pay
       race.raw_earned = race.raw_earned + tdata.pay
-      -- The final checkpoint lands on the finish line and its pay is already in
-      -- the projection (economy.projected_rate counts it at full value), so it
-      -- fires no meter jump -- a pop there would read as the result lurching at
-      -- the very end. Earlier checkpoints still jump.
-      local is_final = race.next_checkpoint >= economy.owned_cps(id)
-      if not is_final then
-        table.insert(race.events_this_frame, "collect")
-      end
+      -- Every owned checkpoint's pay is already in the projection
+      -- (economy.projected_rate counts all upcoming ones at full value, since
+      -- crossing them in order is how the race finishes), so crossing one
+      -- fires no meter jump -- only coin collects still pop.
       popups.spawn({
         amount = pay,
         x      = car_rect.x + car.SIZE / 2,
