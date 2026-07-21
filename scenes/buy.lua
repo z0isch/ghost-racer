@@ -78,36 +78,30 @@ local MODAL_INFO = {
     end,
   },
   nirvana = {
-    title     = "Loop Complete!",
-    rainbow   = true,
-    button    = "OKAY",
-    body      = function()
-      return "RANK " .. (State.last_loop_rank or "D") .. "\n\nTime: " ..
-          format_duration(State.last_loop_time or 0) ..
-          "\n+ ¥" .. persist.LOOP_REWARD ..
-          "\n\nUnfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA."
+    title   = "Loop Complete!",
+    rainbow = true,
+    button  = "OKAY",
+    body    = function()
+      return "Unfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA!"
     end,
-    draw_body = function(x, y, scale)
-      local rank      = State.last_loop_rank or "D"
-      local rank_line = "RANK " .. rank
-      local time_line = "Time: " .. format_duration(State.last_loop_time or 0)
-      local cash_line = "+ ¥" .. persist.LOOP_REWARD
-      local _, line_h = usagi.measure_text(rank_line)
-      local lh        = line_h * scale
-      -- The panel is centered on the screen, so centering on GAME_W centers
-      -- within the panel too.
-      local function center_x(text, s)
-        return math.floor((usagi.GAME_W - usagi.measure_text(text) * s) / 2)
-      end
-      ui.rank_text(rank_line, rank, center_x(rank_line, scale * 2), y, scale * 2)
-      ui.coin_text(time_line, center_x(time_line, scale),
-        y + lh * 2, scale, gfx.COLOR_LIGHT_GRAY)
-      ui.coin_text(cash_line, center_x(cash_line, scale),
-        y + lh * 3, scale, gfx.COLOR_YELLOW)
-      ui.coin_text(
-        "Unfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA.",
-        x, y + lh * 5, scale, gfx.COLOR_LIGHT_GRAY)
-    end,
+  },
+}
+
+-- Two-step explainer shown once, right after the first race of loop 2 (the
+-- first loop where the tachometer appears - see finish_race). Step 1 teaches
+-- the loop rank / tachometer with a shrunk copy of the dial; step 2 sets the
+-- S-rank win condition. Sequenced via State.loop_intro (1, then 2, then nil).
+local LOOP_INTRO = {
+  {
+    title = "Loop Rank",
+    body  = "This gauge is your Loop Rank - the\npace to finish the whole loop.\n\n"
+        .. "Faster loops earn a higher Rank,\nand higher Ranks pay more ¥.",
+    demo  = true,
+  },
+  {
+    title = "Escape SAMSARA",
+    body  = "Reach Rank S on a loop to break\nfree and escape SAMSARA for good.\n\n"
+        .. "Anything less and the loop\nbegins anew...",
   },
 }
 
@@ -129,10 +123,10 @@ end
 local TACH_ZONES  = { "S", "A", "B", "C", "D" } -- dial order, f=0 to f=1
 local TACH_START  = math.rad(210)               -- f=0 angle, lower-left
 local TACH_SPAN   = math.rad(240)               -- clockwise sweep to lower-right
-local TACH_R      = 62                           -- band radius
-local TACH_STEPS  = 60                           -- chords stepped along the arc
-local TACH_CY     = 156                           -- dial center y
-local TACH_LSCALE = 2                             -- wedge-letter text scale
+local TACH_R      = 62                          -- band radius
+local TACH_STEPS  = 60                          -- chords stepped along the arc
+local TACH_CY     = 156                         -- dial center y
+local TACH_LSCALE = 2                           -- wedge-letter text scale
 
 -- Screen-space point at needle fraction `f` (0 = S end, 1 = redline) on a
 -- circle of radius `r` centered at (cx, cy).
@@ -141,12 +135,18 @@ local function tach_point(f, r, cx, cy)
   return cx + math.cos(a) * r, cy - math.sin(a) * r
 end
 
-local function draw_loop_status()
-  if State.loop == 1 then return end
-  local seconds     = State.loop_time or 0
+-- Draws the tachometer dial for loop time `seconds`, centered at (cx, cy) with
+-- band radius `r`. All other dimensions scale off `r` via opts so the same dial
+-- renders full-size on the buy screen and shrunk inside the loop-rank tutorial
+-- modal. opts: band_w (band chord width), lscale (rank-letter text scale),
+-- letter_r (letter ring radius), hub_r (hub outer radius).
+local function draw_tach(cx, cy, r, seconds, opts)
+  opts              = opts or {}
+  local band_w      = opts.band_w or 7
+  local lscale      = opts.lscale or TACH_LSCALE
+  local letter_r    = opts.letter_r or (r + 20)
+  local hub_r       = opts.hub_r or 5
   local pos, rank   = track_data.loop_rank_gauge(seconds)
-  local cx          = math.floor(usagi.GAME_W / 2)
-  local cy          = TACH_CY
   local active_zone = math.min(math.floor(pos * 5) + 1, 5)
 
   -- Zone band: short thick chords stepped along the arc. Only the needle's
@@ -157,15 +157,15 @@ local function draw_loop_status()
     local zi     = math.min(math.floor((f0 + f1) / 2 * 5) + 1, 5)
     local color  = zi == active_zone and ui.rank_color(TACH_ZONES[zi], s)
         or gfx.COLOR_DARK_GRAY
-    local x0, y0 = tach_point(f0, TACH_R, cx, cy)
-    local x1, y1 = tach_point(f1, TACH_R, cx, cy)
-    gfx.line_ex(x0, y0, x1, y1, 7, color, 1)
+    local x0, y0 = tach_point(f0, r, cx, cy)
+    local x1, y1 = tach_point(f1, r, cx, cy)
+    gfx.line_ex(x0, y0, x1, y1, band_w, color, 1)
   end
 
   -- Tick marks at the wedge boundaries.
   for i = 0, 5 do
-    local x0, y0 = tach_point(i / 5, TACH_R - 6, cx, cy)
-    local x1, y1 = tach_point(i / 5, TACH_R + 5, cx, cy)
+    local x0, y0 = tach_point(i / 5, r - 6, cx, cy)
+    local x1, y1 = tach_point(i / 5, r + 5, cx, cy)
     gfx.line_ex(x0, y0, x1, y1, 1, gfx.COLOR_WHITE, 1)
   end
 
@@ -174,21 +174,29 @@ local function draw_loop_status()
   for zi = 1, 5 do
     local letter = TACH_ZONES[zi]
     local lw, lh = usagi.measure_text(letter)
-    local lx, ly = tach_point((zi - 0.5) / 5, TACH_R + 20, cx, cy)
-    lx           = math.floor(lx - lw * TACH_LSCALE / 2)
-    ly           = math.floor(ly - lh * TACH_LSCALE / 2)
+    local lx, ly = tach_point((zi - 0.5) / 5, letter_r, cx, cy)
+    lx           = math.floor(lx - lw * lscale / 2)
+    ly           = math.floor(ly - lh * lscale / 2)
     local color  = zi == active_zone and gfx.COLOR_WHITE or gfx.COLOR_LIGHT_GRAY
     local alpha  = zi == active_zone and 1 or 0.5
-    gfx.text_ex(letter, lx + 1, ly + 1, TACH_LSCALE, 0, gfx.COLOR_BLACK, alpha)
-    gfx.text_ex(letter, lx, ly, TACH_LSCALE, 0, color, alpha)
+    gfx.text_ex(letter, lx + 1, ly + 1, lscale, 0, gfx.COLOR_BLACK, alpha)
+    gfx.text_ex(letter, lx, ly, lscale, 0, color, alpha)
   end
 
   -- Needle from the hub out to just under the band, plus a rank-colored hub.
-  local nx, ny = tach_point(pos, TACH_R - 8, cx, cy)
+  local nx, ny = tach_point(pos, r - 8, cx, cy)
   gfx.line_ex(nx + 1, ny + 1, cx + 1, cy + 1, 2, gfx.COLOR_BLACK, 0.5)
   gfx.line_ex(nx, ny, cx, cy, 2, gfx.COLOR_WHITE, 1)
-  gfx.circ_fill(cx, cy, 5, gfx.COLOR_BLACK, 1)
-  gfx.circ_fill(cx, cy, 3, ui.rank_color(rank, 0), 1)
+  gfx.circ_fill(cx, cy, hub_r, gfx.COLOR_BLACK, 1)
+  gfx.circ_fill(cx, cy, hub_r - 2, ui.rank_color(rank, 0), 1)
+end
+
+local function draw_loop_status()
+  if State.loop == 1 then return end
+  local seconds = State.loop_time or 0
+  local cx      = math.floor(usagi.GAME_W / 2)
+  local cy      = TACH_CY
+  draw_tach(cx, cy, TACH_R, seconds)
 
   -- Digital clock readout below the dial.
   local scale     = 3
@@ -198,6 +206,19 @@ local function draw_loop_status()
   local ty        = cy + 44
   gfx.text_ex(time_text, tx + 1, ty + 1, scale, 0, gfx.COLOR_BLACK, 1)
   gfx.text_ex(time_text, tx, ty, scale, 0, gfx.COLOR_WHITE, 1)
+end
+
+-- Small tachometer for the loop-rank tutorial modal's demo slot. Sized so the
+-- dial and its outer rank letters fit inside a compact box; the needle reads
+-- the live loop time, matching the full dial drawn behind the modal.
+local TACH_DEMO_W  = 128
+local TACH_DEMO_H  = 78
+local TACH_DEMO_R  = 34
+local TACH_DEMO_CY = 54 -- dial center offset from the demo box's top edge
+
+local function draw_tach_demo(x, y)
+  draw_tach(x + math.floor(TACH_DEMO_W / 2), y + TACH_DEMO_CY, TACH_DEMO_R,
+    State.loop_time or 0, { band_w = 4, lscale = 1, letter_r = TACH_DEMO_R + 12, hub_r = 4 })
 end
 
 local M = {}
@@ -239,7 +260,12 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
-  if not State.purchase_modal and not State.race_modal and input.key_pressed(input.KEY_SPACE) then
+  -- Only advance the tutorial once the post-race modal is cleared, so a single
+  -- press can't skip past both at once (draw shows race_modal first).
+  if not State.race_modal and State.loop_intro and input.pressed(input.BTN1) then
+    M.advance_loop_intro()
+  end
+  if not State.purchase_modal and not State.race_modal and not State.loop_intro and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
 end
@@ -345,6 +371,8 @@ function M.draw()
   draw_loop_status()
   if State.race_modal then
     M.draw_race_modal()
+  elseif State.loop_intro then
+    M.draw_loop_intro()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
   else
@@ -456,6 +484,25 @@ function M.draw_race_modal()
   if modal.draw({ title = title, body = body, draw_title = draw_title }) then
     State.race_modal = nil
   end
+end
+
+-- Draws the current loop-rank tutorial step (see LOOP_INTRO). Advancing past
+-- the last step clears State.loop_intro, dropping back to the shop.
+function M.draw_loop_intro()
+  local step = LOOP_INTRO[State.loop_intro]
+  local demo
+  if step.demo then
+    demo = { w = TACH_DEMO_W, h = TACH_DEMO_H, draw = draw_tach_demo }
+  end
+  if modal.draw({ title = step.title, body = step.body, demo = demo }) then
+    M.advance_loop_intro()
+  end
+end
+
+-- Steps the loop-rank tutorial forward, clearing it once past the last modal.
+function M.advance_loop_intro()
+  State.loop_intro = State.loop_intro + 1
+  if State.loop_intro > #LOOP_INTRO then State.loop_intro = nil end
 end
 
 function M.draw_shop()

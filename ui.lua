@@ -2,7 +2,7 @@
 -- ui.button returns true the frame a click completes (press + release on same button).
 -- ui.label draws scaled/colored text at (x, y).
 -- ui.rank_text draws text in the animated per-rank style (wave + color).
--- ui.coin_text draws text with every COIN_CHAR in yellow.
+-- ui.coin_text draws text with every currency glyph (COIN_CHAR / YEN_CHAR) in yellow.
 -- ui.neon_text draws headline text in the neon style (alternating colors,
 -- drop shadow, per-character wobble + wave).
 
@@ -10,6 +10,11 @@ local PAD_X = 4
 local PAD_Y = 2
 local DEFAULT_SCALE = 2
 local COIN_CHAR = "©"
+local YEN_CHAR  = "¥"
+-- Currency glyphs coin_text draws in yellow: the race coin © and the garage
+-- yen ¥. Both are always currency, so both color the same wherever coin_text
+-- is used.
+local CURRENCY_CHARS = { COIN_CHAR, YEN_CHAR }
 
 -- Wave amplitude (px at text scale AMP_SCALE, scales with the text) and text
 -- color per rank; higher ranks bounce harder.
@@ -36,6 +41,7 @@ local active = nil       -- id of currently armed button (cleared on mouse relea
 local M = {}
 
 M.COIN_CHAR = COIN_CHAR
+M.YEN_CHAR  = YEN_CHAR
 M.theme = {
   fill     = gfx.COLOR_DARK_GRAY,
   hover    = gfx.COLOR_INDIGO,
@@ -110,14 +116,27 @@ end
 
 -- Draws one line of `text` at (x, y) in `color`, with every COIN_CHAR drawn
 -- in yellow. Returns the drawn width.
+-- Finds the nearest currency glyph at or after byte `from`, returning its
+-- start, end, and the glyph itself (nil when none remain).
+local function next_currency(text, from)
+  local best_s, best_e, best_c
+  for _, ch in ipairs(CURRENCY_CHARS) do
+    local s, e = text:find(ch, from, true)
+    if s and (not best_s or s < best_s) then
+      best_s, best_e, best_c = s, e, ch
+    end
+  end
+  return best_s, best_e, best_c
+end
+
 local function coin_line(text, x, y, scale, color, alpha)
   local w = 0
   local i = 1
   while i <= #text do
-    local s, e = text:find(COIN_CHAR, i, true)
+    local s, e, ch = next_currency(text, i)
     local chunk, chunk_color
     if s == i then
-      chunk, chunk_color = COIN_CHAR, gfx.COLOR_YELLOW
+      chunk, chunk_color = ch, gfx.COLOR_YELLOW
       i = e + 1
     else
       chunk, chunk_color = text:sub(i, s and s - 1 or #text), color

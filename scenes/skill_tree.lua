@@ -1,9 +1,26 @@
-local ui         = require "ui"
-local persist    = require "persist"
-local skill_tree = require "skill_tree"
-local car        = require "car"
+local ui                 = require "ui"
+local persist            = require "persist"
+local skill_tree         = require "skill_tree"
+local car                = require "car"
+local modal              = require "modal"
 
-local M = {}
+local M                  = {}
+
+-- First-ever garage visit: a one-shot explainer that the garage sells
+-- permanent, cross-loop upgrades bought with ¥ (a currency distinct from the
+-- race $ spent in the shop). The starting ¥ comes from the loop reward paid by
+-- persist.start_new_loop, so the copy pulls the amount from there to stay in
+-- sync. Gated on State.seen_modals.garage, which persists across loops.
+local GARAGE_MODAL_TITLE = "Welcome to the Garage!"
+local GARAGE_MODAL_BODY  = table.concat({
+  "Buy permanent upgrades that stay",
+  "with you across every loop.",
+  "",
+  "Spend ¥ - a new currency you",
+  "earn by completing loops.",
+  "",
+  "Here's ¥" .. persist.LOOP_REWARD .. " to start!",
+}, "\n")
 
 function M.enter()
   -- Same guarantee as the other scenes: engine silence on every path in.
@@ -18,6 +35,17 @@ function M.draw()
   gfx.clear(gfx.COLOR_DARK_BLUE) -- match the dev harness backdrop
   local st    = State.skill_tree
   local stats = { loops = State.loop - 1 }
+
+  -- First-visit explainer, drawn over the cleared backdrop instead of the
+  -- tree so a dismiss click can't fall through onto a node. Persist the flag
+  -- on dismiss so it never shows again.
+  if not State.seen_modals.garage then
+    if modal.draw({ title = GARAGE_MODAL_TITLE, body = GARAGE_MODAL_BODY }) then
+      State.seen_modals.garage = true
+      persist.save()
+    end
+    return
+  end
 
   -- Title + blurb, centered up top, clear of the ¥ HUD (top-left, drawn by
   -- skill_tree.draw) and the nodes (y >= ~124).

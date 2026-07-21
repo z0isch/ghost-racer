@@ -135,6 +135,15 @@ local function finish_race()
     }
   end
 
+  -- First race of loop 2 is where the loop tachometer first appears (it's
+  -- hidden during the loop-1 prologue), so introduce loop ranks now. Queued
+  -- behind any race_modal above; the buy scene shows the two-step explainer.
+  -- Gated by seen_modals so it fires exactly once across the whole game.
+  if State.loop == 2 and first_lap and not State.seen_modals.loop_rank then
+    State.seen_modals.loop_rank = true
+    State.loop_intro            = 1
+  end
+
   persist.save()
 end
 
