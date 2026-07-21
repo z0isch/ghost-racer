@@ -459,6 +459,26 @@ function M.loop_rank_for_time(seconds)
   return "D"
 end
 
+-- Buy-screen tachometer: maps a live loop time onto a 0..1 needle position
+-- and the rank it lands in. The dial is five equal wedges (S at the 0 end
+-- through D at 1), and the needle climbs across a wedge as its time thresholds
+-- pass -- the same zone-and-needle scheme as the race HUD's rank bar, wrapped
+-- onto an arc. Past the C threshold the needle sinks through the D wedge over
+-- another C-length span, then pins at the redline.
+function M.loop_rank_gauge(seconds)
+  local prev_t = 0
+  for i, letter in ipairs(LOOP_RANK_ORDER) do -- S, A, B, C
+    local t1 = LOOP_RANK_TIMES[letter]
+    if seconds <= t1 then
+      local p = (seconds - prev_t) / (t1 - prev_t)
+      return (i - 1) * 0.2 + 0.2 * p, letter
+    end
+    prev_t = t1
+  end
+  local p = math.min((seconds - prev_t) / prev_t, 1)
+  return 0.8 + 0.2 * p, "D"
+end
+
 -- Rank actually awarded for finishing a loop in `seconds`. Loop 1 is the
 -- scripted prologue and always rates D, no matter how fast it goes.
 function M.loop_rank(loop, seconds)

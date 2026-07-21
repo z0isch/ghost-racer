@@ -119,24 +119,85 @@ local function dismiss_purchase_modal()
   if kind == "nirvana" then SceneGoto("skill_tree") end
 end
 
--- Live clock for the current loop and the provisional rank - what finishing
--- right now would rate. Ticking pressure: finish before the next threshold
--- slips away. Hidden during the loop-1 prologue, where the awarded rank is
--- pinned to D and the clock would only confuse.
+-- Tachometer of the current loop's provisional rank - what finishing right
+-- now would rate. The needle climbs from S at the left, through A/B/C, to the
+-- redline D on the right as loop time burns; the wedge it sits in lights up in
+-- its rank color while the rest gray out (the same zone scheme as the race
+-- HUD's rank bar). Ticking pressure: finish before the needle crosses into the
+-- next wedge. A digital clock reads out below. Hidden during the loop-1
+-- prologue, where the awarded rank is pinned to D and the dial would confuse.
+local TACH_ZONES  = { "S", "A", "B", "C", "D" } -- dial order, f=0 to f=1
+local TACH_START  = math.rad(210)               -- f=0 angle, lower-left
+local TACH_SPAN   = math.rad(240)               -- clockwise sweep to lower-right
+local TACH_R      = 62                           -- band radius
+local TACH_STEPS  = 60                           -- chords stepped along the arc
+local TACH_CY     = 156                           -- dial center y
+local TACH_LSCALE = 2                             -- wedge-letter text scale
+
+-- Screen-space point at needle fraction `f` (0 = S end, 1 = redline) on a
+-- circle of radius `r` centered at (cx, cy).
+local function tach_point(f, r, cx, cy)
+  local a = TACH_START - f * TACH_SPAN
+  return cx + math.cos(a) * r, cy - math.sin(a) * r
+end
+
 local function draw_loop_status()
   if State.loop == 1 then return end
-  local rank      = track_data.loop_rank_for_time(State.loop_time or 0)
+  local seconds     = State.loop_time or 0
+  local pos, rank   = track_data.loop_rank_gauge(seconds)
+  local cx          = math.floor(usagi.GAME_W / 2)
+  local cy          = TACH_CY
+  local active_zone = math.min(math.floor(pos * 5) + 1, 5)
+
+  -- Zone band: short thick chords stepped along the arc. Only the needle's
+  -- wedge shows its rank color (rainbow shimmer for S); the rest gray out.
+  for s = 0, TACH_STEPS - 1 do
+    local f0     = s / TACH_STEPS
+    local f1     = (s + 1) / TACH_STEPS
+    local zi     = math.min(math.floor((f0 + f1) / 2 * 5) + 1, 5)
+    local color  = zi == active_zone and ui.rank_color(TACH_ZONES[zi], s)
+        or gfx.COLOR_DARK_GRAY
+    local x0, y0 = tach_point(f0, TACH_R, cx, cy)
+    local x1, y1 = tach_point(f1, TACH_R, cx, cy)
+    gfx.line_ex(x0, y0, x1, y1, 7, color, 1)
+  end
+
+  -- Tick marks at the wedge boundaries.
+  for i = 0, 5 do
+    local x0, y0 = tach_point(i / 5, TACH_R - 6, cx, cy)
+    local x1, y1 = tach_point(i / 5, TACH_R + 5, cx, cy)
+    gfx.line_ex(x0, y0, x1, y1, 1, gfx.COLOR_WHITE, 1)
+  end
+
+  -- Rank letter just outside each wedge; the needle's wedge stands out white
+  -- while the others dim, matching the HUD bar's held-still labels.
+  for zi = 1, 5 do
+    local letter = TACH_ZONES[zi]
+    local lw, lh = usagi.measure_text(letter)
+    local lx, ly = tach_point((zi - 0.5) / 5, TACH_R + 20, cx, cy)
+    lx           = math.floor(lx - lw * TACH_LSCALE / 2)
+    ly           = math.floor(ly - lh * TACH_LSCALE / 2)
+    local color  = zi == active_zone and gfx.COLOR_WHITE or gfx.COLOR_LIGHT_GRAY
+    local alpha  = zi == active_zone and 1 or 0.5
+    gfx.text_ex(letter, lx + 1, ly + 1, TACH_LSCALE, 0, gfx.COLOR_BLACK, alpha)
+    gfx.text_ex(letter, lx, ly, TACH_LSCALE, 0, color, alpha)
+  end
+
+  -- Needle from the hub out to just under the band, plus a rank-colored hub.
+  local nx, ny = tach_point(pos, TACH_R - 8, cx, cy)
+  gfx.line_ex(nx + 1, ny + 1, cx + 1, cy + 1, 2, gfx.COLOR_BLACK, 0.5)
+  gfx.line_ex(nx, ny, cx, cy, 2, gfx.COLOR_WHITE, 1)
+  gfx.circ_fill(cx, cy, 5, gfx.COLOR_BLACK, 1)
+  gfx.circ_fill(cx, cy, 3, ui.rank_color(rank, 0), 1)
+
+  -- Digital clock readout below the dial.
   local scale     = 3
-  local gap       = 4
-  local time_text = format_duration(State.loop_time or 0)
-  local tw, th    = usagi.measure_text(time_text)
-  local block_h   = th * scale * 2 + gap
-  local ty        = math.floor((usagi.GAME_H - block_h) / 2)
+  local time_text = format_duration(seconds)
+  local tw        = usagi.measure_text(time_text)
   local tx        = math.floor((usagi.GAME_W - tw * scale) / 2)
+  local ty        = cy + 44
   gfx.text_ex(time_text, tx + 1, ty + 1, scale, 0, gfx.COLOR_BLACK, 1)
   gfx.text_ex(time_text, tx, ty, scale, 0, gfx.COLOR_WHITE, 1)
-  local rw = usagi.measure_text(rank) * scale
-  ui.rank_text(rank, rank, math.floor((usagi.GAME_W - rw) / 2), ty + th * scale + gap, scale)
 end
 
 local M = {}
