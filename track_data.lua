@@ -239,7 +239,7 @@ M.TRACKS = {
       { col = 20, row = 3 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 18.0, A = 25.0, S = 31.0 },
+    ranks       = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 2000,
@@ -272,7 +272,7 @@ M.TRACKS = {
     -- prologue track instead of S on this one.
     loop1       = {
       unlock_cost = 200,
-      ranks       = { C = 5, B = 8, A = 10.5, S = 20.0 },
+      ranks       = { C = 5, B = 8, A = 9.5, S = 20.0 },
       shop        = {
         {
           kind      = "checkpoints",
@@ -311,7 +311,7 @@ M.TRACKS = {
       { col = 10, row = 7 },
     },
     base_coins         = 4,
-    ranks              = { C = 30.0, B = 60.0, A = 90.0, S = 98.0 },
+    ranks              = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,
