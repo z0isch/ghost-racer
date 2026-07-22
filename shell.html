@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Ghost Loop</title>
+    <style>
+      /* Ghost Loop is a neon time-trial racer with a VHS/synthwave look:
+         pink + blue neon headlines over dark purple, a bloom shader, and a
+         retro grid horizon. The loading overlay leans into that so the wait
+         before the wasm bundle lands still feels like part of the game. */
+      :root {
+        --neon-pink: #ff77a8;
+        --neon-blue: #29adff;
+        --deep-purple: #7e2553;
+        --dark-blue: #1d2b53;
+        --paper: #fff1e8;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        color: var(--paper);
+        font-family: ui-monospace, "SF Mono", "Cascadia Mono", Menlo,
+          Consolas, monospace;
+      }
+      body {
+        display: grid;
+        place-items: center;
+      }
+      /* Scale the canvas to fill the viewport while preserving its
+      configured aspect ratio. `--game-aspect` is set from JS at load
+      time by reading the canvas's intrinsic backing-store dims, so a
+      game shipped at any `_config().game_width / game_height` lays
+      out correctly without an HTML edit. The backing store stays at
+      export-time dims; CSS just resizes the displayed pixels, with
+      `image-rendering: pixelated` keeping the upscale crisp.
+      The `min()` pair gives the largest box that fits the viewport
+      while keeping aspect: width is whichever is smaller of the
+      viewport's width or the height-derived width, and vice versa.
+      This is what makes itch.io's fullscreen button work: when itch
+      fullscreens its iframe, our canvas inside grows to fill it
+      instead of staying at backing-store size in the middle of a
+      black void. The same rule helps when the embed iframe's size
+      doesn't exactly match the exported game dims. */
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        /* `--game-aspect` is a single number (W / H precomputed in
+        JS), not a `W / H` ratio expression. That keeps the CSS
+        unambiguous: `100vw / var(--game-aspect)` evaluates as
+        `100vw / 1.778` rather than `(100vw / W) / H`, which is
+        what would happen if `var()` substituted a ratio expression
+        as raw text. */
+        width: min(100vw, 100vh * var(--game-aspect, 1.778));
+        height: min(100vh, 100vw / var(--game-aspect, 1.778));
+      }
+      #overlay {
+        position: fixed;
+        inset: 0;
+        /* Synthwave dusk: deep purple bleeding up out of black. */
+        background: radial-gradient(
+            120% 90% at 50% 118%,
+            var(--deep-purple) 0%,
+            var(--dark-blue) 34%,
+            #05010a 72%,
+            #000 100%
+          );
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        cursor: pointer;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+        overflow: hidden;
+      }
+      /* Perspective grid rushing toward a horizon — the classic racer floor.
+         Two layered gradients (verticals + horizontals) scrolling on the Z
+         axis; masked so it fades into the dusk instead of a hard edge. */
+      #overlay::before {
+        content: "";
+        position: absolute;
+        left: -50%;
+        right: -50%;
+        bottom: -10%;
+        height: 65%;
+        background-image: repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(5% - 1px),
+            rgba(41, 173, 255, 0.5) calc(5% - 1px),
+            rgba(41, 173, 255, 0.5) 5%
+          ),
+          repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent calc(10% - 1px),
+            rgba(255, 119, 168, 0.5) calc(10% - 1px),
+            rgba(255, 119, 168, 0.5) 10%
+          );
+        transform: perspective(340px) rotateX(74deg);
+        transform-origin: bottom center;
+        -webkit-mask-image: linear-gradient(
+          to top,
+          #000 0%,
+          rgba(0, 0, 0, 0.35) 55%,
+          transparent 100%
+        );
+        mask-image: linear-gradient(
+          to top,
+          #000 0%,
+          rgba(0, 0, 0, 0.35) 55%,
+          transparent 100%
+        );
+        animation: grid-scroll 1.4s linear infinite;
+        pointer-events: none;
+      }
+      @keyframes grid-scroll {
+        to {
+          background-position: 0 0, 0 40px;
+        }
+      }
+      /* CRT scanlines over everything in the overlay. */
+      #overlay::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0.28) 2px,
+          rgba(0, 0, 0, 0.28) 3px
+        );
+        pointer-events: none;
+        mix-blend-mode: multiply;
+      }
+      #overlay button {
+        position: relative;
+        z-index: 1;
+        background: transparent;
+        color: var(--neon-pink);
+        border: 2px solid var(--neon-pink);
+        padding: 14px 40px;
+        font: inherit;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        cursor: pointer;
+        border-radius: 2px;
+        min-width: 240px;
+        text-shadow: 0 0 8px rgba(255, 119, 168, 0.8);
+        box-shadow: 0 0 10px rgba(255, 119, 168, 0.55),
+          inset 0 0 12px rgba(255, 119, 168, 0.28);
+        transition: color 0.12s, box-shadow 0.12s, background 0.12s,
+          border-color 0.12s;
+      }
+      #overlay button:hover:not(:disabled),
+      #overlay:focus button:not(:disabled) {
+        color: #000;
+        background: var(--neon-pink);
+        box-shadow: 0 0 18px rgba(255, 119, 168, 0.95),
+          0 0 40px rgba(255, 119, 168, 0.5);
+        text-shadow: none;
+      }
+      #overlay button:disabled {
+        color: var(--neon-blue);
+        border-color: var(--neon-blue);
+        cursor: progress;
+        text-shadow: 0 0 8px rgba(41, 173, 255, 0.7);
+        box-shadow: 0 0 10px rgba(41, 173, 255, 0.4),
+          inset 0 0 12px rgba(41, 173, 255, 0.22);
+        /* Pulse while the runtime + bundle load. */
+        animation: load-pulse 1.3s ease-in-out infinite;
+      }
+      @keyframes load-pulse {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 1; }
+      }
+      #overlay .sub {
+        position: relative;
+        z-index: 1;
+        opacity: 0.65;
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        margin-top: 22px;
+        color: var(--neon-blue);
+        max-width: 90vw;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #overlay::before,
+        #overlay button:disabled {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas" width="1280" height="704"></canvas>
+    <script>
+      // `--game-aspect` is a single number, not a `W / H` ratio:
+      // var() substitutes raw text, so a ratio would produce
+      // `(100vw / W) / H` (near-zero, black screen). Re-run after
+      // callMain since raylib's emscripten canvas resize doesn't
+      // fire DOM mutation events.
+      function _usagi_update_aspect() {
+        const c = document.getElementById("canvas");
+        document.documentElement.style.setProperty(
+          "--game-aspect",
+          c.width / c.height,
+        );
+      }
+      _usagi_update_aspect();
+    </script>
+    <script>
+      // Stop game-input keys from triggering the host page's default
+      // scroll. Without this, Down/Space scroll the surrounding page
+      // when the canvas is embedded in scrollable surroundings (notably
+      // itch.io's wrapper). raylib's emscripten port forwards keydown
+      // through GLFW, which only preventDefaults Backspace/Tab — see
+      // emscripten#16805. Listen on `window`, not the canvas: itch.io's
+      // iframe doesn't reliably hand focus to the canvas, so checking
+      // `document.activeElement === canvas` would silently fail there.
+      // Filtering by `e.code` is enough; none of these keys do anything
+      // useful on the surrounding page anyway.
+      window.addEventListener("keydown", function (e) {
+        switch (e.code) {
+          case "Space":
+          case "ArrowUp":
+          case "ArrowDown":
+          case "ArrowLeft":
+          case "ArrowRight":
+          case "PageUp":
+          case "PageDown":
+          case "Home":
+          case "End":
+            e.preventDefault();
+        }
+      });
+    </script>
+    <div id="overlay" role="button" tabindex="0">
+      <button id="start" disabled>Loading…</button>
+      <div class="sub"></div>
+    </div>
+    <script>
+      // Click-to-play overlay. Two jobs:
+      //   1. Browsers block AudioContext until a user gesture, so we hold
+      //      `main()` until a click and start everything inside it.
+      //   2. We fetch the game bundle (`game.usagi`) over HTTP and write it
+      //      to the wasm virtual FS before calling main(). This is how a
+      //      single prebuilt usagi runtime can ship any game without an
+      //      emcc rebuild. Override the bundle URL by setting
+      //      `window.USAGI_BUNDLE_URL` before this script runs.
+      const overlay = document.getElementById("overlay");
+      const startBtn = document.getElementById("start");
+      const subText = overlay.querySelector(".sub");
+      const bundleUrl = window.USAGI_BUNDLE_URL || "game.usagi";
+      let runtimeReady = false;
+      let started = false;
+
+      var Module = {
+        canvas: document.getElementById("canvas"),
+        // Don't auto-run main(); we drive it from the click handler so the
+        // bundle is in place and we're inside a user gesture.
+        noInitialRun: true,
+        onRuntimeInitialized: function () {
+          runtimeReady = true;
+          startBtn.disabled = false;
+          startBtn.textContent = "Click to play";
+        },
+      };
+
+      async function start() {
+        if (started || !runtimeReady) return;
+        started = true;
+        startBtn.disabled = true;
+        startBtn.textContent = "Loading game…";
+
+        try {
+          const res = await fetch(bundleUrl);
+          if (!res.ok) {
+            throw new Error(
+              `${bundleUrl}: HTTP ${res.status} ${res.statusText}`,
+            );
+          }
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          Module.FS.writeFile("/game.usagi", bytes);
+        } catch (e) {
+          console.error("usagi: bundle fetch failed", e);
+          startBtn.textContent = "Failed to load";
+          subText.textContent = String(e.message || e);
+          started = false;
+          startBtn.disabled = false;
+          return;
+        }
+
+        overlay.style.display = "none";
+
+        // Resume any AudioContext emscripten/raylib already created. Most
+        // are created later inside main() (still inside the user gesture)
+        // and start in `running` state automatically.
+        if (
+          Module.audioContext &&
+          Module.audioContext.state === "suspended"
+        ) {
+          Module.audioContext.resume();
+        }
+
+        try {
+          Module.callMain([]);
+        } catch (e) {
+          console.error("usagi: main() threw", e);
+        }
+
+        // raylib resized the canvas backing-store inside callMain;
+        // re-derive --game-aspect from the post-init dims.
+        _usagi_update_aspect();
+      }
+
+      overlay.addEventListener("click", start);
+      overlay.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") start();
+      });
+    </script>
+    <script src="usagi.js"></script>
+  </body>
+</html>
