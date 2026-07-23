@@ -13,8 +13,6 @@ local RANK_MULTS         = {
   A = 1.0,
   S = 2.0
 }
--- Ascending order of ranks above the D floor, checked against track_data.ranks(id, loop).
-local RANK_LETTERS       = { "C", "B", "A", "S" }
 local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
 -- The current-speed estimate of remaining time is padded by this factor so the
@@ -74,16 +72,11 @@ function M.owns_any_ghost()
   return M.owns_any("ghosts")
 end
 
--- Rank earned by a $/sec rate on a given track. Below the lowest threshold is "D".
+-- Rank earned by a $/sec rate on the active loop's version of a track. Below
+-- the lowest threshold is "D". Delegates to track_data (the single source), so
+-- loop scoring and live ranking share one implementation.
 function M.rank_for_rate(id, rate)
-  local thresholds = track_data.ranks(id, State.loop)
-  local rank       = "D"
-  if rate and rate > 0 then
-    for _, letter in ipairs(RANK_LETTERS) do
-      if rate >= thresholds[letter] then rank = letter end
-    end
-  end
-  return rank
+  return track_data.rank_for_rate(id, rate, State.loop)
 end
 
 -- Projected finish $/sec for the run in progress: money already earned plus

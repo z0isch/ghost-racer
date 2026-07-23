@@ -82,7 +82,7 @@ local MODAL_INFO = {
     rainbow = true,
     button  = "OKAY",
     body    = function()
-      return "Unfortunately you have not escaped the endless loop.\nGo FASTER to increase your rank and escape SAMSARA!"
+      return "You have not escaped the\nendless loop of SAMSARA..."
     end,
   },
 }
@@ -94,8 +94,9 @@ local MODAL_INFO = {
 local LOOP_INTRO = {
   {
     title = "Loop Rank",
-    body  = "This gauge is your Loop Rank - the\npace to finish the whole loop.\n\n"
-        .. "Faster loops earn a higher Rank,\nand higher Ranks pay more ¥.",
+    body  = "This gauge is your Loop Rank, set by\nyour course ranks and your pace.\n\n"
+        .. "It starts low and climbs as you clear\ncourses. Better course ranks AND a\n"
+        .. "faster loop both raise it - and higher\nRanks pay more ¥.",
     demo  = true,
   },
   {
@@ -105,22 +106,31 @@ local LOOP_INTRO = {
   },
 }
 
--- Clears the purchase modal; dismissing Nirvana also returns to the title
--- screen, since there's nothing left to buy.
+-- Clears the purchase modal. Dismissing the "Loop Complete!" Nirvana modal
+-- chains into the loop-rank breakdown (the scored recap of the loop just
+-- finished); dismissing that breakdown returns to the skill tree, since
+-- there's nothing left to buy this loop.
 local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
-  if kind == "nirvana" then SceneGoto("skill_tree") end
+  if kind == "nirvana" then
+    State.purchase_modal = "loop_breakdown"
+  elseif kind == "loop_breakdown" then
+    SceneGoto("skill_tree")
+  end
 end
 
--- Tachometer of the current loop's provisional rank - what finishing right
--- now would rate. The needle climbs from S at the left, through A/B/C, to the
--- redline D on the right as loop time burns; the wedge it sits in lights up in
--- its rank color while the rest gray out (the same zone scheme as the race
--- HUD's rank bar). Ticking pressure: finish before the needle crosses into the
--- next wedge. A digital clock reads out below. Hidden during the loop-1
--- prologue, where the awarded rank is pinned to D and the dial would confuse.
-local TACH_ZONES  = { "S", "A", "B", "C", "D" } -- dial order, f=0 to f=1
+-- Tachometer of the loop so far - what the courses banked to date have earned
+-- against the clock they took (live loop_points; unraced courses count for
+-- nothing, so the dial starts at the redline and climbs as courses land).
+-- The needle sits in a wedge from S at the left through A/B/C to the redline D
+-- on the right; that wedge lights up in its rank color while the rest gray out
+-- (the same zone scheme as the race HUD's rank bar). It moves both ways: it
+-- sinks as loop time burns (points fall) and jumps up when a course lands or
+-- promotes a rank (points rise) - the two levers the player pulls, with the
+-- overall arc trending up across the loop. A digital clock reads out below.
+-- Hidden during the loop-1 prologue, where the dial would confuse.
+local TACH_ZONES  = { "D", "C", "B", "A", "S" } -- dial order, f=0 to f=1
 local TACH_START  = math.rad(210)               -- f=0 angle, lower-left
 local TACH_SPAN   = math.rad(240)               -- clockwise sweep to lower-right
 local TACH_R      = 62                          -- band radius
@@ -135,19 +145,22 @@ local function tach_point(f, r, cx, cy)
   return cx + math.cos(a) * r, cy - math.sin(a) * r
 end
 
--- Draws the tachometer dial for loop time `seconds`, centered at (cx, cy) with
+-- Draws the tachometer dial for loop score `points`, centered at (cx, cy) with
 -- band radius `r`. All other dimensions scale off `r` via opts so the same dial
 -- renders full-size on the buy screen and shrunk inside the loop-rank tutorial
 -- modal. opts: band_w (band chord width), lscale (rank-letter text scale),
 -- letter_r (letter ring radius), hub_r (hub outer radius).
-local function draw_tach(cx, cy, r, seconds, opts)
+local function draw_tach(cx, cy, r, points, opts)
   opts              = opts or {}
   local band_w      = opts.band_w or 7
   local lscale      = opts.lscale or TACH_LSCALE
   local letter_r    = opts.letter_r or (r + 20)
   local hub_r       = opts.hub_r or 5
-  local pos, rank   = track_data.loop_rank_gauge(seconds)
-  local active_zone = math.min(math.floor(pos * 5) + 1, 5)
+  local pos, rank   = track_data.loop_rank_gauge(points)
+  -- loop_rank_gauge returns pos with 0 = S end; the dial reads D -> S left to
+  -- right, so mirror the gauge fraction for all drawing (needle and zones).
+  local dpos        = 1 - pos
+  local active_zone = math.min(math.floor(dpos * 5) + 1, 5)
 
   -- Zone band: short thick chords stepped along the arc. Only the needle's
   -- wedge shows its rank color (rainbow shimmer for S); the rest gray out.
@@ -184,7 +197,7 @@ local function draw_tach(cx, cy, r, seconds, opts)
   end
 
   -- Needle from the hub out to just under the band, plus a rank-colored hub.
-  local nx, ny = tach_point(pos, r - 8, cx, cy)
+  local nx, ny = tach_point(dpos, r - 8, cx, cy)
   gfx.line_ex(nx + 1, ny + 1, cx + 1, cy + 1, 2, gfx.COLOR_BLACK, 0.5)
   gfx.line_ex(nx, ny, cx, cy, 2, gfx.COLOR_WHITE, 1)
   gfx.circ_fill(cx, cy, hub_r, gfx.COLOR_BLACK, 1)
@@ -194,9 +207,10 @@ end
 local function draw_loop_status()
   if State.loop == 1 then return end
   local seconds = State.loop_time or 0
+  local points  = track_data.loop_points(State.loop, State.tracks, seconds)
   local cx      = math.floor(usagi.GAME_W / 2)
   local cy      = TACH_CY
-  draw_tach(cx, cy, TACH_R, seconds)
+  draw_tach(cx, cy, TACH_R, points)
 
   -- Digital clock readout below the dial.
   local scale     = 3
@@ -217,8 +231,9 @@ local TACH_DEMO_R  = 34
 local TACH_DEMO_CY = 54 -- dial center offset from the demo box's top edge
 
 local function draw_tach_demo(x, y)
+  local points = track_data.loop_points(State.loop, State.tracks, State.loop_time or 0)
   draw_tach(x + math.floor(TACH_DEMO_W / 2), y + TACH_DEMO_CY, TACH_DEMO_R,
-    State.loop_time or 0, { band_w = 4, lscale = 1, letter_r = TACH_DEMO_R + 12, hub_r = 4 })
+    points, { band_w = 4, lscale = 1, letter_r = TACH_DEMO_R + 12, hub_r = 4 })
 end
 
 local M = {}
@@ -373,6 +388,8 @@ function M.draw()
     M.draw_race_modal()
   elseif State.loop_intro then
     M.draw_loop_intro()
+  elseif State.purchase_modal == "loop_breakdown" then
+    M.draw_loop_breakdown_modal()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
   else
@@ -400,6 +417,79 @@ function M.draw_purchase_modal()
     draw_title = function(x, y, scale) ui.rank_text(info.title, "S", x, y, scale) end
   end
   if modal.draw({ title = info.title, body = info.body(), demo = demo, draw_title = draw_title, draw_body = info.draw_body, button = info.button }) then
+    dismiss_purchase_modal()
+  end
+end
+
+-- Aligned character width of a "Label ..... VALUE" breakdown row, so the value
+-- column right-aligns across the per-track and Loop Time lines.
+local BREAKDOWN_ROW_CHARS = 20
+
+-- One dotted "Label ..... value" line padded to BREAKDOWN_ROW_CHARS.
+local function breakdown_dots(label, value)
+  local ndots = BREAKDOWN_ROW_CHARS - #label - #value - 2
+  if ndots < 1 then ndots = 1 end
+  return label .. " " .. string.rep(".", ndots) .. " " .. value
+end
+
+-- Draws one breakdown row centered at `cx`. Rows with a `rank` draw their
+-- trailing rank letter in that rank's color (rank_color for the list, the
+-- animated rank_text for the big `big` RANK line); the rest is light gray.
+local function draw_breakdown_row(row, cx, y, scale)
+  local text = row.text
+  local w    = usagi.measure_text(text) * scale
+  local x    = math.floor(cx - w / 2)
+  if not row.rank then
+    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+    return
+  end
+  local prefix = text:sub(1, #text - #row.rank)
+  local pw     = usagi.measure_text(prefix) * scale
+  gfx.text_ex(prefix, x, y, scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  if row.big then
+    ui.rank_text(row.rank, row.rank, x + pw, y, scale)
+  else
+    gfx.text_ex(row.rank, x + pw, y, scale, 0, ui.rank_color(row.rank, 0), 1)
+  end
+end
+
+-- Loop-rank breakdown: the scored recap shown after "Loop Complete!", before
+-- the skill tree. Reads State.last_loop_breakdown (captured in
+-- persist.start_new_loop): each course's rank, the loop time, and the final
+-- letter, so the player can see how the rank was earned and how to raise it.
+-- Shown on every loop including loop 1 - the calculation is honest now.
+function M.draw_loop_breakdown_modal()
+  local bd = State.last_loop_breakdown
+  if not bd then
+    -- No recap captured (shouldn't happen): fall through to the skill tree.
+    dismiss_purchase_modal()
+    return
+  end
+
+  local rows = {}
+  local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
+  for _, c in ipairs(bd.courses) do
+    rows[#rows + 1] = { text = breakdown_dots(track_data.TRACKS[c.id].label, c.rank), rank = c.rank }
+  end
+  rows[#rows + 1] = { text = divider }
+  rows[#rows + 1] = { text = breakdown_dots("Loop Time", format_duration(bd.time)) }
+  rows[#rows + 1] = { text = divider }
+  rows[#rows + 1] = { text = breakdown_dots("RANK ", bd.rank), rank = bd.rank, big = true }
+
+  local body_lines = {}
+  for _, r in ipairs(rows) do body_lines[#body_lines + 1] = r.text end
+  local body      = table.concat(body_lines, "\n")
+
+  local cx        = math.floor(usagi.GAME_W / 2)
+  local draw_body = function(_, by, scale)
+    local _, line_h = usagi.measure_text("A")
+    for _, r in ipairs(rows) do
+      draw_breakdown_row(r, cx, by, scale)
+      by = by + line_h * scale
+    end
+  end
+
+  if modal.draw({ title = "Loop Rank", body = body, draw_body = draw_body }) then
     dismiss_purchase_modal()
   end
 end

@@ -444,46 +444,142 @@ function M.unlock_rank(loop)
   return loop == 1 and "B" or "A"
 end
 
--- Loop-completion rank: seconds of loop time a finished loop must come in
--- under to earn each letter. Tuning knobs only - change freely.
-local LOOP_RANK_TIMES = { S = 90, A = 240, B = 300, C = 600 }
-local LOOP_RANK_ORDER = { "S", "A", "B", "C" }
+-- Per-course rank as a number for loop scoring: linear (every rank-up worth
+-- the same) with a positive D floor so even a D course still contributes -- a
+-- freshly unlocked, still-D track adds time to the loop but shouldn't be pure
+-- dead weight. Deliberately NOT reused from economy.RANK_MULTS: the pay
+-- multipliers are a separate concern, and coupling them would let a payout
+-- retune silently shift loop rank. Extend with S+/S++ (=6, =7, ...) when the
+-- manual-rank rework lands.
+local LOOP_RANK_POINTS = { D = 1, C = 2, B = 3, A = 4, S = 5 }
 
--- Rank a loop time is pacing toward right now: what finishing at `seconds`
--- would rate, before the loop-1 pin below. The buy screen shows this as the
--- provisional rank.
-function M.loop_rank_for_time(seconds)
-  for _, letter in ipairs(LOOP_RANK_ORDER) do
-    if seconds <= LOOP_RANK_TIMES[letter] then return letter end
+-- Ascending per-course rank letters above the D floor, checked against
+-- M.ranks(id, loop). Shared by rank_for_rate; economy.rank_for_rate delegates
+-- here so there's a single source.
+local RANK_LETTERS = { "C", "B", "A", "S" }
+
+-- Rank earned by a $/sec `rate` on a track this `loop`. Below the lowest
+-- threshold is "D". Pure (no State), so loop scoring can reach it from
+-- track_data without pulling in economy (economy requires persist, which
+-- requires track_data - a cycle). economy.rank_for_rate delegates here.
+function M.rank_for_rate(id, rate, loop)
+  local thresholds = M.ranks(id, loop)
+  local rank       = "D"
+  if rate and rate > 0 then
+    for _, letter in ipairs(RANK_LETTERS) do
+      if rate >= thresholds[letter] then rank = letter end
+    end
+  end
+  return rank
+end
+
+-- Ordered per-course ranks over this loop's track order, reading each track's
+-- best_rate from `tracks`. Feeds both loop_points (summed) and the end-of-loop
+-- breakdown modal (shown line by line).
+--
+-- `raced` distinguishes a course you haven't reached yet from one you raced
+-- badly - best_rate is nil until a lap is promoted (see ghost.promote) and
+-- resets with the loop, so both otherwise report "D". loop_points banks only
+-- raced courses, which is what lets the live tach climb instead of starting
+-- pinned at S. By loop end every course is raced, so nothing downstream of a
+-- finished loop sees a difference.
+function M.loop_course_ranks(loop, tracks)
+  local out = {}
+  for _, id in ipairs(M.track_order(loop)) do
+    local ts   = tracks[id]
+    local rate = ts and ts.best_rate
+    out[#out + 1] = {
+      id    = id,
+      rank  = M.rank_for_rate(id, rate, loop),
+      raced = rate ~= nil,
+    }
+  end
+  return out
+end
+
+-- Loop score: total per-course rank points banked divided by the average time
+-- per banked course (loop_time / n) -- equivalently n * Σrank / loop_time. So
+-- at a fixed average pace more courses banked scores higher (mastering more
+-- content is a bigger achievement), and at a fixed course count a faster loop
+-- scores higher.
+--
+-- `n` counts courses actually raced, not the whole roster, and unraced courses
+-- contribute nothing. Mid-loop that makes this a score of the loop *so far*
+-- rather than a projection off a near-zero clock: the tach starts at the
+-- redline (nothing banked) and steps up each time a course lands, instead of
+-- opening pinned at S and only ever sinking. A partial loop scoring low is the
+-- same N-reward term doing its job - a partial loop is a smaller roster.
+--
+-- At loop completion n == #track_order and every rank is real, so a finished
+-- loop scores exactly what it always did. Guards loop_time <= 0 to 0.
+function M.loop_points(loop, tracks, loop_time)
+  if not loop_time or loop_time <= 0 then return 0 end
+  local sum, n = 0, 0
+  for _, entry in ipairs(M.loop_course_ranks(loop, tracks)) do
+    if entry.raced then
+      sum = sum + LOOP_RANK_POINTS[entry.rank]
+      n   = n + 1
+    end
+  end
+  return n * sum / loop_time
+end
+
+-- Loop-completion thresholds on loop_points (higher = better). Calibrated
+-- against the current 4-track roster: an all-A loop (Σrank 16) at ~240s scores
+-- 4*16/240 ~= 0.27, landing at the A/B edge to preserve today's difficulty
+-- feel. Because loop_points scales with track count, these fixed thresholds
+-- mean grades inflate as the roster grows -- intended (a bigger game is a
+-- bigger achievement), so retune as tracks and S+/S++ ranks are added. Tuning
+-- knobs only - change freely (empirical, tune in playtest).
+local LOOP_RANK_POINT_THRESHOLDS = { S = 0.40, A = 0.26, B = 0.15, C = 0.07 }
+local LOOP_RANK_POINT_ORDER      = { "S", "A", "B", "C" }
+
+-- Letter a loop_points value earns. Below the C threshold is "D". A typical
+-- slow loop 1 (3 tracks, mostly low ranks, lots of learning/modal time) lands
+-- here in D as an emergent result of the formula rather than a hard pin.
+function M.loop_rank_for_points(points)
+  for _, letter in ipairs(LOOP_RANK_POINT_ORDER) do
+    if points >= LOOP_RANK_POINT_THRESHOLDS[letter] then return letter end
   end
   return "D"
 end
 
--- Buy-screen tachometer: maps a live loop time onto a 0..1 needle position
--- and the rank it lands in. The dial is five equal wedges (S at the 0 end
--- through D at 1), and the needle climbs across a wedge as its time thresholds
--- pass -- the same zone-and-needle scheme as the race HUD's rank bar, wrapped
--- onto an arc. Past the C threshold the needle sinks through the D wedge over
--- another C-length span, then pins at the redline.
-function M.loop_rank_gauge(seconds)
-  local prev_t = 0
-  for i, letter in ipairs(LOOP_RANK_ORDER) do -- S, A, B, C
-    local t1 = LOOP_RANK_TIMES[letter]
-    if seconds <= t1 then
-      local p = (seconds - prev_t) / (t1 - prev_t)
-      return (i - 1) * 0.2 + 0.2 * p, letter
-    end
-    prev_t = t1
+-- Buy-screen tachometer, reading loop_points (higher = better) instead of
+-- elapsed seconds: the needle points at the S end (f=0) for a high score and
+-- sinks toward the redline D (f=1) as the score drops. The dial is still five
+-- equal wedges (S at the 0 end through D at 1) and the needle climbs across a
+-- wedge as its point thresholds pass -- the same zone-and-needle scheme as the
+-- race HUD's rank bar, wrapped onto an arc. This flips the old axis, so the
+-- needle now moves BOTH ways: it sinks as the clock ticks (points fall) and
+-- jumps up when a course promotes (points rise), making the two levers visible.
+-- Above the S threshold the needle climbs through the S wedge over another
+-- S-threshold span, then pins at f=0; below C it sinks through the D wedge and
+-- pins at the redline.
+function M.loop_rank_gauge(points)
+  local s_hi = LOOP_RANK_POINT_THRESHOLDS.S
+  if points >= s_hi then
+    local p = math.min((points - s_hi) / s_hi, 1)
+    return 0.2 - 0.2 * p, "S"
   end
-  local p = math.min((seconds - prev_t) / prev_t, 1)
+  local hi = s_hi
+  for i = 2, #LOOP_RANK_POINT_ORDER do -- A, B, C (wedge indices 2..4)
+    local letter = LOOP_RANK_POINT_ORDER[i]
+    local lo     = LOOP_RANK_POINT_THRESHOLDS[letter]
+    if points >= lo then
+      local p = (points - lo) / (hi - lo)
+      return i * 0.2 - 0.2 * p, letter
+    end
+    hi = lo
+  end
+  local c = LOOP_RANK_POINT_THRESHOLDS.C
+  local p = math.min((c - points) / c, 1)
   return 0.8 + 0.2 * p, "D"
 end
 
--- Rank actually awarded for finishing a loop in `seconds`. Loop 1 is the
--- scripted prologue and always rates D, no matter how fast it goes.
-function M.loop_rank(loop, seconds)
-  if loop == 1 then return "D" end
-  return M.loop_rank_for_time(seconds)
+-- Rank actually awarded for finishing a loop: the letter its loop_points earn,
+-- for every loop including loop 1 (the score is honest now - no special case).
+function M.loop_rank(loop, tracks, loop_time)
+  return M.loop_rank_for_points(M.loop_points(loop, tracks, loop_time))
 end
 
 function M.track_shop_item(track_id, kind, loop)

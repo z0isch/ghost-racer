@@ -164,29 +164,41 @@ end
 -- up the full game (all four tracks, ghosts, coins); head-start coins come
 -- from the skill tree's Head Start ranks (see track_data.start_coin_floor).
 function M.start_new_loop()
-  local next_loop         = (State.loop or 1) + 1
-  local finished_time     = State.loop_time or 0
-  local finished_rank     = track_data.loop_rank(State.loop or 1, finished_time)
-  local seen_help         = State.seen_help
-  local seen_modals       = State.seen_modals
-  local tree              = State.skill_tree
-  State                   = default_state()
-  State.loop              = next_loop
-  State.seen_help         = seen_help
-  State.seen_modals       = seen_modals
+  local old_loop            = State.loop or 1
+  local next_loop           = old_loop + 1
+  local finished_time       = State.loop_time or 0
+  -- Score the finished loop before the reset wipes State.tracks: the per-course
+  -- ranks, the loop_points they earn at this time, and the letter that lands
+  -- on. All read once by the loop-rank breakdown modal (see scenes/buy.lua).
+  local finished_courses    = track_data.loop_course_ranks(old_loop, State.tracks)
+  local finished_points     = track_data.loop_points(old_loop, State.tracks, finished_time)
+  local finished_rank       = track_data.loop_rank_for_points(finished_points)
+  local seen_help           = State.seen_help
+  local seen_modals         = State.seen_modals
+  local tree                = State.skill_tree
+  State                     = default_state()
+  State.loop                = next_loop
+  State.seen_help           = seen_help
+  State.seen_modals         = seen_modals
   -- Carry the skill tree across the reset (like seen_help) and pay the loop
   -- reward atomically with the rollover. fx is transient, rebuilt empty.
-  State.skill_tree        = tree
-  State.skill_tree.fx     = {}
-  State.skill_tree.points = State.skill_tree.points + M.LOOP_REWARD
+  State.skill_tree          = tree
+  State.skill_tree.fx       = {}
+  State.skill_tree.points   = State.skill_tree.points + M.LOOP_REWARD
   -- Not part of default_state/progression - only read once by the "Well
   -- Done!" modal that's about to show, reporting on the loop that just ended.
-  State.last_loop_time    = finished_time
-  State.last_loop_rank    = finished_rank
-  State.tracks.track1     = track_data.default_track_state("track1", next_loop)
+  State.last_loop_time      = finished_time
+  State.last_loop_rank      = finished_rank
+  State.last_loop_breakdown = {
+    courses = finished_courses,
+    time    = finished_time,
+    points  = finished_points,
+    rank    = finished_rank,
+  }
+  State.tracks.track1       = track_data.default_track_state("track1", next_loop)
   -- The ending modal always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
-  State.purchase_modal    = "nirvana"
+  State.purchase_modal      = "nirvana"
   ghost.clear_all_sims()
   M.rederive_skill_effects()
   M.resync_car_and_ghosts()
