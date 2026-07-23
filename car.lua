@@ -138,6 +138,20 @@ function M.stop_engine(car)
   car.engine_on = false
 end
 
+-- Adds `impulse` px/s along the car's current travel direction (its drift
+-- direction while drifting) and lights the boost flame + sfx, clamped to the
+-- overspeed ceiling so stacked boosts can't run past top_vel + OVERSPEED_MAX.
+-- Shared by pickup pads (see pad.lua); the manual BTN3 boost inlines the same
+-- rule against this frame's freshly-computed drift state.
+function M.apply_boost(car, impulse)
+  local boost_dir = car.vel < 0 and -1 or 1
+  if car.is_drifitng then boost_dir = car.drift_dir end
+  local max_vel = car.top_vel + OVERSPEED_MAX
+  car.vel = util.clamp(car.vel + boost_dir * impulse, -max_vel, max_vel)
+  car.boost_flame_t = BOOST_FLAME_TIME
+  sfx.play("boost")
+end
+
 function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_boost_enabled, boost_ranks, reverse_enabled)
   car.accel               = ACCEL_BASE + accel_lvl * ACCEL_STEP
   car.top_vel             = TOP_VEL_BASE + top_speed_lvl * TOP_VEL_STEP

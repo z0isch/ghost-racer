@@ -1,5 +1,6 @@
 local car       = require "car"
 local gates     = require "gates"
+local pad       = require "pad"
 
 local GAME_W    = 640
 local GAME_H    = 352
@@ -31,6 +32,10 @@ function _init()
       gates.new(12, 8, 12, true, "forward"),
       gates.new(28, 8, 12, true, "reverse"),
     },
+    pads  = {
+      pad.new(20, 3, "east"),
+      pad.new(6, 6, "south"),
+    },
   }
   car.apply_upgrades(State.car, 0, 0, true, true, 5, true)
   car.reset(State.car, { col = COLS / 2, row = ROWS / 2 })
@@ -43,10 +48,12 @@ function _update(dt)
   local saved = gates.apply_walls(State.gates, State.car, State.map)
   car.update(State.car, dt, State.map)
   gates.restore_walls(State.map, saved)
+  pad.apply(State.pads, State.car)
 end
 
 function _draw()
   gfx.clear(gfx.COLOR_INDIGO)
+  pad.draw(State.pads)
   gates.draw(State.gates, State.car)
   car.draw_skid_marks(State.car)
   car.draw_headlights(State.car)
