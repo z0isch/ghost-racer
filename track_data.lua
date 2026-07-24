@@ -68,7 +68,9 @@ M.UPGRADES           = {
 }
 
 -- Loop-1 prologue variant: checkpoint-only economy, so prices are scaled way
--- down, and no magnet (coins don't exist until loop 2).
+-- down, and no magnet (nothing to magnetize - coins arrive with the Loose
+-- Change skill node, which needs 2 finished loops). The magnet row is hidden
+-- in later coinless loops too - see scenes/buy.lua.
 local LOOP1_UPGRADES = {
   {
     kind      = "accel",
@@ -113,25 +115,30 @@ end
 
 M.TRACKS = {
   track1 = {
-    map         = track1,
-    spawn       = { col = 5, row = 14 },
-    checkpoints = {
+    map           = track1,
+    spawn         = { col = 5, row = 14 },
+    checkpoints   = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
-    gates       = {
+    gates         = {
       { col = 10, row = 8, len = 7, vertical = true, mode = "reverse" },
       { col = 26, row = 8, len = 7, vertical = true, mode = "forward" },
     },
-    coins       = {
+    coins         = {
       { col = 18, row = 9 },
       { col = 26, row = 9 },
     },
-    base_coins  = 1,
-    ranks       = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
-    label       = "Track 1",
-    pay         = 5,
-    unlock_cost = nil,
-    shop        = {
+    base_coins    = 1,
+    ranks         = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
+    -- Thresholds while coins are off (the Loose Change skill node isn't
+    -- bought): checkpoint-and-ghost income only, so scaled way down. Covers
+    -- the whole loop-1 prologue plus every later loop before the node lands.
+    -- Provisional - tune freely.
+    no_coin_ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
+    label         = "Track 1",
+    pay           = 5,
+    unlock_cost   = nil,
+    shop          = {
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -150,36 +157,35 @@ M.TRACKS = {
     },
     -- Loop-1 prologue overrides: checkpoint-only income (no ghosts, no
     -- coins - the shop is empty and car upgrades live in the global
-    -- UPGRADES column), so ranks are scaled way down. Values are
-    -- provisional - tune freely.
-    loop1       = {
-      ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
-      shop  = {},
+    -- UPGRADES column).
+    loop1         = {
+      shop = {},
     },
   },
   basic = {
-    map         = basic_map,
-    spawn       = { col = 1, row = 9 },
-    checkpoints = {
+    map           = basic_map,
+    spawn         = { col = 1, row = 9 },
+    checkpoints   = {
       { col = 33, row = 12, w = 2, h = 5 },
       { col = 1,  row = 6,  w = 4, h = 11 },
     },
-    gates       = {
+    gates         = {
       { col = 34, row = 6,  len = 5, vertical = true, mode = "reverse" },
       { col = 26, row = 12, len = 5, vertical = true, mode = "forward" },
     },
-    coins       = {
+    coins         = {
       { col = 18, row = 7 },
       { col = 30, row = 14 },
       { col = 10, row = 16 },
       { col = 6,  row = 8 },
     },
-    base_coins  = 3,
-    ranks       = { C = 5.0, B = 6.5, A = 8.4, S = 11.0 },
-    label       = "Track 2",
-    pay         = 15,
-    unlock_cost = 250,
-    shop        = {
+    base_coins    = 3,
+    ranks         = { C = 5.0, B = 6.5, A = 8.4, S = 11.0 },
+    no_coin_ranks = { C = 2.5, B = 2.7, A = 3, S = 6.0 },
+    label         = "Track 2",
+    pay           = 15,
+    unlock_cost   = 250,
+    shop          = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
@@ -204,9 +210,8 @@ M.TRACKS = {
       },
     },
     -- Loop-1 prologue overrides - provisional, tune freely.
-    loop1       = {
+    loop1         = {
       unlock_cost = 28,
-      ranks       = { C = 2.5, B = 2.7, A = 3, S = 6.0 },
       shop        = {
         {
           kind      = "checkpoints",
@@ -219,31 +224,32 @@ M.TRACKS = {
     },
   },
   track2 = {
-    map         = track2,
-    spawn       = { col = 7, row = 3 },
-    checkpoints = {
+    map           = track2,
+    spawn         = { col = 7, row = 3 },
+    checkpoints   = {
       { col = 34, row = 14, w = 5, h = 2 },
       { col = 8,  row = 16, w = 2, h = 5 },
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
-    gates       = {
+    gates         = {
       { col = 14, row = 1,  len = 5, vertical = true, mode = "reverse" },
       { col = 29, row = 1,  len = 5, vertical = true, mode = "forward" },
       { col = 33, row = 16, len = 5, vertical = true, mode = "reverse" },
     },
-    coins       = {
+    coins         = {
       { col = 36, row = 7 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 3,  row = 11 },
       { col = 20, row = 3 },
     },
-    base_coins  = 4,
-    ranks       = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
-    label       = "Track 3",
-    pay         = 45,
-    unlock_cost = 2000,
-    shop        = {
+    base_coins    = 4,
+    ranks         = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
+    no_coin_ranks = { C = 5, B = 8, A = 9.5, S = 20.0 },
+    label         = "Track 3",
+    pay           = 45,
+    unlock_cost   = 2000,
+    shop          = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
@@ -270,9 +276,8 @@ M.TRACKS = {
     -- Loop-1 prologue overrides - provisional, tune freely. Nirvana lives
     -- here in loop 1 (Track 4 doesn't exist yet) and needs rank A on every
     -- prologue track instead of S on this one.
-    loop1       = {
+    loop1         = {
       unlock_cost = 200,
-      ranks       = { C = 5, B = 8, A = 9.5, S = 20.0 },
       shop        = {
         {
           kind      = "checkpoints",
@@ -312,6 +317,12 @@ M.TRACKS = {
     },
     base_coins         = 4,
     ranks              = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
+    -- Track 4 never existed in the loop-1 prologue, so it had no coinless
+    -- thresholds until now: coins used to arrive with loop 2, ahead of this
+    -- track. They're behind a skill node now, so this track can be raced
+    -- coinless. Scaled off `ranks` at roughly the ratio the other tracks use
+    -- (~0.43 up to A, ~0.74 at S) - pure guesses, tune in playtest.
+    no_coin_ranks      = { C = 13.0, B = 26.0, A = 34.0, S = 66.0 },
     label              = "Track 4",
     pay                = 135,
     unlock_cost        = 10000,
@@ -418,16 +429,21 @@ function M.track_order(loop)
 end
 
 -- Track fields below prefer the track's `loop1` override table during the
--- loop-1 prologue. A nil loop always reads the base field.
+-- loop-1 prologue. A nil loop always reads the base field. Rank thresholds
+-- used to live here too; they key off coin availability now (see M.ranks).
 
 function M.shop(id, loop)
   local tdata = M.TRACKS[id]
   return loop == 1 and tdata.loop1 and tdata.loop1.shop or tdata.shop
 end
 
-function M.ranks(id, loop)
+-- Rank thresholds for a track. Keyed on whether coins are unlocked (the
+-- Loose Change skill node - see persist.rederive_skill_effects), not on the
+-- loop: a coinless track pays checkpoints and ghosts only, whether that's the
+-- loop-1 prologue or a loop 2+ save that hasn't bought the node yet.
+function M.ranks(id, has_coins)
   local tdata = M.TRACKS[id]
-  return loop == 1 and tdata.loop1 and tdata.loop1.ranks or tdata.ranks
+  return has_coins and tdata.ranks or tdata.no_coin_ranks
 end
 
 function M.unlock_cost(id, loop)
@@ -454,16 +470,17 @@ end
 local LOOP_RANK_POINTS = { D = 1, C = 2, B = 3, A = 4, S = 5 }
 
 -- Ascending per-course rank letters above the D floor, checked against
--- M.ranks(id, loop). Shared by rank_for_rate; economy.rank_for_rate delegates
--- here so there's a single source.
+-- M.ranks(id, has_coins). Shared by rank_for_rate; economy.rank_for_rate
+-- delegates here so there's a single source.
 local RANK_LETTERS = { "C", "B", "A", "S" }
 
--- Rank earned by a $/sec `rate` on a track this `loop`. Below the lowest
--- threshold is "D". Pure (no State), so loop scoring can reach it from
--- track_data without pulling in economy (economy requires persist, which
--- requires track_data - a cycle). economy.rank_for_rate delegates here.
-function M.rank_for_rate(id, rate, loop)
-  local thresholds = M.ranks(id, loop)
+-- Rank earned by a $/sec `rate` on a track, against the coinless or full
+-- thresholds per `has_coins`. Below the lowest threshold is "D". Pure (no
+-- State), so loop scoring can reach it from track_data without pulling in
+-- economy (economy requires persist, which requires track_data - a cycle).
+-- economy.rank_for_rate delegates here.
+function M.rank_for_rate(id, rate, has_coins)
+  local thresholds = M.ranks(id, has_coins)
   local rank       = "D"
   if rate and rate > 0 then
     for _, letter in ipairs(RANK_LETTERS) do
@@ -483,14 +500,14 @@ end
 -- raced courses, which is what lets the live tach climb instead of starting
 -- pinned at S. By loop end every course is raced, so nothing downstream of a
 -- finished loop sees a difference.
-function M.loop_course_ranks(loop, tracks)
+function M.loop_course_ranks(loop, tracks, has_coins)
   local out = {}
   for _, id in ipairs(M.track_order(loop)) do
     local ts   = tracks[id]
     local rate = ts and ts.best_rate
     out[#out + 1] = {
       id    = id,
-      rank  = M.rank_for_rate(id, rate, loop),
+      rank  = M.rank_for_rate(id, rate, has_coins),
       raced = rate ~= nil,
     }
   end
@@ -512,10 +529,10 @@ end
 --
 -- At loop completion n == #track_order and every rank is real, so a finished
 -- loop scores exactly what it always did. Guards loop_time <= 0 to 0.
-function M.loop_points(loop, tracks, loop_time)
+function M.loop_points(loop, tracks, loop_time, has_coins)
   if not loop_time or loop_time <= 0 then return 0 end
   local sum, n = 0, 0
-  for _, entry in ipairs(M.loop_course_ranks(loop, tracks)) do
+  for _, entry in ipairs(M.loop_course_ranks(loop, tracks, has_coins)) do
     if entry.raced then
       sum = sum + LOOP_RANK_POINTS[entry.rank]
       n   = n + 1
@@ -578,8 +595,8 @@ end
 
 -- Rank actually awarded for finishing a loop: the letter its loop_points earn,
 -- for every loop including loop 1 (the score is honest now - no special case).
-function M.loop_rank(loop, tracks, loop_time)
-  return M.loop_rank_for_points(M.loop_points(loop, tracks, loop_time))
+function M.loop_rank(loop, tracks, loop_time, has_coins)
+  return M.loop_rank_for_points(M.loop_points(loop, tracks, loop_time, has_coins))
 end
 
 function M.track_shop_item(track_id, kind, loop)
@@ -616,38 +633,36 @@ function M.checkpoint_rect(cp)
   return { x = cp.col * ts, y = cp.row * ts, w = cp.w * ts, h = cp.h * ts }
 end
 
--- Coins the shop will sell on a track this loop: none in the loop-1
--- prologue, base_coins afterwards. Head Start freebies never change this -
--- they sit on top of the buyable set, not inside it.
-function M.buyable_coins(id, loop)
-  loop = loop or 1
-  if loop == 1 then return 0 end
+-- Coins the shop will sell on a track: none until the Loose Change skill node
+-- is bought, base_coins after. Head Start freebies never change this - they
+-- sit on top of the buyable set, not inside it.
+function M.buyable_coins(id, has_coins)
+  if not has_coins then return 0 end
   return M.TRACKS[id].base_coins
 end
 
 -- Coins active for free from the start: one per Head Start (start_coins)
 -- skill rank, filling only the authored slots left over after the buyable
 -- set so buying the full base_coins is always possible.
-function M.start_coin_floor(id, loop, start_coins)
-  local spare = M.max_coins(id, loop) - M.buyable_coins(id, loop)
+function M.start_coin_floor(id, has_coins, start_coins)
+  local spare = M.max_coins(id, has_coins) - M.buyable_coins(id, has_coins)
   return math.max(0, math.min(start_coins or 0, spare))
 end
 
--- Highest total coin count reachable on a track this loop: no coins at all
--- in the loop-1 prologue, the base set in loop 2, the full authored list in
--- loop 3+ (the slots beyond base_coins are reachable only via Head Start).
-function M.max_coins(id, loop)
-  loop = loop or 1
-  if loop == 1 then return 0 end
-  return loop >= 3 and #M.TRACKS[id].coins or M.TRACKS[id].base_coins
+-- Highest total coin count reachable on a track: none without Loose Change,
+-- the full authored list with it (the slots beyond base_coins are reachable
+-- only via Head Start, which sits downstream of Loose Change in the tree).
+function M.max_coins(id, has_coins)
+  if not has_coins then return 0 end
+  return #M.TRACKS[id].coins
 end
 
-function M.default_track_state(id, loop, start_coins)
+function M.default_track_state(id, has_coins, start_coins)
   return {
     ghost_line  = nil,
     best_rate   = nil,
     ghosts      = 0,
-    coins       = M.start_coin_floor(id, loop, start_coins),
+    coins       = M.start_coin_floor(id, has_coins, start_coins),
     checkpoints = 1,
   }
 end

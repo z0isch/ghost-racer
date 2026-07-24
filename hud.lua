@@ -39,7 +39,7 @@ local WARMUP            = 0.05
 -- Maps a $/sec rate onto the bar: each rank zone is a fifth of the height,
 -- with the arrow interpolating between that rank's thresholds inside it.
 local function bar_fraction(rate)
-  local t      = track_data.ranks(State.active_track, State.loop)
+  local t      = track_data.ranks(State.active_track, State.coins_unlocked)
   local bounds = { 0, t.C, t.B, t.A, t.S, t.S * 2 }
   if rate >= bounds[6] then return 1 end
   for i = 5, 1, -1 do

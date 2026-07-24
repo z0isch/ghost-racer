@@ -207,7 +207,7 @@ end
 local function draw_loop_status()
   if State.loop == 1 then return end
   local seconds = State.loop_time or 0
-  local points  = track_data.loop_points(State.loop, State.tracks, seconds)
+  local points  = track_data.loop_points(State.loop, State.tracks, seconds, State.coins_unlocked)
   local cx      = math.floor(usagi.GAME_W / 2)
   local cy      = TACH_CY
   draw_tach(cx, cy, TACH_R, points)
@@ -231,7 +231,8 @@ local TACH_DEMO_R  = 34
 local TACH_DEMO_CY = 54 -- dial center offset from the demo box's top edge
 
 local function draw_tach_demo(x, y)
-  local points = track_data.loop_points(State.loop, State.tracks, State.loop_time or 0)
+  local points = track_data.loop_points(State.loop, State.tracks, State.loop_time or 0,
+    State.coins_unlocked)
   draw_tach(x + math.floor(TACH_DEMO_W / 2), y + TACH_DEMO_CY, TACH_DEMO_R,
     points, { band_w = 4, lscale = 1, letter_r = TACH_DEMO_R + 12, hub_r = 4 })
 end
@@ -652,8 +653,11 @@ function M.draw_shop()
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(track_data.shop(id, State.loop)) do
     -- Checkpoint Pass (skill tree) grants every checkpoint outright, so
-    -- there's nothing left for this row to sell.
-    if not (item.kind == "checkpoints" and State.unlock_checkpoints) then
+    -- there's nothing left for this row to sell. Coins don't exist at all
+    -- until Loose Change is bought, so that row stays hidden rather than
+    -- teasing a purchase - the node is the reveal.
+    if not (item.kind == "checkpoints" and State.unlock_checkpoints)
+        and not (item.kind == "coins" and not State.coins_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
       if clicked then economy.try_buy(item.kind) end
       shop_y = shop_y + bh + gap
@@ -678,9 +682,16 @@ function M.draw_shop()
   gfx.text_ex(header, ux + math.floor((uw - hw) / 2), nav_y + 10, 2, 0, gfx.COLOR_WHITE, 1)
   local uy = nav_y + th_a * 2 + 16
   for _, item in ipairs(track_data.upgrades(State.loop)) do
-    local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })
-    if clicked then economy.try_buy(item.kind) end
-    uy = uy + bh + gap
+    -- The magnet only pulls in coins, so it hides alongside them (loop 1
+    -- drops it from LOOP1_UPGRADES outright; this covers coinless loop 2+).
+    -- Launch Control (skill tree) starts every loop at max acceleration, so
+    -- there's nothing left for that row to sell.
+    if not (item.kind == "magnet" and not State.coins_unlocked)
+        and not (item.kind == "accel" and State.max_accel) then
+      local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })
+      if clicked then economy.try_buy(item.kind) end
+      uy = uy + bh + gap
+    end
   end
 
   local race_x = math.floor((usagi.GAME_W - w) / 2)

@@ -12,7 +12,7 @@ M.LOOP_REWARD    = 100
 local function default_state()
   return {
     mode               = "buy",
-    money              = 0,
+    money              = 10000000000,
     seen_help          = false,
     loop               = 1,
     loop_time          = 0,
@@ -20,7 +20,9 @@ local function default_state()
     accel              = 0,
     top_speed          = 0,
     start_coins        = 0,
+    coins_unlocked     = false,
     unlock_checkpoints = false,
+    max_accel          = false,
     skill_tree         = skill_tree.new(),
     drift              = 0,
     drift_boost        = 0,
@@ -29,7 +31,7 @@ local function default_state()
     magnet             = 0,
     active_track       = "track1",
     unlocked           = { track1 = true },
-    tracks             = { track1 = track_data.default_track_state("track1", 1) },
+    tracks             = { track1 = track_data.default_track_state("track1", false) },
     car                = car.default_state(),
     race               = {
       next_checkpoint = 1,
@@ -54,10 +56,16 @@ local function progression_of_state()
     loop_time    = State.loop_time,
     seen_modals  = State.seen_modals,
     accel        = State.accel,
-    -- top_speed / start_coins / unlock_checkpoints are derived caches of the
-    -- skill tree, not saved; the tree is the single source of truth. fx is
-    -- transient render state, also dropped.
-    skill_tree   = { points = State.skill_tree.points, ranks = State.skill_tree.ranks },
+    -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
+    -- max_accel are derived caches of the skill tree, not saved; the tree is
+    -- the single source of truth. fx is transient render state, also dropped.
+    -- (accel itself is race-shop progression and is saved, but Launch Control
+    -- floors it at max on every rederive.)
+    skill_tree   = {
+      points    = State.skill_tree.points,
+      ranks     = State.skill_tree.ranks,
+      bought_at = State.skill_tree.bought_at,
+    },
     drift        = State.drift,
     drift_boost  = State.drift_boost,
     boost        = State.boost,
@@ -94,7 +102,7 @@ local function apply_progression(loaded)
       if track_data.TRACKS[id] then
         State.unlocked[id] = v
         if v and not State.tracks[id] then
-          State.tracks[id] = track_data.default_track_state(id, State.loop)
+          State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked)
         end
       end
     end
@@ -104,15 +112,16 @@ local function apply_progression(loaded)
     for id, lt in pairs(loaded.tracks) do
       if track_data.TRACKS[id] then
         if not State.tracks[id] then
-          State.tracks[id] = track_data.default_track_state(id, State.loop)
+          State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked)
         end
         local ts       = State.tracks[id]
         ts.ghost_line  = lt.ghost_line
         ts.best_rate   = lt.best_rate
         ts.ghosts      = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
-        -- Only the ceiling here; the start_coins floor needs the skill tree,
-        -- which loads below - rederive_skill_effects raises to it at the end.
-        ts.coins       = math.min(lt.coins or 0, track_data.max_coins(id, State.loop))
+        -- Raw here; both the coin ceiling and the start_coins floor need the
+        -- skill tree, which loads below - rederive_skill_effects clamps at the
+        -- end.
+        ts.coins       = lt.coins or 0
         ts.checkpoints = math.max(1,
           math.min(lt.checkpoints or 1, #track_data.TRACKS[id].checkpoints))
       end
@@ -122,28 +131,41 @@ local function apply_progression(loaded)
   -- No rank clamping: the defs' `max` only gates future buys, and the game is
   -- unreleased. fx is transient render state, always rebuilt empty.
   if loaded.skill_tree then
-    State.skill_tree.points = loaded.skill_tree.points or 0
-    State.skill_tree.ranks  = loaded.skill_tree.ranks or {}
+    State.skill_tree.points    = loaded.skill_tree.points or 0
+    State.skill_tree.ranks     = loaded.skill_tree.ranks or {}
+    State.skill_tree.bought_at = loaded.skill_tree.bought_at or {}
   end
   State.skill_tree.fx = {}
 
   M.rederive_skill_effects()
 end
 
--- State.top_speed / State.start_coins / State.unlock_checkpoints are caches
--- derived from the skill tree; the tree is the single source of truth.
--- Re-derive after any rank change or load, before resync_car_and_ghosts
--- pushes results into the car and ghost sims. The coin floor and checkpoint
--- unlock are applied live to existing tracks so a rank bought at the loop
--- gate takes effect that loop, not the next.
+-- State.top_speed / State.start_coins / State.coins_unlocked /
+-- State.unlock_checkpoints / State.max_accel are caches derived from the skill
+-- tree; the tree is the single source of truth. Re-derive after any rank change
+-- or load, before resync_car_and_ghosts pushes results into the car and ghost
+-- sims. The coin ceiling/floor and the checkpoint unlock are applied live to
+-- existing tracks so a rank bought at the loop gate takes effect that loop, not
+-- the next.
 function M.rederive_skill_effects()
   local ctx                = skill_tree.apply_all(State.skill_tree, {})
   State.top_speed          = ctx.top_speed or 0
   State.start_coins        = ctx.start_coins or 0
+  State.coins_unlocked     = ctx.coins or false
   State.unlock_checkpoints = ctx.unlock_checkpoints or false
+  State.max_accel          = ctx.max_accel or false
+  -- Launch Control floors accel at max rather than replacing it, so a save
+  -- that already bought ranks the hard way reads back unchanged. The shop row
+  -- hides itself once this is on (see scenes/buy.lua).
+  if State.max_accel then
+    State.accel = math.max(State.accel, track_data.kind_max("accel") or 0)
+  end
   for id, ts in pairs(State.tracks) do
+    -- Ceiling before floor: without Loose Change the ceiling is 0, which is
+    -- also where the floor lands, so a coinless save reads back coinless.
+    ts.coins = math.min(ts.coins, track_data.max_coins(id, State.coins_unlocked))
     ts.coins = math.max(ts.coins,
-      track_data.start_coin_floor(id, State.loop, State.start_coins))
+      track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins))
     if State.unlock_checkpoints then
       ts.checkpoints = #track_data.TRACKS[id].checkpoints
     end
@@ -161,8 +183,9 @@ end
 
 -- Buying Nirvana ends the game... into a new loop: everything resets to a
 -- fresh save except the loop counter and dismissed tutorials. Loop 2 opens
--- up the full game (all four tracks, ghosts, coins); head-start coins come
--- from the skill tree's Head Start ranks (see track_data.start_coin_floor).
+-- up the full game (all four tracks, ghosts); coins arrive later still, with
+-- the skill tree's Loose Change node, and head-start coins with Head Start
+-- above it (see track_data.start_coin_floor).
 function M.start_new_loop()
   local old_loop            = State.loop or 1
   local next_loop           = old_loop + 1
@@ -170,8 +193,9 @@ function M.start_new_loop()
   -- Score the finished loop before the reset wipes State.tracks: the per-course
   -- ranks, the loop_points they earn at this time, and the letter that lands
   -- on. All read once by the loop-rank breakdown modal (see scenes/buy.lua).
-  local finished_courses    = track_data.loop_course_ranks(old_loop, State.tracks)
-  local finished_points     = track_data.loop_points(old_loop, State.tracks, finished_time)
+  local had_coins           = State.coins_unlocked
+  local finished_courses    = track_data.loop_course_ranks(old_loop, State.tracks, had_coins)
+  local finished_points     = track_data.loop_points(old_loop, State.tracks, finished_time, had_coins)
   local finished_rank       = track_data.loop_rank_for_points(finished_points)
   local seen_help           = State.seen_help
   local seen_modals         = State.seen_modals
@@ -195,7 +219,9 @@ function M.start_new_loop()
     points  = finished_points,
     rank    = finished_rank,
   }
-  State.tracks.track1       = track_data.default_track_state("track1", next_loop)
+  -- The tree survives the reset, so coin availability does too; the coin floor
+  -- itself is applied by the rederive below.
+  State.tracks.track1       = track_data.default_track_state("track1", had_coins)
   -- The ending modal always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
   State.purchase_modal      = "nirvana"

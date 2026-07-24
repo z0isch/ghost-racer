@@ -72,11 +72,12 @@ function M.owns_any_ghost()
   return M.owns_any("ghosts")
 end
 
--- Rank earned by a $/sec rate on the active loop's version of a track. Below
--- the lowest threshold is "D". Delegates to track_data (the single source), so
--- loop scoring and live ranking share one implementation.
+-- Rank earned by a $/sec rate on a track, against the coinless or full
+-- thresholds depending on whether coins are unlocked. Below the lowest
+-- threshold is "D". Delegates to track_data (the single source), so loop
+-- scoring and live ranking share one implementation.
 function M.rank_for_rate(id, rate)
-  return track_data.rank_for_rate(id, rate, State.loop)
+  return track_data.rank_for_rate(id, rate, State.coins_unlocked)
 end
 
 -- Projected finish $/sec for the run in progress: money already earned plus
@@ -258,9 +259,9 @@ function M.upgrade_cost(kind)
   local u  = M.shop_item(kind)
   if not u then return nil end
   if kind == "coins" then
-    local free   = track_data.start_coin_floor(id, State.loop, State.start_coins)
+    local free   = track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins)
     local bought = State.tracks[id].coins - free
-    if bought >= track_data.buyable_coins(id, State.loop) then return nil end
+    if bought >= track_data.buyable_coins(id, State.coins_unlocked) then return nil end
     return math.floor(u.base_cost * (u.growth ^ bought))
   end
   if kind == "checkpoints" then
@@ -342,7 +343,7 @@ function M.try_unlock_track(id)
   State.money        = State.money - cost
   State.unlocked[id] = true
   if not State.tracks[id] then
-    State.tracks[id] = track_data.default_track_state(id, State.loop, State.start_coins)
+    State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked, State.start_coins)
     -- Applies the skill tree's floors (Checkpoint Pass, coin floor) to the
     -- fresh track state.
     persist.rederive_skill_effects()

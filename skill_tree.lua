@@ -9,24 +9,57 @@ local M     = {}
 -- Node defs. `links` is authored one-directional here but treated as
 -- undirected (adjacency is symmetrized at load). `entry = true` marks the
 -- tree's starting node: always visible, always buyable.
--- Optional `locked = function(stats) -> reason|nil` gates buying beyond
+-- Optional `locked = function(stats, st) -> reason|nil` gates buying beyond
 -- adjacency: the node still reveals (loses its "?") via adjacency as usual,
 -- but while the callback returns a reason string it can't be bought and the
--- popover shows the reason. `stats` is the game-owned table passed to draw.
+-- popover shows the reason. `stats` is the game-owned table passed to draw;
+-- `st` is the tree state, for gates that read other nodes (rank / bought_at).
 -- Positions are game-space px centers on the 640x352 screen.
 M.NODES     = {
+  {
+    id        = "max_accel",
+    label     = "Launch Control",
+    desc      = "Start every loop with maxed\nAcceleration. Off like a shot!",
+    icon      = "A",
+    entry     = true,
+    max       = 1,
+    base_cost = 1,
+    growth    = 1.5,
+    pos       = { x = 110, y = 176 },
+    links     = { "top_speed" },
+    apply     = function(ctx, _rank)
+      ctx.max_accel = true
+    end,
+  },
   {
     id        = "top_speed",
     label     = "Engine Tune",
     desc      = "Increase top speed\nGotta go fast!",
-    entry     = true,
     max       = 3,
-    base_cost = 100,
+    base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 240, y = 176 },
-    links     = { "start_coins" },
+    pos       = { x = 220, y = 176 },
+    links     = {},
     apply     = function(ctx, rank)
       ctx.top_speed = (ctx.top_speed or 0) + rank
+    end,
+  },
+  {
+    id        = "coins",
+    label     = "Loose Change",
+    entry     = true,
+    desc      = "Coins go on sale on every track.\nDrive through them for cash!",
+    max       = 1,
+    base_cost = 1,
+    growth    = 1.5,
+    pos       = { x = 330, y = 140 },
+    links     = { "start_coins" },
+    locked    = function(stats)
+      local loops = stats.loops or 0
+      if loops < 2 then return "Finish 2 loops (" .. loops .. "/2)" end
+    end,
+    apply     = function(ctx, _rank)
+      ctx.coins = true
     end,
   },
   {
@@ -34,13 +67,15 @@ M.NODES     = {
     label     = "Head Start",
     desc      = "Start with +1 coin on every track.\nEasy money!",
     max       = 1,
-    base_cost = 100,
+    base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 340, y = 140 },
+    pos       = { x = 440, y = 104 },
     links     = {},
-    locked    = function(stats)
-      local loops = stats.loops or 0
-      if loops < 2 then return "Finish 2 loops (" .. loops .. "/2)" end
+    locked    = function(stats, st)
+      local bought = st.bought_at and st.bought_at.coins
+      if not bought then return "Buy Loose Change" end
+      local since = (stats.loops or 0) - bought
+      if since < 1 then return "Finish a loop with coins" end
     end,
     apply     = function(ctx, rank)
       ctx.start_coins = (ctx.start_coins or 0) + rank
@@ -51,10 +86,11 @@ M.NODES     = {
     label     = "TSA Pre-check",
     desc      = "All checkpoints unlocked\nNo more taking out the liquids for you!",
     max       = 1,
-    base_cost = 100,
+    entry     = true,
+    base_cost = 1,
     growth    = 1,
-    pos       = { x = 340, y = 212 },
-    links     = { "top_speed" },
+    pos       = { x = 330, y = 212 },
+    links     = {},
     apply     = function(ctx, _rank)
       ctx.unlock_checkpoints = true
     end,
@@ -105,9 +141,13 @@ local PULSE_SPEED = 4 -- rad/sec of the buyable border pulse
 -- (minus `fx`, which is transient render state and must be stripped/rebuilt).
 function M.new(opts)
   return {
-    points = opts and opts.points or 0,
-    ranks  = {}, -- id -> rank (absent = 0)
-    fx     = {}, -- id -> { kind = "flash"|"deny", until_t = <usagi.elapsed> }
+    points    = opts and opts.points or 0,
+    ranks     = {}, -- id -> rank (absent = 0)
+    -- id -> stats.loops at the moment the node was first bought. Feeds gates
+    -- phrased relative to a purchase ("finish a loop with this node") rather
+    -- than to an absolute loop count.
+    bought_at = {},
+    fx        = {}, -- id -> { kind = "flash"|"deny", until_t = <usagi.elapsed> }
   }
 end
 
@@ -130,10 +170,9 @@ function M.is_revealed(st, id)
 end
 
 -- Why the node's extra gate is shut, or nil when it isn't (or has none).
--- Takes st for signature consistency with the other rule queries.
-function M.lock_reason(_st, id, stats)
+function M.lock_reason(st, id, stats)
   local def = BY_ID[id]
-  if def.locked then return def.locked(stats or {}) end
+  if def.locked then return def.locked(stats or {}, st) end
   return nil
 end
 
@@ -183,6 +222,10 @@ function M.try_buy(st, id, stats)
   end
   st.points = st.points - cost
   st.ranks[id] = M.rank(st, id) + 1
+  -- Stamp the first purchase only, so a later rank can't push a gate that
+  -- reads it back out of reach.
+  st.bought_at = st.bought_at or {}
+  if st.bought_at[id] == nil then st.bought_at[id] = stats and stats.loops or 0 end
   set_fx(st, id, "flash")
   sfx.play("coin")
   return true
