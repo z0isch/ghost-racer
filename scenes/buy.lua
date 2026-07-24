@@ -1,23 +1,23 @@
-local ui          = require "ui"
-local dim         = require "dim"
-local hud         = require "hud"
-local economy     = require "economy"
-local ghost       = require "ghost"
-local track_data  = require "track_data"
-local road        = require "road"
-local popups      = require "popups"
-local modal       = require "modal"
-local car_demo    = require "car_demo"
-local car         = require "car"
-local gates       = require "gates"
-local persist     = require "persist"
+local ui               = require "ui"
+local dim              = require "dim"
+local hud              = require "hud"
+local economy          = require "economy"
+local ghost            = require "ghost"
+local track_data       = require "track_data"
+local road             = require "road"
+local popups           = require "popups"
+local modal            = require "modal"
+local car_demo         = require "car_demo"
+local car              = require "car"
+local gates            = require "gates"
+local persist          = require "persist"
 
-local SHOP_COST_W = 50
-local GHOST_ALPHA = 0.6
+local SHOP_COST_W      = 50
+local GHOST_ALPHA      = 0.6
 
 -- First-purchase explainer copy, keyed by shop `kind`. Shown once as an
 -- overlay in this scene immediately on purchase (see economy.try_buy).
-local MODAL_INFO = {
+local MODAL_INFO       = {
   ghosts = {
     title = "Ghost Unlocked!",
     body  = function()
@@ -152,7 +152,7 @@ function M.update(dt)
     end
   end
   if State.first_wall and input.pressed(input.BTN1) then
-    State.first_wall         = nil
+    State.first_wall             = nil
     State.seen_modals.first_wall = true
     persist.save()
   end
@@ -371,13 +371,15 @@ local function prestige_breakdown_rows()
   for _, id in ipairs(track_data.track_order()) do
     local ts    = State.tracks[id]
     local label = track_data.TRACKS[id].label
-    if ts and ts.best_rate then
-      local rank = economy.track_rank(id)
-      local yen  = economy.rank_yen(rank)
-      total = total + yen
-      rows[#rows + 1] = { text = breakdown_dots(label, "¥" .. yen .. " " .. rank), rank = rank }
-    else
-      rows[#rows + 1] = { text = breakdown_dots(label, "--") }
+    local rank  = economy.track_rank(id)
+    local yen   = economy.rank_yen(rank)
+    if yen > 0 then
+      if ts and ts.best_rate then
+        total = total + yen
+        rows[#rows + 1] = { text = breakdown_dots(label, "¥" .. yen .. " " .. rank), rank = rank }
+      else
+        rows[#rows + 1] = { text = breakdown_dots(label, "--") }
+      end
     end
   end
   rows[#rows + 1] = { text = divider }
@@ -579,10 +581,12 @@ function M.draw_shop()
   for _, item in ipairs(track_data.shop(id)) do
     -- Checkpoint Pass (skill tree) grants every checkpoint outright, so
     -- there's nothing left for this row to sell. Coins don't exist at all
-    -- until Loose Change is bought, so that row stays hidden rather than
-    -- teasing a purchase - the node is the reveal.
+    -- until Loose Change is bought, and ghosts until Ghost Racer is bought,
+    -- so those rows stay hidden rather than teasing a purchase - the node is
+    -- the reveal.
     if not (item.kind == "checkpoints" and State.unlock_checkpoints)
-        and not (item.kind == "coins" and not State.coins_unlocked) then
+        and not (item.kind == "coins" and not State.coins_unlocked)
+        and not (item.kind == "ghosts" and not State.ghosts_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
       if clicked then economy.try_buy(item.kind) end
       shop_y = shop_y + bh + gap
@@ -605,7 +609,7 @@ function M.draw_shop()
   if rb_clicked and economy.nirvana_affordable() then
     State.nirvana_confirm = true
   end
-  shop_y = shop_y + rb_bh + gap
+  shop_y       = shop_y + rb_bh + gap
 
   -- Global car-upgrades column, mirrored on the right edge. Wider cost
   -- buttons than the track shop so 5-digit prices fit.

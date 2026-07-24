@@ -27,6 +27,8 @@ local function default_state()
     coins_unlocked     = false,
     unlock_checkpoints = false,
     max_accel          = false,
+    ghosts_unlocked    = false,
+    ghost_efficiency   = 1,
     skill_tree         = skill_tree.new(),
     drift              = 0,
     drift_boost        = 0,
@@ -61,8 +63,9 @@ local function progression_of_state()
     announced_nirvana = State.announced_nirvana,
     accel             = State.accel,
     -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
-    -- max_accel are derived caches of the skill tree, not saved; the tree is
-    -- the single source of truth. fx is transient render state, also dropped.
+    -- max_accel / ghosts_unlocked / ghost_efficiency are derived caches of the
+    -- skill tree, not saved; the tree is the single source of truth. fx is
+    -- transient render state, also dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
     skill_tree        = {
@@ -145,8 +148,9 @@ local function apply_progression(loaded)
 end
 
 -- State.top_speed / State.start_coins / State.coins_unlocked /
--- State.unlock_checkpoints / State.max_accel are caches derived from the skill
--- tree; the tree is the single source of truth. Re-derive after any rank change
+-- State.unlock_checkpoints / State.max_accel / State.ghosts_unlocked /
+-- State.ghost_efficiency are caches derived from the skill tree; the tree is
+-- the single source of truth. Re-derive after any rank change
 -- or load, before resync_car_and_ghosts pushes results into the car and ghost
 -- sims. The coin ceiling/floor and the checkpoint unlock are applied live to
 -- existing tracks so a rank bought at the loop gate takes effect that loop, not
@@ -158,6 +162,8 @@ function M.rederive_skill_effects()
   State.coins_unlocked     = ctx.coins or false
   State.unlock_checkpoints = ctx.unlock_checkpoints or false
   State.max_accel          = ctx.max_accel or false
+  State.ghosts_unlocked    = ctx.ghosts_unlocked or false
+  State.ghost_efficiency   = ctx.ghost_efficiency or 1
   -- Launch Control floors accel at max rather than replacing it, so a save
   -- that already bought ranks the hard way reads back unchanged. The shop row
   -- hides itself once this is on (see scenes/buy.lua).

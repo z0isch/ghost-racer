@@ -247,7 +247,7 @@ function M.track_raw_cash_rate(id)
   local tdata   = track_data.TRACKS[id]
   local pickups = ghost.get_track_sim(id).ghost_coin_pickups
   local pay     = (ghost.crossed_cp_count(id) + (pickups and #pickups or 0)) * tdata.pay
-  return tstate.ghosts * (pay / period) * ghost.SPEED_MULT
+  return tstate.ghosts * (pay / period) * ghost.SPEED_MULT * State.ghost_efficiency
 end
 
 function M.track_cash_rate(id)
@@ -399,7 +399,9 @@ function M.bank(event)
   local id     = event.track_id
   local tstate = State.tracks[id]
   local mult   = M.rank_mult(id, tstate.best_rate)
-  local pay    = M.track_pay(id) * mult
+  -- Ghost income only, so the Slipstream skill multiplier applies here but not
+  -- to the player's live-race pay (player_pay / pay_for_mult stay unscaled).
+  local pay    = M.track_pay(id) * mult * State.ghost_efficiency
   State.money  = State.money + pay
   if id == State.active_track then
     popups.spawn({

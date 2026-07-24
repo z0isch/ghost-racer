@@ -25,7 +25,7 @@ M.NODES     = {
     max       = 1,
     base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 110, y = 176 },
+    pos       = { x = 288, y = 144 },
     links     = { "top_speed" },
     apply     = function(ctx, _rank)
       ctx.max_accel = true
@@ -38,7 +38,7 @@ M.NODES     = {
     max       = 3,
     base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 220, y = 176 },
+    pos       = { x = 254, y = 90 },
     links     = {},
     apply     = function(ctx, rank)
       ctx.top_speed = (ctx.top_speed or 0) + rank
@@ -52,7 +52,7 @@ M.NODES     = {
     max       = 1,
     base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 330, y = 140 },
+    pos       = { x = 352, y = 144 },
     links     = { "start_coins" },
     locked    = function(stats)
       local loops = stats.loops or 0
@@ -69,7 +69,7 @@ M.NODES     = {
     max       = 1,
     base_cost = 1,
     growth    = 1.5,
-    pos       = { x = 440, y = 104 },
+    pos       = { x = 400, y = 90 },
     links     = {},
     locked    = function(stats, st)
       local bought = st.bought_at and st.bought_at.coins
@@ -89,10 +89,41 @@ M.NODES     = {
     entry     = true,
     base_cost = 1,
     growth    = 1,
-    pos       = { x = 330, y = 212 },
+    pos       = { x = 352, y = 208 },
     links     = {},
     apply     = function(ctx, _rank)
       ctx.unlock_checkpoints = true
+    end,
+  },
+  {
+    id        = "ghost",
+    label     = "Ghost Racer",
+    desc      = "Unlock ghosts for sale on every track.\nThey drive your best lap for cash!",
+    icon      = "G",
+    entry     = true,
+    max       = 1,
+    base_cost = 1,
+    growth    = 1.5,
+    pos       = { x = 288, y = 208 },
+    links     = { "ghost_efficiency" },
+    apply     = function(ctx, _rank)
+      ctx.ghosts_unlocked = true
+    end,
+  },
+  {
+    id        = "ghost_efficiency",
+    label     = "Slipstream",
+    desc      = "Ghosts bank +25% cash per rank.\nEvery lap counts for more!",
+    icon      = "E",
+    max       = 3,
+    base_cost = 1,
+    growth    = 1.5,
+    pos       = { x = 220, y = 200 },
+    links     = {},
+    apply     = function(ctx, rank)
+      -- Multiplier on ghost income only (economy applies State.ghost_efficiency
+      -- in bank() and track_raw_cash_rate). +25% per rank over the 1.0 base.
+      ctx.ghost_efficiency = (ctx.ghost_efficiency or 1) + 0.25 * rank
     end,
   }
 }
