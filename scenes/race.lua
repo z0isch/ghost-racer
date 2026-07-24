@@ -95,8 +95,6 @@ local function finish_race()
   local prev_rank   = economy.track_rank(id)
   local cash_before = economy.track_cash_rate(id)
   local locked_id   = economy.next_locked_track()
-  local was_ready   = locked_id ~= nil and economy.track_unlock_ready(locked_id)
-  local nirvana_was = economy.nirvana_ready()
   ghost.promote()
   local new_rank     = economy.track_rank(id)
   local cash_after   = economy.track_cash_rate(id)
@@ -104,10 +102,32 @@ local function finish_race()
   local rank_changed = not first_lap and new_rank ~= prev_rank
   local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
 
-  if first_lap or rank_changed or cash_up then
-    local show_unlock  = locked_id ~= nil and not was_ready
-        and economy.track_unlock_ready(locked_id)
-    local show_nirvana = not nirvana_was and economy.nirvana_ready()
+  -- Tracks carry no rank gate any more, so the "now available" announcement
+  -- edge-triggers on affordability instead: this race's earnings are what
+  -- crossed the price, which keeps the old feedback shape ("that race changed
+  -- something") and teaches the new rule - racing well is what buys content.
+  -- announced_unlock makes it a real edge rather than a level, so it doesn't
+  -- re-fire every time the balance dips under the price and climbs back.
+  local afforded_id
+  if locked_id and not State.announced_unlock[locked_id] then
+    local cost = track_data.unlock_cost(locked_id, State.loop)
+    if cost and State.money >= cost then afforded_id = locked_id end
+  end
+  -- Nirvana costs money now, so its announcement edge-triggers on affording
+  -- the fare rather than on the row appearing: "the exit is open" should land
+  -- on the race that paid for it, not on the race that revealed a price the
+  -- player can't meet yet. Same once-per-loop flag shape as announced_unlock,
+  -- for the same reason (the balance dips under the price and climbs back
+  -- every time anything else is bought).
+  local show_nirvana = not State.announced_nirvana
+      and economy.nirvana_ready() and economy.nirvana_affordable()
+
+  -- afforded_id / show_nirvana open the modal on their own: a race that
+  -- unlocked something has news to deliver even if the rank and the $/sec
+  -- both held steady.
+  if first_lap or rank_changed or cash_up or afforded_id or show_nirvana then
+    if afforded_id then State.announced_unlock[afforded_id] = true end
+    if show_nirvana then State.announced_nirvana = true end
     local coins_total  = road.active_coin_count(tstate.coins, tdata.coins)
     local coins_got    = 0
     for _ in pairs(race.coins_collected) do coins_got = coins_got + 1 end
@@ -124,9 +144,9 @@ local function finish_race()
       -- rank-delta block then.
       prev_rank    = rank_changed and prev_rank or nil,
       -- Ids of the track that just became purchasable / the track selling
-      -- Nirvana, nil unless this lap flipped the gate. Ids rather than
-      -- booleans so the modal can name the shop to visit.
-      show_unlock  = show_unlock and locked_id or nil,
+      -- Nirvana, nil unless this lap flipped it. Ids rather than booleans so
+      -- the modal can name the shop to visit.
+      show_unlock  = afforded_id,
       show_nirvana = show_nirvana and economy.nirvana_track() or nil,
       -- nil unless the track's ghost $/sec went up (requires an owned
       -- ghost). Merged into this same modal rather than a second popup.

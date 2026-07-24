@@ -184,13 +184,13 @@ M.TRACKS = {
     no_coin_ranks = { C = 2.5, B = 2.7, A = 3, S = 6.0 },
     label         = "Track 2",
     pay           = 15,
-    unlock_cost   = 250,
+    unlock_cost   = 100,
     shop          = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 300,
+        base_cost = 180,
         growth    = 1.3
       },
       {
@@ -248,7 +248,7 @@ M.TRACKS = {
     no_coin_ranks = { C = 5, B = 8, A = 9.5, S = 20.0 },
     label         = "Track 3",
     pay           = 45,
-    unlock_cost   = 2000,
+    unlock_cost   = 700,
     shop          = {
       {
         kind      = "checkpoints",
@@ -274,8 +274,9 @@ M.TRACKS = {
       },
     },
     -- Loop-1 prologue overrides - provisional, tune freely. Nirvana lives
-    -- here in loop 1 (Track 4 doesn't exist yet) and needs rank A on every
-    -- prologue track instead of S on this one.
+    -- here in loop 1 (Track 4 doesn't exist yet) and keeps a rank gate - rank
+    -- A on every prologue track - as the prologue's graduation requirement.
+    -- It's the only rank gate left anywhere; loop 2+ buys purely on cash.
     loop1         = {
       unlock_cost = 200,
       shop        = {
@@ -287,11 +288,16 @@ M.TRACKS = {
           growth    = 1.3
         },
         {
+          -- Priced like Track 4's, scaled to prologue money (~1 A-rank race
+          -- on this track: 3 checkpoints x $45 x the A mult). The rank gate
+          -- is still the prologue's climax - the price is here so "the exit
+          -- costs money" is learned in the tutorial rather than sprung in
+          -- loop 2. Drop it to 0 if the prologue's tail drags.
           kind              = "nirvana",
           label             = "Nirvana?",
           currency          = "cash",
           max               = 1,
-          base_cost         = 0,
+          base_cost         = 500,
           growth            = 1,
           requires_rank_all = "A"
         },
@@ -299,37 +305,34 @@ M.TRACKS = {
     },
   },
   track4 = {
-    map                = track4,
-    spawn              = { col = 20, row = 11 },
-    checkpoints        = {
+    map           = track4,
+    spawn         = { col = 20, row = 11 },
+    checkpoints   = {
       { col = 34, row = 2,  w = 4, h = 4 },
       { col = 2,  row = 16, w = 4, h = 4 },
       { col = 2,  row = 2,  w = 4, h = 4 },
       { col = 34, row = 16, w = 4, h = 4 },
       { col = 18, row = 9,  w = 4, h = 4 }
     },
-    coins              = {
+    coins         = {
       { col = 36, row = 12 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 4,  row = 11 },
       { col = 10, row = 7 },
     },
-    base_coins         = 4,
-    ranks              = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
+    base_coins    = 4,
+    ranks         = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
     -- Track 4 never existed in the loop-1 prologue, so it had no coinless
     -- thresholds until now: coins used to arrive with loop 2, ahead of this
     -- track. They're behind a skill node now, so this track can be raced
     -- coinless. Scaled off `ranks` at roughly the ratio the other tracks use
     -- (~0.43 up to A, ~0.74 at S) - pure guesses, tune in playtest.
-    no_coin_ranks      = { C = 13.0, B = 26.0, A = 34.0, S = 66.0 },
-    label              = "Track 4",
-    pay                = 135,
-    unlock_cost        = 10000,
-    -- Unlocking needs an S rank on every earlier track instead of the usual
-    -- rank A on the previous one (see economy.track_unlock_ready).
-    unlock_needs_all_s = true,
-    shop               = {
+    no_coin_ranks = { C = 13.0, B = 26.0, A = 34.0, S = 66.0 },
+    label         = "Track 4",
+    pay           = 135,
+    unlock_cost   = 3500,
+    shop          = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
@@ -353,13 +356,27 @@ M.TRACKS = {
         growth    = 1.3
       },
       {
-        kind          = "nirvana",
-        label         = "Nirvana?",
-        currency      = "cash",
-        max           = 1,
-        base_cost     = 0,
-        growth        = 1,
-        requires_rank = "S"
+        -- Ungated on rank: the only requirement is having raced this track
+        -- once (see economy.needs_first_race), so the exit reveals itself
+        -- right after the final course lands.
+        --
+        -- Priced, and priced high, because the exit is the last track's
+        -- reason to exist. Free, Track 4 was raced once for the ghost lap and
+        -- abandoned - its only remaining payoff was the loop rank, which a
+        -- player who doesn't care about the score can ignore. At $10k it's
+        -- roughly 1.5 A-rank races on top of the $3,500 unlock (Track 4 pays
+        -- 135/pickup x 10 pickups x the rank mult: ~$1.4k a race at D, ~$6.8k
+        -- at A, ~$13.5k at S), so the fare is paid in Track 4 laps and the
+        -- rank you drive them at sets how many. Race it badly and you pay in
+        -- clock, which the loop rank then charges you for again. Ghost income
+        -- means it's always reachable, just slower. Tuning knob - change
+        -- freely.
+        kind      = "nirvana",
+        label     = "Nirvana?",
+        currency  = "cash",
+        max       = 1,
+        base_cost = 10000,
+        growth    = 1
       }
     },
   },
@@ -454,12 +471,6 @@ function M.unlock_cost(id, loop)
   return tdata.unlock_cost
 end
 
--- Rank needed on the previous track to unlock the next one: B during the
--- loop-1 prologue, A afterwards.
-function M.unlock_rank(loop)
-  return loop == 1 and "B" or "A"
-end
-
 -- Per-course rank as a number for loop scoring: linear (every rank-up worth
 -- the same) with a positive D floor so even a D course still contributes -- a
 -- freshly unlocked, still-D track adds time to the loop but shouldn't be pure
@@ -503,8 +514,8 @@ end
 function M.loop_course_ranks(loop, tracks, has_coins)
   local out = {}
   for _, id in ipairs(M.track_order(loop)) do
-    local ts   = tracks[id]
-    local rate = ts and ts.best_rate
+    local ts      = tracks[id]
+    local rate    = ts and ts.best_rate
     out[#out + 1] = {
       id    = id,
       rank  = M.rank_for_rate(id, rate, has_coins),
@@ -544,11 +555,14 @@ end
 -- Loop-completion thresholds on loop_points (higher = better). Calibrated
 -- against the current 4-track roster: an all-A loop (Σrank 16) at ~240s scores
 -- 4*16/240 ~= 0.27, landing at the A/B edge to preserve today's difficulty
--- feel. Because loop_points scales with track count, these fixed thresholds
--- mean grades inflate as the roster grows -- intended (a bigger game is a
--- bigger achievement), so retune as tracks and S+/S++ ranks are added. Tuning
--- knobs only - change freely (empirical, tune in playtest).
-local LOOP_RANK_POINT_THRESHOLDS = { S = 0.40, A = 0.26, B = 0.15, C = 0.07 }
+-- feel. S sits at 4*20/240 ~= 0.33 so an all-S loop at that same competent
+-- pace grades S: the S/A split is carried by rank, with time as the
+-- tiebreaker, rather than demanding perfect ranks AND a 20% faster clock.
+-- Because loop_points scales with track count, these fixed thresholds mean
+-- grades inflate as the roster grows -- intended (a bigger game is a bigger
+-- achievement), so retune as tracks and S+/S++ ranks are added. Tuning knobs
+-- only - change freely (empirical, tune in playtest).
+local LOOP_RANK_POINT_THRESHOLDS = { S = 0.33, A = 0.26, B = 0.15, C = 0.07 }
 local LOOP_RANK_POINT_ORDER      = { "S", "A", "B", "C" }
 
 -- Letter a loop_points value earns. Below the C threshold is "D". A typical

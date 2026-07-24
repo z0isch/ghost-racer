@@ -1,22 +1,47 @@
-local track_data = require "track_data"
-local car        = require "car"
-local ghost      = require "ghost"
-local skill_tree = require "skill_tree"
+local track_data          = require "track_data"
+local car                 = require "car"
+local ghost               = require "ghost"
+local skill_tree          = require "skill_tree"
 
-local M          = {}
+local M                   = {}
 
--- ¥ granted for completing a loop, paid into the skill tree by
--- start_new_loop. Exposed so the Loop Complete modal copy can't drift.
-M.LOOP_REWARD    = 100
+-- ¥ granted for finishing the loop-1 prologue, paid into the skill tree by
+-- start_new_loop. Flat, because the prologue is authored and its rank isn't
+-- a fair measure of anything yet. Exposed so the garage's first-visit copy
+-- ("Here's ¥N to start!") can't drift from what was actually paid.
+M.LOOP_REWARD             = 100
+
+-- ¥ paid for completing a loop 2+, by the rank that loop earned. This is what
+-- rank is *for* now that track purchases are gated on cash alone: rank is
+-- already the in-loop cash multiplier (see economy.pay_for_mult), and this
+-- makes it the cross-loop one too. B holds at the old flat 100 so skill-tree
+-- pacing keeps its baseline; a bad loop still pays, and a great loop is worth
+-- 5x a bad one. Moderate rather than punitive on purpose - a loop can't be
+-- finished at all without earning enough to buy all four tracks, so there's
+-- no cheap loop to farm. Tuning knobs only - change freely.
+local LOOP_REWARD_BY_RANK = { D = 40, C = 70, B = 100, A = 140, S = 200 }
+
+function M.loop_reward(rank)
+  return LOOP_REWARD_BY_RANK[rank] or M.LOOP_REWARD
+end
 
 local function default_state()
   return {
     mode               = "buy",
-    money              = 10000000000,
+    money              = 0,
     seen_help          = false,
     loop               = 1,
     loop_time          = 0,
     seen_modals        = {},
+    -- Track ids whose "Track #N available in the shop!" announcement has
+    -- already fired this loop, so it lands once on the race that made the
+    -- track affordable instead of every time the balance re-crosses the
+    -- price. Per-loop: start_new_loop resets it with the rest of the state.
+    announced_unlock   = {},
+    -- Same idea for the "Nirvana available!" announcement, which now fires on
+    -- affording the exit rather than on revealing it. Per-loop, one field
+    -- rather than a set: only one track sells Nirvana in a loop.
+    announced_nirvana  = false,
     accel              = 0,
     top_speed          = 0,
     start_coins        = 0,
@@ -50,48 +75,52 @@ local DEV_SNAPSHOT_FILE = "data/" .. DEV_SNAPSHOT_REL
 -- Fields carried by both the real save file and dev snapshots.
 local function progression_of_state()
   return {
-    money        = State.money,
-    seen_help    = State.seen_help,
-    loop         = State.loop,
-    loop_time    = State.loop_time,
-    seen_modals  = State.seen_modals,
-    accel        = State.accel,
+    money             = State.money,
+    seen_help         = State.seen_help,
+    loop              = State.loop,
+    loop_time         = State.loop_time,
+    seen_modals       = State.seen_modals,
+    announced_unlock  = State.announced_unlock,
+    announced_nirvana = State.announced_nirvana,
+    accel             = State.accel,
     -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
     -- max_accel are derived caches of the skill tree, not saved; the tree is
     -- the single source of truth. fx is transient render state, also dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
-    skill_tree   = {
+    skill_tree        = {
       points    = State.skill_tree.points,
       ranks     = State.skill_tree.ranks,
       bought_at = State.skill_tree.bought_at,
     },
-    drift        = State.drift,
-    drift_boost  = State.drift_boost,
-    boost        = State.boost,
-    nirvana      = State.nirvana,
-    magnet       = State.magnet,
-    active_track = State.active_track,
-    unlocked     = State.unlocked,
-    tracks       = State.tracks,
+    drift             = State.drift,
+    drift_boost       = State.drift_boost,
+    boost             = State.boost,
+    nirvana           = State.nirvana,
+    magnet            = State.magnet,
+    active_track      = State.active_track,
+    unlocked          = State.unlocked,
+    tracks            = State.tracks,
   }
 end
 
 -- Applies a progression table (shape of `progression_of_state`) onto the
 -- current State in place. Shared by the real load path and dev snapshot load.
 local function apply_progression(loaded)
-  State.money       = loaded.money or 0
-  State.seen_help   = loaded.seen_help or false
-  State.loop        = loaded.loop or 1
-  State.loop_time   = loaded.loop_time or 0
-  State.seen_modals = loaded.seen_modals or {}
+  State.money             = loaded.money or 0
+  State.seen_help         = loaded.seen_help or false
+  State.loop              = loaded.loop or 1
+  State.loop_time         = loaded.loop_time or 0
+  State.seen_modals       = loaded.seen_modals or {}
+  State.announced_unlock  = loaded.announced_unlock or {}
+  State.announced_nirvana = loaded.announced_nirvana or false
 
-  State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
-  State.drift       = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
-  State.drift_boost = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
-  State.boost       = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
-  State.nirvana     = math.min(loaded.nirvana or 0, track_data.kind_max("nirvana") or 0)
-  State.magnet      = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
+  State.accel             = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
+  State.drift             = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
+  State.drift_boost       = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
+  State.boost             = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
+  State.nirvana           = math.min(loaded.nirvana or 0, track_data.kind_max("nirvana") or 0)
+  State.magnet            = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
 
   if loaded.active_track and track_data.TRACKS[loaded.active_track] then
     State.active_track = loaded.active_track
@@ -205,10 +234,13 @@ function M.start_new_loop()
   State.seen_help           = seen_help
   State.seen_modals         = seen_modals
   -- Carry the skill tree across the reset (like seen_help) and pay the loop
-  -- reward atomically with the rollover. fx is transient, rebuilt empty.
+  -- reward atomically with the rollover. The prologue pays its flat stipend;
+  -- every loop after that pays by the rank it just earned. fx is transient,
+  -- rebuilt empty.
+  local reward              = old_loop == 1 and M.LOOP_REWARD or M.loop_reward(finished_rank)
   State.skill_tree          = tree
   State.skill_tree.fx       = {}
-  State.skill_tree.points   = State.skill_tree.points + M.LOOP_REWARD
+  State.skill_tree.points   = State.skill_tree.points + reward
   -- Not part of default_state/progression - only read once by the "Well
   -- Done!" modal that's about to show, reporting on the loop that just ended.
   State.last_loop_time      = finished_time

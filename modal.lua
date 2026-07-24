@@ -1,7 +1,7 @@
 -- Full-screen modal: dims the scene, then draws a bordered panel with a
--- centered title, body, and a single dismiss button. Immediate-mode; call
--- from _draw. Layout is computed from the measured text, so any number of
--- body lines fits.
+-- centered title, body, and a dismiss button (or a row of choice buttons).
+-- Immediate-mode; call from _draw. Layout is computed from the measured text,
+-- so any number of body lines fits.
 
 local ui           = require "ui"
 
@@ -9,18 +9,24 @@ local TITLE_SCALE  = 3
 local BODY_SCALE   = 2
 local BUTTON_SCALE = 2
 local BUTTON_W     = 180
-local BUTTON_PAD_Y = 2 -- matches ui.button's vertical padding
+local BUTTON_PAD_Y = 2  -- matches ui.button's vertical padding
+local BUTTON_GAP   = 12 -- horizontal space between buttons in a choice row
 local PANEL_PAD    = 16
 local GAP          = 20 -- vertical space between title, body, and button
 
 local M            = {}
 
--- Draws the modal. Returns true the frame the button is clicked.
+-- Draws the modal. Returns true the frame the button is clicked, or - with
+-- opts.buttons - the index of the choice clicked that frame (nil otherwise).
 -- opts: title (string), body (string), button (string, default "GOT IT"),
--- demo (optional { w, h, draw = function(x, y) }, drawn between the body and
--- the button), draw_title (optional function(x, y, scale) replacing the
--- default plain-white title render - `title` is still required for layout,
--- so it must measure the same width as whatever draw_title actually draws),
+-- buttons (optional list of labels drawn side by side instead of the single
+-- dismiss button; the caller distinguishes them by returned index, so put the
+-- safe choice where a stray keypress can't reach it - see scenes/buy.lua's
+-- Escape SAMSARA confirm), demo (optional { w, h, draw = function(x, y) },
+-- drawn between the body and the button), draw_title (optional
+-- function(x, y, scale) replacing the default plain-white title render -
+-- `title` is still required for layout, so it must measure the same width as
+-- whatever draw_title actually draws),
 -- draw_body (optional function(x, y, scale) replacing the default light-gray
 -- body render - `body` is still required for layout, so it must measure the
 -- same width/line count as whatever draw_body actually draws).
@@ -29,8 +35,9 @@ function M.draw(opts)
 
   local title       = opts.title
   local body        = opts.body
-  local button      = opts.button or "GOT IT"
+  local buttons     = opts.buttons or { opts.button or "GOT IT" }
   local demo        = opts.demo
+  local row_w       = #buttons * BUTTON_W + (#buttons - 1) * BUTTON_GAP
 
   -- measure_text height is the font line height, so multi-line bodies are
   -- sized by counting lines.
@@ -47,7 +54,7 @@ function M.draw(opts)
   local content_h   = line_h * TITLE_SCALE + GAP + bh + GAP
       + (demo and demo.h + GAP or 0) + btn_h
 
-  local panel_w     = math.max(tw, bw, BUTTON_W, demo and demo.w or 0) + PANEL_PAD * 2
+  local panel_w     = math.max(tw, bw, row_w, demo and demo.w or 0) + PANEL_PAD * 2
   local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
   local panel_h     = content_h + PANEL_PAD * 2
   local panel_y     = math.floor((usagi.GAME_H - panel_h) / 2)
@@ -77,8 +84,16 @@ function M.draw(opts)
     demo.draw(math.floor((usagi.GAME_W - demo.w) / 2), demo_y)
   end
 
-  local btn_x = math.floor((usagi.GAME_W - BUTTON_W) / 2)
-  return ui.button(button, btn_x, btn_y, { w = BUTTON_W, scale = BUTTON_SCALE })
+  local btn_x   = math.floor((usagi.GAME_W - row_w) / 2)
+  local clicked
+  for i, label in ipairs(buttons) do
+    local x = btn_x + (i - 1) * (BUTTON_W + BUTTON_GAP)
+    if ui.button(label, x, btn_y, { w = BUTTON_W, scale = BUTTON_SCALE }) then
+      clicked = i
+    end
+  end
+  if opts.buttons then return clicked end
+  return clicked == 1
 end
 
 return M

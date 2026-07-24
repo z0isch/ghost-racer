@@ -110,11 +110,21 @@ local LOOP_INTRO = {
 -- chains into the loop-rank breakdown (the scored recap of the loop just
 -- finished); dismissing that breakdown returns to the skill tree, since
 -- there's nothing left to buy this loop.
+--
+-- Only the prologue takes that detour, though. State.loop has already rolled
+-- over by the time this modal shows, so `loop == 2` means loop 1 just ended:
+-- a first-time player meets the loop rank here, after the fact. Every loop
+-- after that just read the same breakdown live in the Escape SAMSARA confirm,
+-- so it goes straight to the garage rather than showing it twice.
 local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
   if kind == "nirvana" then
-    State.purchase_modal = "loop_breakdown"
+    if State.loop == 2 then
+      State.purchase_modal = "loop_breakdown"
+    else
+      SceneGoto("skill_tree")
+    end
   elseif kind == "loop_breakdown" then
     SceneGoto("skill_tree")
   end
@@ -276,12 +286,19 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
+  -- BTN1 backs out of the Escape SAMSARA confirm rather than accepting it:
+  -- the safe answer is the default for an irreversible choice, so a stray
+  -- press can't wipe the loop. YES needs its own click (draw_nirvana_confirm).
+  if State.nirvana_confirm and input.pressed(input.BTN1) then
+    State.nirvana_confirm = nil
+  end
   -- Only advance the tutorial once the post-race modal is cleared, so a single
   -- press can't skip past both at once (draw shows race_modal first).
   if not State.race_modal and State.loop_intro and input.pressed(input.BTN1) then
     M.advance_loop_intro()
   end
-  if not State.purchase_modal and not State.race_modal and not State.loop_intro and input.key_pressed(input.KEY_SPACE) then
+  if not State.purchase_modal and not State.race_modal and not State.loop_intro
+      and not State.nirvana_confirm and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
 end
@@ -301,7 +318,7 @@ local function shop_button(item, x, y, w, opts)
         and ("RANK " .. item.requires_rank_all .. " on all tracks")
         or ("RANK " .. item.requires_rank .. " needed")
   elseif economy.needs_first_race(State.active_track, kind) then
-    locked_msg = "Complete 1 race"
+    locked_msg = kind == "nirvana" and "Race this track first" or "Complete 1 race"
   end
   if locked_msg then
     local _, th = usagi.measure_text(label)
@@ -322,6 +339,8 @@ local function shop_button(item, x, y, w, opts)
   if cost == nil then
     cost_text = "MAX"
   elseif cost == 0 then
+    -- Nothing in the data is free since Nirvana was priced; kept for a
+    -- base_cost of 0 during tuning (the prologue's Nirvana is the likely one).
     cost_text = "FREE"
   else
     cost_text  = "$" .. tostring(cost)
@@ -339,22 +358,14 @@ local function shop_button(item, x, y, w, opts)
   return clicked, bh
 end
 
+-- The next track's row: label and price only. Tracks carry no rank gate, so
+-- this is always a live button - it just costs more than the player has until
+-- they've raced enough to afford it.
 local function new_track_row(next_id, next_track_idx, x, y, w)
   local label = string.format("Track #%d", next_track_idx)
   local _, th = usagi.measure_text(label)
   local bh    = th * 2 + 4
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
-
-  if not economy.track_unlock_ready(next_id) then
-    local msg = track_data.TRACKS[next_id].unlock_needs_all_s
-        and "RANK S on all tracks"
-        or ("RANK " .. track_data.unlock_rank(State.loop) .. " needed")
-    local mw  = usagi.measure_text(msg)
-    local mx  = x + w + usagi.measure_text(label) - mw
-    local my  = y + math.floor((bh - th) / 2)
-    ui.label(msg, mx, my, { scale = 1, color = gfx.COLOR_LIGHT_GRAY })
-    return false, bh
-  end
 
   local cost       = track_data.unlock_cost(next_id, State.loop)
   local affordable = State.money >= cost
@@ -389,6 +400,8 @@ function M.draw()
     M.draw_race_modal()
   elseif State.loop_intro then
     M.draw_loop_intro()
+  elseif State.nirvana_confirm then
+    M.draw_nirvana_confirm()
   elseif State.purchase_modal == "loop_breakdown" then
     M.draw_loop_breakdown_modal()
   elseif State.purchase_modal then
@@ -426,9 +439,17 @@ end
 -- column right-aligns across the per-track and Loop Time lines.
 local BREAKDOWN_ROW_CHARS = 20
 
+-- Glyph count of a string. `#` counts bytes, which overcounts the multibyte ¥
+-- in the reward row and would shift its value column out of line with the
+-- rest; UTF-8 continuation bytes (0x80-0xBF) are what to skip.
+local function glyph_len(s)
+  local _, n = s:gsub("[^\128-\191]", "")
+  return n
+end
+
 -- One dotted "Label ..... value" line padded to BREAKDOWN_ROW_CHARS.
 local function breakdown_dots(label, value)
-  local ndots = BREAKDOWN_ROW_CHARS - #label - #value - 2
+  local ndots = BREAKDOWN_ROW_CHARS - glyph_len(label) - glyph_len(value) - 2
   if ndots < 1 then ndots = 1 end
   return label .. " " .. string.rep(".", ndots) .. " " .. value
 end
@@ -454,11 +475,55 @@ local function draw_breakdown_row(row, cx, y, scale)
   end
 end
 
+-- Rows of a loop-rank breakdown: a line per course, the loop time, and the
+-- final letter. Shared by the post-hoc recap (loop 1, reading the scored
+-- loop that just ended) and the live Escape SAMSARA confirm (loop 2+, reading
+-- the loop in progress), so the two always report the same thing the same way.
+local function breakdown_rows(courses, time, rank)
+  local rows    = {}
+  local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
+  for _, c in ipairs(courses) do
+    -- An unraced course banks nothing at all (see track_data.loop_points), so
+    -- it reads as a dash rather than a D. Only the live confirm ever sees one:
+    -- by the end of a loop every course has been raced.
+    local label = track_data.TRACKS[c.id].label
+    if c.raced then
+      rows[#rows + 1] = { text = breakdown_dots(label, c.rank), rank = c.rank }
+    else
+      rows[#rows + 1] = { text = breakdown_dots(label, "--") }
+    end
+  end
+  rows[#rows + 1] = { text = divider }
+  rows[#rows + 1] = { text = breakdown_dots("Loop Time", format_duration(time)) }
+  rows[#rows + 1] = { text = divider }
+  rows[#rows + 1] = { text = breakdown_dots("RANK ", rank), rank = rank, big = true }
+  return rows
+end
+
+-- Packs breakdown `rows` for modal.draw: the plain-text body it measures the
+-- panel from, plus the draw_body that paints the same rows with their rank
+-- letters colored.
+local function breakdown_body(rows)
+  local lines = {}
+  for _, r in ipairs(rows) do lines[#lines + 1] = r.text end
+  local cx = math.floor(usagi.GAME_W / 2)
+  return table.concat(lines, "\n"), function(_, by, scale)
+    local _, line_h = usagi.measure_text("A")
+    for _, r in ipairs(rows) do
+      draw_breakdown_row(r, cx, by, scale)
+      by = by + line_h * scale
+    end
+  end
+end
+
 -- Loop-rank breakdown: the scored recap shown after "Loop Complete!", before
 -- the skill tree. Reads State.last_loop_breakdown (captured in
 -- persist.start_new_loop): each course's rank, the loop time, and the final
 -- letter, so the player can see how the rank was earned and how to raise it.
--- Shown on every loop including loop 1 - the calculation is honest now.
+-- Loop 1 only - loop 2+ weighs the same numbers up front in the Escape
+-- SAMSARA confirm instead, so replaying them afterwards is just another modal
+-- in the chain. The prologue is where a first-time player learns what a loop
+-- rank is, and there it has to come after the fact.
 function M.draw_loop_breakdown_modal()
   local bd = State.last_loop_breakdown
   if not bd then
@@ -467,31 +532,39 @@ function M.draw_loop_breakdown_modal()
     return
   end
 
-  local rows = {}
-  local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
-  for _, c in ipairs(bd.courses) do
-    rows[#rows + 1] = { text = breakdown_dots(track_data.TRACKS[c.id].label, c.rank), rank = c.rank }
-  end
-  rows[#rows + 1] = { text = divider }
-  rows[#rows + 1] = { text = breakdown_dots("Loop Time", format_duration(bd.time)) }
-  rows[#rows + 1] = { text = divider }
-  rows[#rows + 1] = { text = breakdown_dots("RANK ", bd.rank), rank = bd.rank, big = true }
-
-  local body_lines = {}
-  for _, r in ipairs(rows) do body_lines[#body_lines + 1] = r.text end
-  local body      = table.concat(body_lines, "\n")
-
-  local cx        = math.floor(usagi.GAME_W / 2)
-  local draw_body = function(_, by, scale)
-    local _, line_h = usagi.measure_text("A")
-    for _, r in ipairs(rows) do
-      draw_breakdown_row(r, cx, by, scale)
-      by = by + line_h * scale
-    end
-  end
-
+  local body, draw_body = breakdown_body(breakdown_rows(bd.courses, bd.time, bd.rank))
   if modal.draw({ title = "Loop Rank", body = body, draw_body = draw_body }) then
     dismiss_purchase_modal()
+  end
+end
+
+-- Escape SAMSARA confirm (loop 2+): the loop breakdown again, but live and
+-- before the fact. Buying Nirvana wipes the loop on the spot, so this is both
+-- the safety on an irreversible click and the pitch: the player reads the
+-- ranks they've banked, the clock they've burned, and the ¥ that combination
+-- pays, then decides whether one more run at the last course is worth more
+-- than cashing out now. The fare is already paid for by the time this opens
+-- (the row's button is dead until it's affordable), so the cost isn't
+-- restated here - the live question is the rank, not the price.
+function M.draw_nirvana_confirm()
+  local time      = State.loop_time or 0
+  local courses   = track_data.loop_course_ranks(State.loop, State.tracks, State.coins_unlocked)
+  local rank      = track_data.loop_rank(State.loop, State.tracks, time, State.coins_unlocked)
+  local rows      = breakdown_rows(courses, time, rank)
+  rows[#rows + 1] = { text = breakdown_dots("Reward", "¥" .. persist.loop_reward(rank)) }
+
+  local body, draw_body = breakdown_body(rows)
+  -- YES first, NOT YET second: BTN1 dismisses to NOT YET (see M.update), so
+  -- the irreversible choice needs a deliberate click on its own button.
+  local pressed         = modal.draw({
+    title     = "Escape SAMSARA?",
+    body      = body,
+    draw_body = draw_body,
+    buttons   = { "YES", "NOT YET" },
+  })
+  if pressed then
+    State.nirvana_confirm = nil
+    if pressed == 1 then economy.try_buy("nirvana") end
   end
 end
 
@@ -659,7 +732,17 @@ function M.draw_shop()
     if not (item.kind == "checkpoints" and State.unlock_checkpoints)
         and not (item.kind == "coins" and not State.coins_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
-      if clicked then economy.try_buy(item.kind) end
+      if clicked then
+        -- Nirvana ends the loop on the spot, so loop 2+ routes it through a
+        -- confirm instead of buying on the click. The prologue keeps the
+        -- straight-through buy: its rank gate is friction enough, and a
+        -- confirm on top would just be tutorial noise.
+        if item.kind == "nirvana" and State.loop > 1 then
+          State.nirvana_confirm = true
+        else
+          economy.try_buy(item.kind)
+        end
+      end
       shop_y = shop_y + bh + gap
     end
   end

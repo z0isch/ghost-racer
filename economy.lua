@@ -154,10 +154,12 @@ function M.rank_at_least(id, letter)
   return RANK_ORDER[M.track_rank(id)] >= RANK_ORDER[letter]
 end
 
--- True when a shop item's rank gate is met: `requires_rank` checks the given
--- track (e.g. Nirvana needing rank S on Track 4), `requires_rank_all` checks
--- every track in this loop (e.g. loop-1 Nirvana needing rank A everywhere).
--- Ungated items always pass.
+-- True when a shop item's rank gate is met: `requires_rank_all` checks every
+-- track in this loop (the loop-1 prologue's Nirvana, needing rank A
+-- everywhere, is the only user left). `requires_rank` gates on the given
+-- track alone; nothing in the data sets it since Track 4's Nirvana was
+-- ungated, but it's kept as the obvious knob for re-gating a shop item during
+-- a rebalance. Ungated items always pass.
 function M.shop_item_unlocked(id, item)
   if item.requires_rank_all then
     for _, tid in ipairs(track_data.track_order(State.loop)) do
@@ -169,21 +171,6 @@ function M.shop_item_unlocked(id, item)
   return M.rank_at_least(id, item.requires_rank)
 end
 
--- True when the rank requirement to unlock a track is met: the loop's unlock
--- rank (B in the loop-1 prologue, A afterwards) on the previous track
--- normally, or an S rank on every earlier track when the track sets
--- `unlock_needs_all_s`.
-function M.track_unlock_ready(id)
-  local idx = track_data.get_track_index(id)
-  if track_data.TRACKS[id].unlock_needs_all_s then
-    for i = 1, idx - 1 do
-      if M.track_rank(track_data.TRACK_ORDER[i]) ~= "S" then return false end
-    end
-    return true
-  end
-  return M.rank_at_least(track_data.TRACK_ORDER[idx - 1], track_data.unlock_rank(State.loop))
-end
-
 -- Track whose shop sells Nirvana this loop (Track 3 during the loop-1
 -- prologue, Track 4 afterwards), or nil.
 function M.nirvana_track()
@@ -193,10 +180,35 @@ function M.nirvana_track()
   return nil
 end
 
--- True once Nirvana's rank gate is met on the track that sells it.
+-- True once Nirvana's non-cash requirements are met on the track that sells
+-- it: its first-race requirement, plus the loop-1 prologue's rank gate. The
+-- price is deliberately not part of this - the shop row appears (with its
+-- price on it) the moment the last track has been raced, and the money is the
+-- remaining work. See nirvana_affordable for the other half.
 function M.nirvana_ready()
   local tid = M.nirvana_track()
-  return tid ~= nil and M.shop_item_unlocked(tid, track_data.track_shop_item(tid, "nirvana", State.loop))
+  if not tid then return false end
+  return M.shop_item_unlocked(tid, track_data.track_shop_item(tid, "nirvana", State.loop))
+      and not M.needs_first_race(tid, "nirvana")
+end
+
+-- Cash price of this loop's Nirvana, or nil if no track sells it. Not
+-- upgrade_cost(), which prices against State.active_track - the player can be
+-- standing in any shop when this is asked.
+function M.nirvana_cost()
+  local tid  = M.nirvana_track()
+  local item = tid and track_data.track_shop_item(tid, "nirvana", State.loop)
+  if not item then return nil end
+  return math.floor(item.base_cost * (item.growth ^ State.nirvana))
+end
+
+-- True once the exit is both unlocked and paid for. This is what edge-triggers
+-- the "Nirvana available!" announcement (see scenes/race.lua finish_race):
+-- with a price on it, the race that earns the fare is the news, not the race
+-- that revealed the row.
+function M.nirvana_affordable()
+  local cost = M.nirvana_cost()
+  return cost ~= nil and State.money >= cost
 end
 
 -- First track in this loop's track order the player hasn't unlocked yet, or
@@ -285,11 +297,20 @@ end
 local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, checkpoints = true }
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
--- completed race everywhere. Checkpoints only carry that lock on Track 2
--- during the first loop, where it teaches the race-then-buy rhythm.
+-- completed race everywhere. Nirvana ends the loop, so it stays locked until
+-- the track selling it has been raced -- which is what stops a player from
+-- buying the last track and immediately cashing out without driving it (and,
+-- since Nirvana is sold by the last track of the loop, needs no per-loop
+-- special-casing). Checkpoints only carry that lock on Track 2 during the
+-- first loop, where it teaches the race-then-buy rhythm.
+--
+-- Unowned tracks report true: nirvana_ready() runs at every race finish and
+-- reaches for the Nirvana-selling track whether or not it's been bought yet.
 function M.needs_first_race(id, kind)
-  if State.tracks[id].ghost_line then return false end
-  if kind == "ghosts" then return true end
+  local tstate = State.tracks[id]
+  if not tstate then return true end
+  if tstate.ghost_line then return false end
+  if kind == "ghosts" or kind == "nirvana" then return true end
   return kind == "checkpoints" and State.loop == 1 and track_data.get_track_index(id) == 2
 end
 
@@ -339,7 +360,6 @@ end
 function M.try_unlock_track(id)
   local cost = track_data.unlock_cost(id, State.loop)
   if not cost or State.money < cost then return end
-  if not M.track_unlock_ready(id) then return end
   State.money        = State.money - cost
   State.unlocked[id] = true
   if not State.tracks[id] then
