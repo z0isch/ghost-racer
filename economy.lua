@@ -15,9 +15,6 @@ local RANK_MULTS         = {
 }
 local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
--- Car Upgrades locked out during Loop 1's accel-only tutorial; everything
--- else in the column waits for Loop 2. Accel is intentionally absent.
-local LOOP1_LOCKED_UPGRADES = { drift = true, drift_boost = true, boost = true, magnet = true }
 
 -- ¥ a track is worth this loop at each best-race rank, the cross-loop payout
 -- that rank now drives (rank is already the in-loop cash multiplier; this
@@ -200,17 +197,13 @@ function M.shop_item_unlocked(id, item)
   return M.rank_at_least(id, item.requires_rank)
 end
 
--- The next corridor track the player may buy this loop, or nil. It's the first
--- unowned track, but only while that track is within the loop's purchase ceiling
--- (top_track_index) - past the ceiling there's nothing to buy until a Rebirth
--- raises it. Owned tracks are a contiguous prefix, so the first unowned track is
--- always the one directly above the top owned track.
+-- The next corridor track the player may buy, or nil once every track is owned.
+-- The whole corridor is buyable regardless of loop - cash is the only wall.
+-- Owned tracks are a contiguous prefix, so the first unowned track is always the
+-- one directly above the top owned track.
 function M.next_locked_track()
   for _, tid in ipairs(track_data.track_order()) do
     if not State.unlocked[tid] then
-      if track_data.get_track_index(tid) > track_data.top_track_index(State.loop) then
-        return nil
-      end
       return tid
     end
   end
@@ -251,20 +244,16 @@ function M.top_owned_track()
   return top
 end
 
--- The track Rebirth and Nirvana fire from: the loop's ceiling track - the top
--- track this loop makes buyable (track_data.top_track), the true top of the
--- climb. This is the loop ceiling, not merely the top the player has bought so
--- far, so the loop-enders stay hidden until the climb has reached the top. It's
--- reachable (navigable, ownable) only once bought all the way up, at which point
--- it equals top_owned_track.
+-- The track Rebirth and Nirvana fire from: the top track the player has climbed
+-- to this loop (top_owned_track). The loop ends as far up the corridor as the
+-- player's power reached - climb further or Rebirth from here, the fork lives on
+-- the top owned track's page.
 function M.rebirth_track()
-  return track_data.top_track(State.loop)
+  return M.top_owned_track()
 end
 
 -- Cash price of a Rebirth: the authored exit price of the track it fires from,
--- the loop's ceiling track (Track 2 on loop 2, Track 4 at loop 4+). Flat per
--- track, no per-loop escalation - past the last track every loop pays Track 4's
--- cost.
+-- the top owned track. Flat per track, no per-loop escalation.
 function M.rebirth_cost()
   return track_data.rebirth_cost(M.rebirth_track())
 end
@@ -341,12 +330,6 @@ function M.shop_item(kind)
       or track_data.track_shop_item(State.active_track, kind)
 end
 
--- True while `kind` is a Car Upgrade sitting out Loop 1's accel-only
--- tutorial (see LOOP1_LOCKED_UPGRADES). Used by the buy scene to hide the row
--- rather than show a button try_buy will just refuse.
-function M.loop1_locked(kind)
-  return LOOP1_LOCKED_UPGRADES[kind] and State.loop == 1
-end
 
 function M.upgrade_cost(kind)
   local id = State.active_track
@@ -413,8 +396,10 @@ function M.try_buy(kind)
   if not M.shop_item_unlocked(id, M.shop_item(kind)) then return end
   if M.needs_first_race(id, kind) then return end
   if kind == "drift_boost" and State.drift == 0 then return end
-  -- Loop 1 is an accel-only tutorial: every other car upgrade waits for Loop 2.
-  if LOOP1_LOCKED_UPGRADES[kind] and State.loop == 1 then return end
+  -- The magnet only pulls in coins, so it stays locked until the Loose Change
+  -- skill node puts coins on sale (State.coins_unlocked). The buy scene hides the
+  -- row until then too; this refuses the buy on any other path.
+  if kind == "magnet" and not State.coins_unlocked then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" or kind == "checkpoints" then

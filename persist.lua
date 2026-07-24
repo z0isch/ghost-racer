@@ -11,6 +11,7 @@ local function default_state()
     money              = 0,
     seen_help          = false,
     loop               = 1,
+    loop_time_left     = track_data.LOOP_SECONDS,
     seen_modals        = {},
     -- Edge-flag for the "Rebirth available!" announcement, fired once the loop
     -- the exit fare is first affordable. Per-loop: start_new_loop resets it
@@ -54,6 +55,9 @@ local function progression_of_state()
     money             = State.money,
     seen_help         = State.seen_help,
     loop              = State.loop,
+    -- Remaining loop-countdown seconds, persisted so a quit/reload resumes the
+    -- clock where it left off (game time, not wall-clock) rather than at 5:00.
+    loop_time_left    = State.loop_time_left,
     seen_modals       = State.seen_modals,
     announced_rebirth = State.announced_rebirth,
     accel             = State.accel,
@@ -87,6 +91,8 @@ local function apply_progression(loaded)
   State.money             = loaded.money or 0
   State.seen_help         = loaded.seen_help or false
   State.loop              = loaded.loop or 1
+  -- Default a full clock for pre-existing saves that predate the field.
+  State.loop_time_left    = loaded.loop_time_left or track_data.LOOP_SECONDS
   State.seen_modals       = loaded.seen_modals or {}
   State.announced_rebirth = loaded.announced_rebirth or false
 
@@ -101,14 +107,11 @@ local function apply_progression(loaded)
   end
 
   -- Restore the tracks bought this loop (cash-purchased, saved). Track 1 is
-  -- always owned; defensively drop any owned id beyond the loop's purchase
-  -- ceiling (game is unreleased; this only bites a hand-edited/stale save) and
-  -- seed default track state for each owned id.
+  -- always owned; seed default track state for each owned id.
   State.unlocked = { track1 = true }
   if loaded.unlocked then
     for id, owned in pairs(loaded.unlocked) do
-      if owned and track_data.TRACKS[id]
-          and track_data.get_track_index(id) <= track_data.top_track_index(State.loop) then
+      if owned and track_data.TRACKS[id] then
         State.unlocked[id] = true
       end
     end
@@ -201,9 +204,8 @@ end
 -- carries this loop's ¥ - already banked per race rank (see
 -- economy.bank_race_yen) - so there's no reward term here; the ¥ was earned as
 -- the loop was raced and is now spent in the garage this reset drops into.
-function M.start_new_loop()
-  local old_loop      = State.loop or 1
-  local next_loop     = old_loop + 1
+function M.start_new_loop(opts)
+  local next_loop     = (State.loop or 1) + 1
   local seen_help     = State.seen_help
   local seen_modals   = State.seen_modals
   local tree          = State.skill_tree
@@ -217,18 +219,16 @@ function M.start_new_loop()
   State.skill_tree.fx = {}
   -- Ownership resets to Track 1 for the fresh climb (default_state already seeded
   -- unlocked = { track1 } and tracks.track1). The higher tracks are re-bought
-  -- with cash this loop, up to the new loop's ceiling. The tree (and its coin
-  -- availability) survives the reset; the coin floor is applied by the rederive
-  -- below.
-  -- Record the track this Rebirth newly made *buyable* (if any) so the fanfare
-  -- can show "Track #N available to buy!". Nothing new opens once the ceiling is
-  -- capped (loop 4+), so leave it nil then.
-  if track_data.top_track_index(next_loop) > track_data.top_track_index(old_loop) then
-    State.rebirth_unlocked_track = track_data.top_track(next_loop)
+  -- with cash this loop; the whole corridor is buyable regardless of loop. The
+  -- tree (and its coin availability) survives the reset; the coin floor is
+  -- applied by the rederive below.
+  -- The ending fanfare shows on a *voluntary* Rebirth (the payoff, not a
+  -- tutorial - it shows even on repeat loops). A timeout already showed its own
+  -- TIME'S UP breakdown and the buy scene routes straight to the garage, so
+  -- suppress the fanfare there to avoid a second, unearned dismissal.
+  if not (opts and opts.timeout) then
+    State.purchase_modal = "rebirth"
   end
-  -- The ending fanfare always shows, even on repeat loops - it's the payoff,
-  -- not a tutorial.
-  State.purchase_modal = "rebirth"
   ghost.clear_all_sims()
   M.rederive_skill_effects()
   M.resync_car_and_ghosts()

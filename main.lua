@@ -58,11 +58,29 @@ end
 local AUTOSAVE_PERIOD = 5
 local autosave_left   = AUTOSAVE_PERIOD
 
+-- The loop clock bleeds only during active play: the buy screen and a live
+-- race, and not while a blocking modal covers the shop or the first-race
+-- controls screen is up. Pause is handled for free -- _update is skipped while
+-- the engine pause overlay is open (USAGI.md).
+local function clock_ticking()
+  if State.mode == "buy" then
+    return not (State.purchase_modal or State.race_modal or State.first_wall
+      or State.rebirth_confirm or State.loop_timeout)
+  elseif State.mode == "race" then
+    local r = State.race
+    return r ~= nil and r.phase ~= "help"
+  end
+  return false   -- skill_tree (garage) + intro never tick
+end
+
 function _update(dt)
   autosave_left = autosave_left - dt
   if autosave_left <= 0 then
     autosave_left = AUTOSAVE_PERIOD
     persist.save()
+  end
+  if clock_ticking() then
+    State.loop_time_left = math.max(0, State.loop_time_left - dt)
   end
   scenes[State.mode].update(dt)
 end

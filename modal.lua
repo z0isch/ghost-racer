@@ -12,7 +12,8 @@ local BUTTON_W     = 180
 local BUTTON_PAD_Y = 2  -- matches ui.button's vertical padding
 local BUTTON_GAP   = 12 -- horizontal space between buttons in a choice row
 local PANEL_PAD    = 16
-local GAP          = 20 -- vertical space between title, body, and button
+local GAP          = 20  -- vertical space between title, body, and button
+local MIN_PANEL_W  = 260 -- floor so short-body modals don't shrink to a stub
 
 local M            = {}
 
@@ -33,16 +34,25 @@ local M            = {}
 function M.draw(opts)
   gfx.rect_fill(0, 0, usagi.GAME_W, usagi.GAME_H, gfx.COLOR_BLACK, .4)
 
-  local title       = opts.title
+  local title       = opts.title or ""
   local body        = opts.body
   local buttons     = opts.buttons or { opts.button or "GOT IT" }
   local demo        = opts.demo
   local row_w       = #buttons * BUTTON_W + (#buttons - 1) * BUTTON_GAP
 
-  -- measure_text height is the font line height, so multi-line bodies are
-  -- sized by counting lines.
-  local tw, line_h  = usagi.measure_text(title)
-  tw                = tw * TITLE_SCALE
+  -- An empty title (dialogue-only modals, e.g. the intro sequence) collapses
+  -- its whole band - height and the gap under it - so the panel isn't topped by
+  -- a blank stripe.
+  local has_title   = title ~= ""
+
+  -- Font line height comes from a known glyph, not `title`: an empty title
+  -- (dialogue-only modals) measures 0 tall, which would collapse every vertical
+  -- offset below. measure_text height is the font line height, so multi-line
+  -- bodies are sized by counting lines.
+  local _, line_h   = usagi.measure_text("A")
+  local tw          = usagi.measure_text(title) * TITLE_SCALE
+  local title_h     = has_title and line_h * TITLE_SCALE or 0
+  local title_gap   = has_title and GAP or 0
   local bw          = usagi.measure_text(body) * BODY_SCALE
   local _, breaks   = body:gsub("\n", "")
   local bh          = (breaks + 1) * line_h * BODY_SCALE
@@ -51,16 +61,16 @@ function M.draw(opts)
 
   -- Total content height, so the panel can be centered vertically no matter
   -- how many body lines there are.
-  local content_h   = line_h * TITLE_SCALE + GAP + bh + GAP
+  local content_h   = title_h + title_gap + bh + GAP
       + (demo and demo.h + GAP or 0) + btn_h
 
-  local panel_w     = math.max(tw, bw, row_w, demo and demo.w or 0) + PANEL_PAD * 2
+  local panel_w     = math.max(tw, bw, row_w, demo and demo.w or 0, MIN_PANEL_W) + PANEL_PAD * 2
   local panel_x     = math.floor((usagi.GAME_W - panel_w) / 2)
   local panel_h     = content_h + PANEL_PAD * 2
   local panel_y     = math.floor((usagi.GAME_H - panel_h) / 2)
 
   local ty          = panel_y + PANEL_PAD
-  local by          = ty + line_h * TITLE_SCALE + GAP
+  local by          = ty + title_h + title_gap
   local demo_y      = by + bh + GAP
   local btn_y       = demo_y + (demo and demo.h + GAP or 0)
   gfx.rect_fill(panel_x, panel_y, panel_w, panel_h, gfx.COLOR_DARK_GRAY)

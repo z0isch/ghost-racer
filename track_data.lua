@@ -26,10 +26,13 @@ function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
 end
 
+-- Seconds in a loop's countdown before it force-Rebirths. Tuning knob.
+M.LOOP_SECONDS = 300
+
 -- Fixed cash price of Nirvana, the always-available escape item (the eventual
 -- win condition). Ungated - never keyed to rank/loop/track - and unreachable
--- for now; the buy button renders it trimmed to "1m". Tuning knob.
-M.NIRVANA_COST = 1000000
+-- for now; the buy button renders it trimmed to "$300m". Tuning knob.
+M.NIRVANA_COST = 300000000   -- was 1000000
 
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
@@ -107,9 +110,8 @@ M.TRACKS = {
     label         = "Track 1",
     pay           = 5,
     -- Cash price to *buy* this track for the current loop. Track 1 is owned free
-    -- at the start of every loop (nil), the rest are re-bought each climb. Loop
-    -- caps how far up the corridor you may buy (see track_data.top_track_index);
-    -- cash is the wall within that cap.
+    -- at the start of every loop (nil), the rest are re-bought each climb. The
+    -- whole corridor is buyable regardless of loop; cash is the only wall.
     unlock_cost   = nil,
     -- Cash price of a Rebirth taken *from* this track (the top owned track for
     -- the loop). Flat per track, no per-loop escalation - see the rebirth_cost
@@ -348,8 +350,8 @@ M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
 
 -- The visible corridor: TRACK_ORDER with hidden tracks filtered out. Every
 -- track exists in the corridor from the start; which ones are *owned* is
--- cash-bought within the loop's ceiling (see M.top_track_index and
--- economy.try_unlock_track), so the order itself never depends on the loop.
+-- cash-bought (see economy.try_unlock_track), so the order never depends on the
+-- loop.
 function M.track_order()
   local out = {}
   for _, id in ipairs(M.TRACK_ORDER) do
@@ -377,23 +379,6 @@ end
 -- Cash price to buy a track for the current loop (nil for Track 1, owned free).
 function M.unlock_cost(id)
   return M.TRACKS[id].unlock_cost
-end
-
--- Corridor index (1-based) of the loop's purchase ceiling: the first
--- `min(loop, #tracks)` tracks are buyable, so loop 1 -> Track 1, loop 4+ ->
--- Track 4 (capped; no new track becomes buyable past the last one). Ownership
--- is cash-bought within this cap and resets each loop (see persist), so the
--- ceiling is a wall you may not have climbed to yet.
-function M.top_track_index(loop)
-  return math.min(loop or 1, #M.track_order())
-end
-
--- Id of the loop's ceiling track - the newest track a loop makes *purchasable*.
--- Names the reveal for the Rebirth fanfare ("Track #N available to buy!"), and
--- the track Rebirth/Nirvana fire from (economy.rebirth_track): the top of the
--- climb, reachable only once bought all the way up to it.
-function M.top_track(loop)
-  return M.track_order()[M.top_track_index(loop)]
 end
 
 -- Ascending per-race rank letters above the D floor, checked against

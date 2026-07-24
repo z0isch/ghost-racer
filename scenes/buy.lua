@@ -82,12 +82,7 @@ local MODAL_INFO       = {
 -- State.seen_modals.first_wall (persists across loops).
 local FIRST_WALL_TITLE = "Hit a Wall?"
 local FIRST_WALL_BODY  = table.concat({
-  "You've bought every track",
-  "this loop allows.",
-  "",
-  "Rebirth from the top track to",
-  "reset, grow stronger, and open",
-  "the next one to buy.",
+  "Buy Rebirth to restart the loop."
 }, "\n")
 
 -- Clears the purchase modal. Dismissing the "Loop Complete!" fanfare drops into
@@ -99,6 +94,18 @@ local function dismiss_purchase_modal()
   if kind == "rebirth" then
     SceneGoto("skill_tree")
   end
+end
+
+-- Dismissing the TIME'S UP breakdown fires the forced Rebirth: the timeout
+-- variant of start_new_loop (no fanfare), then drops into the garage. This is
+-- the *unconditional* Rebirth - it calls start_new_loop directly, bypassing
+-- economy.prestige()'s ceiling-track / affordability guards. Banked ¥ already
+-- lives in the skill tree (bank_race_yen), so only in-loop money and track
+-- ownership reset.
+local function dismiss_timeout()
+  State.loop_timeout = nil
+  persist.start_new_loop({ timeout = true })
+  SceneGoto("skill_tree")
 end
 
 local M = {}
@@ -161,8 +168,23 @@ function M.update(dt)
   if State.rebirth_confirm and input.pressed(input.BTN1) then
     State.rebirth_confirm = nil
   end
+  -- Loop timed out: once the clock hits zero and nothing else is on screen,
+  -- raise the TIME'S UP breakdown. Held behind other modals so a just-finished
+  -- race's result modal shows first. Detecting here (not just on enter) covers
+  -- all arrival paths: idling on buy, returning from a timed-out race, and
+  -- loading into buy with a dead clock. State.loop_timeout gates the modal; the
+  -- reset happens on its dismissal, not here.
+  if not State.loop_timeout and State.loop_time_left <= 0
+      and not State.purchase_modal and not State.race_modal
+      and not State.first_wall and not State.rebirth_confirm then
+    State.loop_timeout = true
+  end
+  if State.loop_timeout and input.pressed(input.BTN1) then
+    dismiss_timeout()
+  end
   if not State.purchase_modal and not State.race_modal and not State.first_wall
-      and not State.rebirth_confirm and input.key_pressed(input.KEY_SPACE) then
+      and not State.rebirth_confirm and not State.loop_timeout
+      and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
 end
@@ -222,9 +244,9 @@ local function shop_button(item, x, y, w, opts)
 end
 
 -- The buy-next-track row: the climb within a loop. Shown on the top owned
--- track's page (the only page whose next corridor track is unowned) when that
--- track is within the loop's purchase ceiling. Priced at the track's authored
--- unlock_cost; buying it (economy.try_unlock_track) opens it to race.
+-- track's page (the only page whose next corridor track is unowned). Priced at
+-- the track's authored unlock_cost; buying it (economy.try_unlock_track) opens
+-- it to race.
 local function new_track_row(next_id, next_track_idx, x, y, w)
   local label = string.format("Track #%d", next_track_idx)
   local _, th = usagi.measure_text(label)
@@ -242,10 +264,10 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
 end
 
 -- The Rebirth row: the loop-ender that stays in Samsara and climbs again,
--- priced at the loop ceiling track's authored exit cost (economy.rebirth_cost).
+-- priced at the top owned track's authored exit cost (economy.rebirth_cost).
 -- Shows the ¥ this loop's race ranks have banked as the payoff (Q12c) - that's
--- what carries into the garage on reset. Renders only on the loop's ceiling
--- track (see draw_shop); disabled until the fare is affordable.
+-- what carries into the garage on reset. Renders only on the top owned track
+-- (see draw_shop); disabled until the fare is affordable.
 local function rebirth_row(x, y, w)
   local banked = economy.loop_yen_total()
   local label  = banked > 0 and string.format("Rebirth", banked) or "Rebirth"
@@ -265,7 +287,7 @@ end
 
 -- The Nirvana row: escape the loop - the eventual win, paired directly below
 -- Rebirth on the top track as the other fork (stay in Samsara vs escape).
--- Fixed $1M price, button trimmed to "1m", affordability-gated like any other
+-- Fixed $300M price, button trimmed to "$300m", affordability-gated like any other
 -- button. Non-functional for now (unreachable price, click is a no-op).
 local function nirvana_row(x, y, w)
   local label = "Nirvana"
@@ -277,7 +299,7 @@ local function nirvana_row(x, y, w)
   local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
   local bx         = x + w - SHOP_COST_W
   local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
-  local clicked    = ui.button("$1 million", bx, y, btn_opts)
+  local clicked    = ui.button("$300m", bx, y, btn_opts)
   return clicked, bh
 end
 
@@ -301,6 +323,8 @@ function M.draw()
   hud.draw()
   if State.race_modal then
     M.draw_race_modal()
+  elseif State.loop_timeout then
+    M.draw_timeout()
   elseif State.first_wall then
     M.draw_first_wall()
   elseif State.rebirth_confirm then
@@ -440,6 +464,25 @@ function M.draw_rebirth_confirm()
   if pressed then
     State.rebirth_confirm = nil
     if pressed == 1 then economy.prestige() end
+  end
+end
+
+-- Loop-timeout modal: the clock hit 0. Shows the same live ¥ breakdown as the
+-- Rebirth confirm (read before the reset wipes State.tracks), under a rainbow
+-- "TIME'S UP!" title with a single OKAY. It *replaces* the SAMSARA fanfare on
+-- this path; dismissal fires the forced Rebirth and drops to the garage. A
+-- BTN1 press dismisses in M.update.
+function M.draw_timeout()
+  local body, draw_body = breakdown_body(prestige_breakdown_rows())
+  local draw_title      = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
+  if modal.draw({
+        title      = "TIME'S UP!",
+        body       = body,
+        draw_body  = draw_body,
+        draw_title = draw_title,
+        button     = "OKAY",
+      }) then
+    dismiss_timeout()
   end
 end
 
@@ -597,8 +640,7 @@ function M.draw_shop()
 
   -- The climb: the buy-next-track row sits on the top owned track's page (the
   -- only page whose next corridor track is unowned), offering to climb one more
-  -- track this loop while the corridor has a next track within the loop's
-  -- ceiling.
+  -- track this loop while the corridor has a next track left to buy.
   if id == economy.top_owned_track() then
     local next_track = economy.next_locked_track()
     if next_track and next_track == order[idx + 1] then
@@ -610,11 +652,10 @@ function M.draw_shop()
     end
   end
 
-  -- The loop-enders live on the loop's ceiling track (its top for this loop),
-  -- reachable only once the climb has bought all the way up to it - not on
-  -- whatever track the player has climbed to so far. Rebirth stays in Samsara
-  -- and resets; Nirvana escapes the loop (the eventual win, non-functional for
-  -- now).
+  -- The loop-enders live on the top owned track (economy.rebirth_track), the
+  -- fork paired with the climb: buy the next track to go higher, or end the loop
+  -- from as far up as you've reached. Rebirth stays in Samsara and resets;
+  -- Nirvana escapes the loop (the eventual win, non-functional for now).
   if id == economy.rebirth_track() then
     -- Rebirth routes through a confirm since it wipes the loop on the spot.
     local rb_clicked, rb_bh = rebirth_row(x, shop_y, w)
@@ -637,14 +678,11 @@ function M.draw_shop()
   gfx.text_ex(header, ux + math.floor((uw - hw) / 2), nav_y + 10, 2, 0, gfx.COLOR_WHITE, 1)
   local uy = nav_y + th_a * 2 + 16
   for _, item in ipairs(track_data.upgrades()) do
-    -- The magnet only pulls in coins, so it hides alongside them (coinless
-    -- loops before Loose Change is bought). Launch Control (skill tree) starts
-    -- every loop at max acceleration, so there's nothing left for that row.
-    -- Loop 1 is an accel-only tutorial - every other upgrade here stays
-    -- hidden until Loop 2 (economy.loop1_locked).
+    -- The magnet only pulls in coins, so it hides until the Loose Change skill
+    -- node puts coins on sale (State.coins_unlocked). Launch Control (skill tree)
+    -- starts every loop at max acceleration, so there's nothing left for that row.
     if not (item.kind == "magnet" and not State.coins_unlocked)
-        and not (item.kind == "accel" and State.max_accel)
-        and not economy.loop1_locked(item.kind) then
+        and not (item.kind == "accel" and State.max_accel) then
       local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })
       if clicked then economy.try_buy(item.kind) end
       uy = uy + bh + gap

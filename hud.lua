@@ -36,6 +36,37 @@ local ARROW_FLASH_DECAY = 10   -- flash decay rate, 1/sec
 -- it sweeps up into the live projection.
 local WARMUP            = 0.05
 
+-- Low-time thresholds for the loop-countdown clock (see draw_clock).
+local CLOCK_WARN_SECS   = 60   -- yellow at/under 1:00
+local CLOCK_DANGER_SECS = 10   -- red + pulse at/under 0:10
+
+-- The loop countdown formatted M:SS, ceil'd so the visible number only hits
+-- 0:00 exactly at timeout (a live 0.4s still reads 0:01).
+local function clock_text(secs)
+  secs = math.max(0, math.ceil(secs))
+  return string.format("%d:%02d", math.floor(secs / 60), secs % 60)
+end
+
+-- Draws the loop clock with its left edge at (x, y) and the given scale. Color
+-- escalates as the loop drains: white, yellow at/under a minute, red at/under
+-- ten seconds; the red state also pulses (a sine on usagi.elapsed) so a
+-- mid-lap timeout is never a surprise. One draw path; buy and race differ only
+-- in the position/scale the caller passes.
+local function draw_clock(x, y, scale)
+  local secs  = State.loop_time_left or 0
+  local text  = clock_text(secs)
+  local color = gfx.COLOR_WHITE
+  local alpha = 1
+  if secs <= CLOCK_DANGER_SECS then
+    color = gfx.COLOR_RED
+    alpha = 0.55 + 0.45 * math.abs(math.sin(usagi.elapsed * 6))
+  elseif secs <= CLOCK_WARN_SECS then
+    color = gfx.COLOR_YELLOW
+  end
+  gfx.text_ex(text, x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, alpha)
+  gfx.text_ex(text, x, y, scale, 0, color, alpha)
+end
+
 -- Maps a $/sec rate onto the bar: each rank zone is a fifth of the height,
 -- with the arrow interpolating between that rank's thresholds inside it.
 local function bar_fraction(rate)
@@ -188,12 +219,23 @@ function M.draw()
   -- so the bar hides entirely rather than falling back to the old meter.
   if State.mode == "race" and State.race and State.race.phase ~= "help" then
     if reference.has() then draw_bar() end
+    -- Compact, top-left, tucked below the race scene's QUIT button so a mid-lap
+    -- timeout is never a surprise. Same color states as the buy clock.
+    draw_clock(5, 26, 2)
     return
   end
 
   local scale        = 3
   local _, th        = usagi.measure_text("0")
-  local bal_y        = 6
+  -- Loop countdown, prominent and top-center, above the money block (which is
+  -- nudged down below it so the two don't collide).
+  local clock_scale  = 3
+  local clock_str    = clock_text(State.loop_time_left or 0)
+  local clock_w      = usagi.measure_text(clock_str) * clock_scale
+  local _, clock_th  = usagi.measure_text(clock_str)
+  draw_clock(math.floor((usagi.GAME_W - clock_w) / 2), 4, clock_scale)
+
+  local bal_y        = 4 + clock_th * clock_scale + 6
   local total_rate_y = bal_y + th * scale + 3
   local rate_y       = total_rate_y
 
