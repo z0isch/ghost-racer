@@ -15,6 +15,10 @@ local RANK_MULTS         = {
 }
 local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
+-- Car Upgrades locked out during Loop 1's accel-only tutorial; everything
+-- else in the column waits for Loop 2. Accel is intentionally absent.
+local LOOP1_LOCKED_UPGRADES = { drift = true, drift_boost = true, boost = true, magnet = true }
+
 -- ¥ a track is worth this loop at each best-race rank, the cross-loop payout
 -- that rank now drives (rank is already the in-loop cash multiplier; this
 -- makes it the skill-tree currency too). Absolute totals, so a track that
@@ -337,6 +341,13 @@ function M.shop_item(kind)
       or track_data.track_shop_item(State.active_track, kind)
 end
 
+-- True while `kind` is a Car Upgrade sitting out Loop 1's accel-only
+-- tutorial (see LOOP1_LOCKED_UPGRADES). Used by the buy scene to hide the row
+-- rather than show a button try_buy will just refuse.
+function M.loop1_locked(kind)
+  return LOOP1_LOCKED_UPGRADES[kind] and State.loop == 1
+end
+
 function M.upgrade_cost(kind)
   local id = State.active_track
   local u  = M.shop_item(kind)
@@ -402,6 +413,8 @@ function M.try_buy(kind)
   if not M.shop_item_unlocked(id, M.shop_item(kind)) then return end
   if M.needs_first_race(id, kind) then return end
   if kind == "drift_boost" and State.drift == 0 then return end
+  -- Loop 1 is an accel-only tutorial: every other car upgrade waits for Loop 2.
+  if LOOP1_LOCKED_UPGRADES[kind] and State.loop == 1 then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
   if kind == "ghosts" or kind == "coins" or kind == "checkpoints" then

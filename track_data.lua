@@ -34,7 +34,7 @@ M.NIRVANA_COST = 1000000
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
 -- by price (plus drift_boost needing drift owned - see economy.try_buy).
-M.UPGRADES      = {
+M.UPGRADES     = {
   {
     kind      = "accel",
     label     = "Acceleration",
@@ -137,7 +137,7 @@ M.TRACKS = {
     map           = basic_map,
     spawn         = { col = 1, row = 9 },
     checkpoints   = {
-      { col = 33, row = 12, w = 2, h = 5 },
+      { col = 32, row = 12, w = 2, h = 5 },
       { col = 1,  row = 6,  w = 4, h = 11 },
     },
     gates         = {

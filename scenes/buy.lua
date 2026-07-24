@@ -640,8 +640,11 @@ function M.draw_shop()
     -- The magnet only pulls in coins, so it hides alongside them (coinless
     -- loops before Loose Change is bought). Launch Control (skill tree) starts
     -- every loop at max acceleration, so there's nothing left for that row.
+    -- Loop 1 is an accel-only tutorial - every other upgrade here stays
+    -- hidden until Loop 2 (economy.loop1_locked).
     if not (item.kind == "magnet" and not State.coins_unlocked)
-        and not (item.kind == "accel" and State.max_accel) then
+        and not (item.kind == "accel" and State.max_accel)
+        and not economy.loop1_locked(item.kind) then
       local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })
       if clicked then economy.try_buy(item.kind) end
       uy = uy + bh + gap
