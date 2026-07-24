@@ -15,6 +15,14 @@ local RANK_MULTS         = {
 }
 local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
+-- ¥ a track is worth this loop at each best-race rank, the cross-loop payout
+-- that rank now drives (rank is already the in-loop cash multiplier; this
+-- makes it the skill-tree currency too). Absolute totals, so a track that
+-- climbs from C to A banks the gap and ends the loop worth RANK_YEN[A]. D pays
+-- nothing - a track you only limped through doesn't fund the climb. Tuning
+-- knobs only (Q15's D->0, C->x, B->y, A->z, S->w) - change freely.
+local RANK_YEN           = { D = 0, C = 15, B = 30, A = 60, S = 120 }
+
 -- The current-speed estimate of remaining time is padded by this factor so the
 -- meter leans conservative: better to under-promise and let the player beat the
 -- bar than to promise a rank and rob it at the finish.
@@ -23,6 +31,24 @@ local FINISH_FUDGE       = 1.08
 local M                  = {}
 
 M.RANK_MULTS             = RANK_MULTS
+M.RANK_YEN               = RANK_YEN
+
+function M.rank_yen(rank)
+  return RANK_YEN[rank] or 0
+end
+
+-- Total ¥ this loop's race ranks are worth across the corridor - what a Rebirth
+-- carries into the garage. Sums each raced track's rank ¥; equals what's been
+-- banked into the skill tree this loop (bank_race_yen credits the same amounts
+-- incrementally).
+function M.loop_yen_total()
+  local total = 0
+  for _, id in ipairs(track_data.track_order()) do
+    local ts = State.tracks[id]
+    if ts and ts.best_rate then total = total + RANK_YEN[M.track_rank(id)] end
+  end
+  return total
+end
 
 -- $ awarded per checkpoint/coin on a given track.
 function M.track_pay(id)
@@ -162,7 +188,7 @@ end
 -- a rebalance. Ungated items always pass.
 function M.shop_item_unlocked(id, item)
   if item.requires_rank_all then
-    for _, tid in ipairs(track_data.track_order(State.loop)) do
+    for _, tid in ipairs(track_data.track_order()) do
       if not M.rank_at_least(tid, item.requires_rank_all) then return false end
     end
     return true
@@ -171,53 +197,45 @@ function M.shop_item_unlocked(id, item)
   return M.rank_at_least(id, item.requires_rank)
 end
 
--- Track whose shop sells Nirvana this loop (Track 3 during the loop-1
--- prologue, Track 4 afterwards), or nil.
-function M.nirvana_track()
-  for _, tid in ipairs(track_data.track_order(State.loop)) do
-    if track_data.track_shop_item(tid, "nirvana", State.loop) then return tid end
+-- First track in the visible corridor the player hasn't unlocked yet, or nil
+-- once the whole corridor is cleared. Hidden tracks are already filtered out
+-- of track_order, so they're never offered as the next wall.
+function M.next_locked_track()
+  for _, tid in ipairs(track_data.track_order()) do
+    if not State.unlocked[tid] then return tid end
   end
   return nil
 end
 
--- True once Nirvana's non-cash requirements are met on the track that sells
--- it: its first-race requirement, plus the loop-1 prologue's rank gate. The
--- price is deliberately not part of this - the shop row appears (with its
--- price on it) the moment the last track has been raced, and the money is the
--- remaining work. See nirvana_affordable for the other half.
-function M.nirvana_ready()
-  local tid = M.nirvana_track()
-  if not tid then return false end
-  return M.shop_item_unlocked(tid, track_data.track_shop_item(tid, "nirvana", State.loop))
-      and not M.needs_first_race(tid, "nirvana")
-end
-
--- Cash price of this loop's Nirvana, or nil if no track sells it. Not
--- upgrade_cost(), which prices against State.active_track - the player can be
--- standing in any shop when this is asked.
+-- Cash price of a Rebirth: a fixed fraction of the wall the player is stuck at
+-- (the next locked track's unlock_cost), or of the last corridor track once
+-- everything is unlocked. No per-prestige escalation - the exit tracks the
+-- current wall, so it's affordable soon after that wall bites. track1 has no
+-- unlock_cost, so a single-track corridor would return nil; the real corridor
+-- always has a priced track to reference.
 function M.nirvana_cost()
-  local tid  = M.nirvana_track()
-  local item = tid and track_data.track_shop_item(tid, "nirvana", State.loop)
-  if not item then return nil end
-  return math.floor(item.base_cost * (item.growth ^ State.nirvana))
+  local order = track_data.track_order()
+  local ref   = M.next_locked_track() or order[#order]
+  local cost  = ref and track_data.unlock_cost(ref)
+  if not cost then return nil end
+  return track_data.nirvana_cost(cost)
 end
 
--- True once the exit is both unlocked and paid for. This is what edge-triggers
--- the "Nirvana available!" announcement (see scenes/race.lua finish_race):
--- with a price on it, the race that earns the fare is the news, not the race
--- that revealed the row.
+-- True once the player can afford to Rebirth. Edge-triggers the "Rebirth
+-- available!" announcement (see scenes/race.lua finish_race): the race that
+-- earns the fare is the news.
 function M.nirvana_affordable()
   local cost = M.nirvana_cost()
   return cost ~= nil and State.money >= cost
 end
 
--- First track in this loop's track order the player hasn't unlocked yet, or
--- nil. Track 4 doesn't exist in loop 1, so it's never offered there.
-function M.next_locked_track()
-  for _, tid in ipairs(track_data.track_order(State.loop)) do
-    if not State.unlocked[tid] then return tid end
-  end
-  return nil
+-- Rebirth (Nirvana): reset and climb again. Always available once the fare is
+-- earned; the ¥ banked from this loop's race ranks is already in the skill
+-- tree, waiting to be spent in the garage the reset drops the player into.
+function M.prestige()
+  if not M.nirvana_affordable() then return end
+  sfx.play("loop_complete")
+  persist.start_new_loop()
 end
 
 -- $/sec earned from ghosts before the rank multiplier is applied.
@@ -260,10 +278,10 @@ end
 
 -- Shop item definition for `kind` in the current context: global car
 -- upgrades first (track-independent), then the active track's shop
--- (ghosts/coins/nirvana).
+-- (ghosts/coins/checkpoints).
 function M.shop_item(kind)
-  return track_data.upgrade_item(kind, State.loop)
-      or track_data.track_shop_item(State.active_track, kind, State.loop)
+  return track_data.upgrade_item(kind)
+      or track_data.track_shop_item(State.active_track, kind)
 end
 
 function M.upgrade_cost(kind)
@@ -297,21 +315,30 @@ end
 local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, checkpoints = true }
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
--- completed race everywhere. Nirvana ends the loop, so it stays locked until
--- the track selling it has been raced -- which is what stops a player from
--- buying the last track and immediately cashing out without driving it (and,
--- since Nirvana is sold by the last track of the loop, needs no per-loop
--- special-casing). Checkpoints only carry that lock on Track 2 during the
--- first loop, where it teaches the race-then-buy rhythm.
---
--- Unowned tracks report true: nirvana_ready() runs at every race finish and
--- reaches for the Nirvana-selling track whether or not it's been bought yet.
+-- completed race on that track (nothing to replay otherwise). It's the only
+-- first-race gate left: tracks and Rebirth are gated on cash alone now.
 function M.needs_first_race(id, kind)
   local tstate = State.tracks[id]
   if not tstate then return true end
   if tstate.ghost_line then return false end
-  if kind == "ghosts" or kind == "nirvana" then return true end
-  return kind == "checkpoints" and State.loop == 1 and track_data.get_track_index(id) == 2
+  return kind == "ghosts"
+end
+
+-- Banks the ¥ newly earned on `id` this loop: the gap between the track's best
+-- rank this loop (its established rank) and the highest tier already paid.
+-- Called on race finish, after ghost.promote(). Best-rank-per-track per loop -
+-- re-racing at or below the paid tier banks nothing, so there's no farm - and
+-- the ¥ lands in the skill tree immediately, to be spent only once the player
+-- Rebirths into the garage. Returns the ¥ credited (0 if none).
+function M.bank_race_yen(id)
+  local tstate = State.tracks[id]
+  if not tstate then return 0 end
+  local rank = M.track_rank(id)
+  local gain = RANK_YEN[rank] - (RANK_YEN[tstate.paid_rank or "D"] or 0)
+  if gain <= 0 then return 0 end
+  tstate.paid_rank        = rank
+  State.skill_tree.points = State.skill_tree.points + gain
+  return gain
 end
 
 function M.try_buy(kind)
@@ -348,17 +375,12 @@ function M.try_buy(kind)
       end
     end
   end
-  if kind == "nirvana" then
-    sfx.play("loop_complete")
-    persist.start_new_loop()
-    return
-  end
   car.apply_upgrades(State.car, State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   persist.save()
 end
 
 function M.try_unlock_track(id)
-  local cost = track_data.unlock_cost(id, State.loop)
+  local cost = track_data.unlock_cost(id)
   if not cost or State.money < cost then return end
   State.money        = State.money - cost
   State.unlocked[id] = true

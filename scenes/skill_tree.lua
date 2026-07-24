@@ -8,18 +8,17 @@ local M                  = {}
 
 -- First-ever garage visit: a one-shot explainer that the garage sells
 -- permanent, cross-loop upgrades bought with ¥ (a currency distinct from the
--- race $ spent in the shop). The starting ¥ comes from the loop reward paid by
--- persist.start_new_loop, so the copy pulls the amount from there to stay in
--- sync. Gated on State.seen_modals.garage, which persists across loops.
+-- race $ spent in the shop). The ¥ is earned by racing well - each track's best
+-- rank banks ¥ (see economy.bank_race_yen), spent here between loops. Gated on
+-- State.seen_modals.garage, which persists across loops.
 local GARAGE_MODAL_TITLE = "Welcome to the Garage!"
 local GARAGE_MODAL_BODY  = table.concat({
   "Buy permanent upgrades that stay",
   "with you across every loop.",
   "",
-  "Spend ¥ - a new currency you",
-  "earn by completing loops.",
-  "",
-  "Here's ¥" .. persist.LOOP_REWARD .. " to start!",
+  "Spend ¥ - earned by racing well,",
+  "the better a track's rank the more",
+  "it banks - then climb back stronger.",
 }, "\n")
 
 function M.enter()
@@ -68,11 +67,16 @@ function M.draw()
     persist.save()
   end
 
-  -- NEXT button, gated until Engine Tune (top_speed) is bought at least once.
-  local w     = 200
-  local x     = math.floor((usagi.GAME_W - w) / 2)
-  local y     = usagi.GAME_H - 60
-  local gated = skill_tree.rank(st, "top_speed") == 0
+  -- NEXT button, gated until Engine Tune (top_speed) is bought at least once -
+  -- but only while it's actually affordable, so a player who Rebirthed with too
+  -- little ¥ to buy anything (all-D races bank none) isn't trapped in the
+  -- garage. They climb again and buy it once a race earns ¥.
+  local w        = 200
+  local x        = math.floor((usagi.GAME_W - w) / 2)
+  local y        = usagi.GAME_H - 60
+  local ts_cost  = skill_tree.next_cost(st, "top_speed")
+  local gated    = skill_tree.rank(st, "top_speed") == 0
+      and ts_cost ~= nil and st.points >= ts_cost
   if ui.button("NEXT", x, y, { w = w, scale = 3, disabled = gated }) and not gated then
     SceneGoto("intro")
   end

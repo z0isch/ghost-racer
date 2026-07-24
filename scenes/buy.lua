@@ -15,18 +15,6 @@ local persist     = require "persist"
 local SHOP_COST_W = 50
 local GHOST_ALPHA = 0.6
 
--- Formats a duration in seconds as H:MM:SS (or M:SS under an hour).
-local function format_duration(seconds)
-  local total = math.floor(seconds + 0.5)
-  local h     = math.floor(total / 3600)
-  local m     = math.floor((total % 3600) / 60)
-  local s     = total % 60
-  if h > 0 then
-    return string.format("%d:%02d:%02d", h, m, s)
-  end
-  return string.format("%d:%02d", m, s)
-end
-
 -- First-purchase explainer copy, keyed by shop `kind`. Shown once as an
 -- overlay in this scene immediately on purchase (see economy.try_buy).
 local MODAL_INFO = {
@@ -87,164 +75,30 @@ local MODAL_INFO = {
   },
 }
 
--- Two-step explainer shown once, right after the first race of loop 2 (the
--- first loop where the tachometer appears - see finish_race). Step 1 teaches
--- the loop rank / tachometer with a shrunk copy of the dial; step 2 sets the
--- S-rank win condition. Sequenced via State.loop_intro (1, then 2, then nil).
-local LOOP_INTRO = {
-  {
-    title = "Loop Rank",
-    body  = "This gauge is your Loop Rank, set by\nyour course ranks and your pace.\n\n"
-        .. "It starts low and climbs as you clear\ncourses. Better course ranks AND a\n"
-        .. "faster loop both raise it - and higher\nRanks pay more ¥.",
-    demo  = true,
-  },
-  {
-    title = "Escape SAMSARA",
-    body  = "Reach Rank S on a loop to break\nfree and escape SAMSARA for good.\n\n"
-        .. "Anything less and the loop\nbegins anew...",
-  },
-}
+-- First-wall onboarding: shown once the first time the next track is out of
+-- reach on cash while a Rebirth is affordable - the moment the corridor's cash
+-- wall first bites. Teaches the prestige-to-climb loop that replaces "just
+-- keep racing." Gated on State.seen_modals.first_wall (persists across loops).
+local FIRST_WALL_TITLE = "Hit a Wall?"
+local FIRST_WALL_BODY  = table.concat({
+  "The next track costs more than",
+  "you can earn this loop.",
+  "",
+  "Rebirth to reset the corridor and",
+  "spend the ¥ you've banked on",
+  "permanent upgrades - then climb",
+  "back faster and reach further.",
+}, "\n")
 
--- Clears the purchase modal. Dismissing the "Loop Complete!" Nirvana modal
--- chains into the loop-rank breakdown (the scored recap of the loop just
--- finished); dismissing that breakdown returns to the skill tree, since
--- there's nothing left to buy this loop.
---
--- Only the prologue takes that detour, though. State.loop has already rolled
--- over by the time this modal shows, so `loop == 2` means loop 1 just ended:
--- a first-time player meets the loop rank here, after the fact. Every loop
--- after that just read the same breakdown live in the Escape SAMSARA confirm,
--- so it goes straight to the garage rather than showing it twice.
+-- Clears the purchase modal. Dismissing the "Loop Complete!" fanfare drops into
+-- the garage (skill tree) - the between-loops spend, and the only thing left to
+-- do once the loop has reset.
 local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
   if kind == "nirvana" then
-    if State.loop == 2 then
-      State.purchase_modal = "loop_breakdown"
-    else
-      SceneGoto("skill_tree")
-    end
-  elseif kind == "loop_breakdown" then
     SceneGoto("skill_tree")
   end
-end
-
--- Tachometer of the loop so far - what the courses banked to date have earned
--- against the clock they took (live loop_points; unraced courses count for
--- nothing, so the dial starts at the redline and climbs as courses land).
--- The needle sits in a wedge from S at the left through A/B/C to the redline D
--- on the right; that wedge lights up in its rank color while the rest gray out
--- (the same zone scheme as the race HUD's rank bar). It moves both ways: it
--- sinks as loop time burns (points fall) and jumps up when a course lands or
--- promotes a rank (points rise) - the two levers the player pulls, with the
--- overall arc trending up across the loop. A digital clock reads out below.
--- Hidden during the loop-1 prologue, where the dial would confuse.
-local TACH_ZONES  = { "D", "C", "B", "A", "S" } -- dial order, f=0 to f=1
-local TACH_START  = math.rad(210)               -- f=0 angle, lower-left
-local TACH_SPAN   = math.rad(240)               -- clockwise sweep to lower-right
-local TACH_R      = 62                          -- band radius
-local TACH_STEPS  = 60                          -- chords stepped along the arc
-local TACH_CY     = 156                         -- dial center y
-local TACH_LSCALE = 2                           -- wedge-letter text scale
-
--- Screen-space point at needle fraction `f` (0 = S end, 1 = redline) on a
--- circle of radius `r` centered at (cx, cy).
-local function tach_point(f, r, cx, cy)
-  local a = TACH_START - f * TACH_SPAN
-  return cx + math.cos(a) * r, cy - math.sin(a) * r
-end
-
--- Draws the tachometer dial for loop score `points`, centered at (cx, cy) with
--- band radius `r`. All other dimensions scale off `r` via opts so the same dial
--- renders full-size on the buy screen and shrunk inside the loop-rank tutorial
--- modal. opts: band_w (band chord width), lscale (rank-letter text scale),
--- letter_r (letter ring radius), hub_r (hub outer radius).
-local function draw_tach(cx, cy, r, points, opts)
-  opts              = opts or {}
-  local band_w      = opts.band_w or 7
-  local lscale      = opts.lscale or TACH_LSCALE
-  local letter_r    = opts.letter_r or (r + 20)
-  local hub_r       = opts.hub_r or 5
-  local pos, rank   = track_data.loop_rank_gauge(points)
-  -- loop_rank_gauge returns pos with 0 = S end; the dial reads D -> S left to
-  -- right, so mirror the gauge fraction for all drawing (needle and zones).
-  local dpos        = 1 - pos
-  local active_zone = math.min(math.floor(dpos * 5) + 1, 5)
-
-  -- Zone band: short thick chords stepped along the arc. Only the needle's
-  -- wedge shows its rank color (rainbow shimmer for S); the rest gray out.
-  for s = 0, TACH_STEPS - 1 do
-    local f0     = s / TACH_STEPS
-    local f1     = (s + 1) / TACH_STEPS
-    local zi     = math.min(math.floor((f0 + f1) / 2 * 5) + 1, 5)
-    local color  = zi == active_zone and ui.rank_color(TACH_ZONES[zi], s)
-        or gfx.COLOR_DARK_GRAY
-    local x0, y0 = tach_point(f0, r, cx, cy)
-    local x1, y1 = tach_point(f1, r, cx, cy)
-    gfx.line_ex(x0, y0, x1, y1, band_w, color, 1)
-  end
-
-  -- Tick marks at the wedge boundaries.
-  for i = 0, 5 do
-    local x0, y0 = tach_point(i / 5, r - 6, cx, cy)
-    local x1, y1 = tach_point(i / 5, r + 5, cx, cy)
-    gfx.line_ex(x0, y0, x1, y1, 1, gfx.COLOR_WHITE, 1)
-  end
-
-  -- Rank letter just outside each wedge; the needle's wedge stands out white
-  -- while the others dim, matching the HUD bar's held-still labels.
-  for zi = 1, 5 do
-    local letter = TACH_ZONES[zi]
-    local lw, lh = usagi.measure_text(letter)
-    local lx, ly = tach_point((zi - 0.5) / 5, letter_r, cx, cy)
-    lx           = math.floor(lx - lw * lscale / 2)
-    ly           = math.floor(ly - lh * lscale / 2)
-    local color  = zi == active_zone and gfx.COLOR_WHITE or gfx.COLOR_LIGHT_GRAY
-    local alpha  = zi == active_zone and 1 or 0.5
-    gfx.text_ex(letter, lx + 1, ly + 1, lscale, 0, gfx.COLOR_BLACK, alpha)
-    gfx.text_ex(letter, lx, ly, lscale, 0, color, alpha)
-  end
-
-  -- Needle from the hub out to just under the band, plus a rank-colored hub.
-  local nx, ny = tach_point(dpos, r - 8, cx, cy)
-  gfx.line_ex(nx + 1, ny + 1, cx + 1, cy + 1, 2, gfx.COLOR_BLACK, 0.5)
-  gfx.line_ex(nx, ny, cx, cy, 2, gfx.COLOR_WHITE, 1)
-  gfx.circ_fill(cx, cy, hub_r, gfx.COLOR_BLACK, 1)
-  gfx.circ_fill(cx, cy, hub_r - 2, ui.rank_color(rank, 0), 1)
-end
-
-local function draw_loop_status()
-  if State.loop == 1 then return end
-  local seconds = State.loop_time or 0
-  local points  = track_data.loop_points(State.loop, State.tracks, seconds, State.coins_unlocked)
-  local cx      = math.floor(usagi.GAME_W / 2)
-  local cy      = TACH_CY
-  draw_tach(cx, cy, TACH_R, points)
-
-  -- Digital clock readout below the dial.
-  local scale     = 3
-  local time_text = format_duration(seconds)
-  local tw        = usagi.measure_text(time_text)
-  local tx        = math.floor((usagi.GAME_W - tw * scale) / 2)
-  local ty        = cy + 44
-  gfx.text_ex(time_text, tx + 1, ty + 1, scale, 0, gfx.COLOR_BLACK, 1)
-  gfx.text_ex(time_text, tx, ty, scale, 0, gfx.COLOR_WHITE, 1)
-end
-
--- Small tachometer for the loop-rank tutorial modal's demo slot. Sized so the
--- dial and its outer rank letters fit inside a compact box; the needle reads
--- the live loop time, matching the full dial drawn behind the modal.
-local TACH_DEMO_W  = 128
-local TACH_DEMO_H  = 78
-local TACH_DEMO_R  = 34
-local TACH_DEMO_CY = 54 -- dial center offset from the demo box's top edge
-
-local function draw_tach_demo(x, y)
-  local points = track_data.loop_points(State.loop, State.tracks, State.loop_time or 0,
-    State.coins_unlocked)
-  draw_tach(x + math.floor(TACH_DEMO_W / 2), y + TACH_DEMO_CY, TACH_DEMO_R,
-    points, { band_w = 4, lscale = 1, letter_r = TACH_DEMO_R + 12, hub_r = 4 })
 end
 
 local M = {}
@@ -253,10 +107,10 @@ local M = {}
 local demo_kind
 
 -- Applause follows the Nirvana fanfare once it finishes, rather than
--- overlapping it (see economy.try_buy). Edge-triggered on the fanfare
+-- overlapping it (see economy.prestige). Edge-triggered on the fanfare
 -- ending rather than tied to the modal, since the modal only re-arms via
--- demo_kind on the very first Nirvana purchase (seen_modals carries the
--- kind across loops after that).
+-- demo_kind on the very first Rebirth (seen_modals carries the kind across
+-- loops after that).
 local loop_complete_was_playing = false
 
 function M.enter()
@@ -286,18 +140,29 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
-  -- BTN1 backs out of the Escape SAMSARA confirm rather than accepting it:
-  -- the safe answer is the default for an irreversible choice, so a stray
-  -- press can't wipe the loop. YES needs its own click (draw_nirvana_confirm).
+  -- First-wall teach: fire once when the corridor's cash wall first bites (next
+  -- track unaffordable) while a Rebirth is affordable. Held behind any other
+  -- modal so it doesn't stomp them. seen_modals.first_wall keeps it one-time.
+  if not State.seen_modals.first_wall and not State.purchase_modal
+      and not State.race_modal and not State.nirvana_confirm and not State.first_wall then
+    local locked = economy.next_locked_track()
+    local cost   = locked and track_data.unlock_cost(locked)
+    if locked and cost and State.money < cost and economy.nirvana_affordable() then
+      State.first_wall = true
+    end
+  end
+  if State.first_wall and input.pressed(input.BTN1) then
+    State.first_wall         = nil
+    State.seen_modals.first_wall = true
+    persist.save()
+  end
+  -- BTN1 backs out of the Rebirth confirm rather than accepting it: the safe
+  -- answer is the default for an irreversible choice, so a stray press can't
+  -- wipe the loop. YES needs its own click (draw_nirvana_confirm).
   if State.nirvana_confirm and input.pressed(input.BTN1) then
     State.nirvana_confirm = nil
   end
-  -- Only advance the tutorial once the post-race modal is cleared, so a single
-  -- press can't skip past both at once (draw shows race_modal first).
-  if not State.race_modal and State.loop_intro and input.pressed(input.BTN1) then
-    M.advance_loop_intro()
-  end
-  if not State.purchase_modal and not State.race_modal and not State.loop_intro
+  if not State.purchase_modal and not State.race_modal and not State.first_wall
       and not State.nirvana_confirm and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
@@ -318,7 +183,7 @@ local function shop_button(item, x, y, w, opts)
         and ("RANK " .. item.requires_rank_all .. " on all tracks")
         or ("RANK " .. item.requires_rank .. " needed")
   elseif economy.needs_first_race(State.active_track, kind) then
-    locked_msg = kind == "nirvana" and "Race this track first" or "Complete 1 race"
+    locked_msg = "Complete 1 race"
   end
   if locked_msg then
     local _, th = usagi.measure_text(label)
@@ -339,8 +204,7 @@ local function shop_button(item, x, y, w, opts)
   if cost == nil then
     cost_text = "MAX"
   elseif cost == 0 then
-    -- Nothing in the data is free since Nirvana was priced; kept for a
-    -- base_cost of 0 during tuning (the prologue's Nirvana is the likely one).
+    -- Nothing in the data is free; kept for a base_cost of 0 during tuning.
     cost_text = "FREE"
   else
     cost_text  = "$" .. tostring(cost)
@@ -367,7 +231,29 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
   local bh    = th * 2 + 4
   ui.label(label, x, y + math.floor((bh - th * 2) / 2))
 
-  local cost       = track_data.unlock_cost(next_id, State.loop)
+  local cost       = track_data.unlock_cost(next_id)
+  local affordable = State.money >= cost
+  local cost_text  = "$" .. tostring(cost)
+  local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
+  local bx         = x + w - SHOP_COST_W
+  local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
+  local clicked    = ui.button(cost_text, bx, y, btn_opts)
+  return clicked, bh
+end
+
+-- The Rebirth row: the always-available prestige action, priced at a fraction
+-- of the wall the player is stuck at (economy.nirvana_cost). Shows the ¥ this
+-- loop's race ranks have banked as the payoff (Q12c) - that's what carries into
+-- the garage on reset. Disabled until the fare is affordable.
+local function rebirth_row(x, y, w)
+  local banked = economy.loop_yen_total()
+  local label  = banked > 0 and string.format("Rebirth  +¥%d", banked) or "Rebirth"
+  local _, th  = usagi.measure_text(label)
+  local bh     = th * 2 + 4
+  ui.label(label, x, y + math.floor((bh - th * 2) / 2), { color = gfx.COLOR_PINK })
+
+  local cost = economy.nirvana_cost()
+  if not cost then return false, bh end
   local affordable = State.money >= cost
   local cost_text  = "$" .. tostring(cost)
   local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
@@ -395,15 +281,12 @@ function M.draw()
   ghost.draw_sim(GHOST_ALPHA)
   popups.draw()
   hud.draw()
-  draw_loop_status()
   if State.race_modal then
     M.draw_race_modal()
-  elseif State.loop_intro then
-    M.draw_loop_intro()
+  elseif State.first_wall then
+    M.draw_first_wall()
   elseif State.nirvana_confirm then
     M.draw_nirvana_confirm()
-  elseif State.purchase_modal == "loop_breakdown" then
-    M.draw_loop_breakdown_modal()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
   else
@@ -475,28 +358,30 @@ local function draw_breakdown_row(row, cx, y, scale)
   end
 end
 
--- Rows of a loop-rank breakdown: a line per course, the loop time, and the
--- final letter. Shared by the post-hoc recap (loop 1, reading the scored
--- loop that just ended) and the live Escape SAMSARA confirm (loop 2+, reading
--- the loop in progress), so the two always report the same thing the same way.
-local function breakdown_rows(courses, time, rank)
+-- Rows of the Rebirth breakdown: a line per corridor track showing the ¥ its
+-- best rank this loop is worth (with that rank colored), then the total. This
+-- is the teacher of the whole climb - "race better, bank more ¥, upgrade more"
+-- - shown live in the Rebirth confirm. A track not yet raced this loop reads as
+-- a dash. The rank letter is the trailing token of the value ("¥60 A"), so
+-- draw_breakdown_row colors it.
+local function prestige_breakdown_rows()
   local rows    = {}
   local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
-  for _, c in ipairs(courses) do
-    -- An unraced course banks nothing at all (see track_data.loop_points), so
-    -- it reads as a dash rather than a D. Only the live confirm ever sees one:
-    -- by the end of a loop every course has been raced.
-    local label = track_data.TRACKS[c.id].label
-    if c.raced then
-      rows[#rows + 1] = { text = breakdown_dots(label, c.rank), rank = c.rank }
+  local total   = 0
+  for _, id in ipairs(track_data.track_order()) do
+    local ts    = State.tracks[id]
+    local label = track_data.TRACKS[id].label
+    if ts and ts.best_rate then
+      local rank = economy.track_rank(id)
+      local yen  = economy.rank_yen(rank)
+      total = total + yen
+      rows[#rows + 1] = { text = breakdown_dots(label, "¥" .. yen .. " " .. rank), rank = rank }
     else
       rows[#rows + 1] = { text = breakdown_dots(label, "--") }
     end
   end
   rows[#rows + 1] = { text = divider }
-  rows[#rows + 1] = { text = breakdown_dots("Loop Time", format_duration(time)) }
-  rows[#rows + 1] = { text = divider }
-  rows[#rows + 1] = { text = breakdown_dots("RANK ", rank), rank = rank, big = true }
+  rows[#rows + 1] = { text = breakdown_dots("Total ", "¥" .. total) }
   return rows
 end
 
@@ -516,55 +401,25 @@ local function breakdown_body(rows)
   end
 end
 
--- Loop-rank breakdown: the scored recap shown after "Loop Complete!", before
--- the skill tree. Reads State.last_loop_breakdown (captured in
--- persist.start_new_loop): each course's rank, the loop time, and the final
--- letter, so the player can see how the rank was earned and how to raise it.
--- Loop 1 only - loop 2+ weighs the same numbers up front in the Escape
--- SAMSARA confirm instead, so replaying them afterwards is just another modal
--- in the chain. The prologue is where a first-time player learns what a loop
--- rank is, and there it has to come after the fact.
-function M.draw_loop_breakdown_modal()
-  local bd = State.last_loop_breakdown
-  if not bd then
-    -- No recap captured (shouldn't happen): fall through to the skill tree.
-    dismiss_purchase_modal()
-    return
-  end
-
-  local body, draw_body = breakdown_body(breakdown_rows(bd.courses, bd.time, bd.rank))
-  if modal.draw({ title = "Loop Rank", body = body, draw_body = draw_body }) then
-    dismiss_purchase_modal()
-  end
-end
-
--- Escape SAMSARA confirm (loop 2+): the loop breakdown again, but live and
--- before the fact. Buying Nirvana wipes the loop on the spot, so this is both
--- the safety on an irreversible click and the pitch: the player reads the
--- ranks they've banked, the clock they've burned, and the ¥ that combination
--- pays, then decides whether one more run at the last course is worth more
--- than cashing out now. The fare is already paid for by the time this opens
--- (the row's button is dead until it's affordable), so the cost isn't
--- restated here - the live question is the rank, not the price.
+-- Rebirth confirm: the ¥ breakdown live and before the fact. Rebirth wipes the
+-- loop on the spot, so this is both the safety on an irreversible click and the
+-- pitch: the player reads the ¥ each track's rank has banked toward the climb,
+-- then decides whether one more run to raise a rank is worth more than resetting
+-- now. The fare is already paid (the row's button is dead until affordable), so
+-- the cost isn't restated - the live question is the ranks, not the price.
 function M.draw_nirvana_confirm()
-  local time      = State.loop_time or 0
-  local courses   = track_data.loop_course_ranks(State.loop, State.tracks, State.coins_unlocked)
-  local rank      = track_data.loop_rank(State.loop, State.tracks, time, State.coins_unlocked)
-  local rows      = breakdown_rows(courses, time, rank)
-  rows[#rows + 1] = { text = breakdown_dots("Reward", "¥" .. persist.loop_reward(rank)) }
-
-  local body, draw_body = breakdown_body(rows)
+  local body, draw_body = breakdown_body(prestige_breakdown_rows())
   -- YES first, NOT YET second: BTN1 dismisses to NOT YET (see M.update), so
   -- the irreversible choice needs a deliberate click on its own button.
   local pressed         = modal.draw({
-    title     = "Escape SAMSARA?",
+    title     = "Rebirth?",
     body      = body,
     draw_body = draw_body,
     buttons   = { "YES", "NOT YET" },
   })
   if pressed then
     State.nirvana_confirm = nil
-    if pressed == 1 then economy.try_buy("nirvana") end
+    if pressed == 1 then economy.prestige() end
   end
 end
 
@@ -611,6 +466,12 @@ function M.draw_race_modal()
     body_parts[#body_parts + 1] = string.format("$/sec: $%.2f -> $%.2f", info.cash_before, info.cash_after)
   end
 
+  -- The ¥ this race banked toward the climb, shown where it's earned so the
+  -- payoff of a better rank is felt now, not only at Rebirth.
+  if info.yen then
+    body_parts[#body_parts + 1] = string.format("+¥%d banked!", info.yen)
+  end
+
   -- New tracks are bought from the previous track's shop page, hence the -1.
   -- Both messages only name the shop's track when the player isn't already
   -- viewing it.
@@ -621,11 +482,10 @@ function M.draw_race_modal()
         or string.format("Track #%d available in\nTrack #%d's shop!", idx, idx - 1)
   end
 
+  -- Rebirth is a single global action, reachable from any shop page, so it's
+  -- named plainly rather than routed to a specific track's shop.
   if info.show_nirvana then
-    body_parts[#body_parts + 1] = State.active_track == info.show_nirvana
-        and "Nirvana available in the shop!"
-        or string.format("Nirvana available in\nTrack #%d's shop!",
-          track_data.get_track_index(info.show_nirvana))
+    body_parts[#body_parts + 1] = "Rebirth available - reset to grow stronger!"
   end
 
   local body = table.concat(body_parts, "\n\n")
@@ -650,23 +510,15 @@ function M.draw_race_modal()
   end
 end
 
--- Draws the current loop-rank tutorial step (see LOOP_INTRO). Advancing past
--- the last step clears State.loop_intro, dropping back to the shop.
-function M.draw_loop_intro()
-  local step = LOOP_INTRO[State.loop_intro]
-  local demo
-  if step.demo then
-    demo = { w = TACH_DEMO_W, h = TACH_DEMO_H, draw = draw_tach_demo }
+-- First-wall teach modal (see FIRST_WALL_*). A button click dismisses here; a
+-- BTN1 press dismisses in M.update. Both set seen_modals.first_wall so it never
+-- shows again.
+function M.draw_first_wall()
+  if modal.draw({ title = FIRST_WALL_TITLE, body = FIRST_WALL_BODY }) then
+    State.first_wall             = nil
+    State.seen_modals.first_wall = true
+    persist.save()
   end
-  if modal.draw({ title = step.title, body = step.body, demo = demo }) then
-    M.advance_loop_intro()
-  end
-end
-
--- Steps the loop-rank tutorial forward, clearing it once past the last modal.
-function M.advance_loop_intro()
-  State.loop_intro = State.loop_intro + 1
-  if State.loop_intro > #LOOP_INTRO then State.loop_intro = nil end
 end
 
 function M.draw_shop()
@@ -676,7 +528,7 @@ function M.draw_shop()
 
   local id      = State.active_track
   local idx     = track_data.get_track_index(id)
-  local order   = track_data.track_order(State.loop)
+  local order   = track_data.track_order()
   local tdata   = track_data.TRACKS[id]
   local _, th_a = usagi.measure_text("A")
   local nav_y   = 50
@@ -724,7 +576,7 @@ function M.draw_shop()
   end
 
   local shop_y = info_y + th_a + 6
-  for _, item in ipairs(track_data.shop(id, State.loop)) do
+  for _, item in ipairs(track_data.shop(id)) do
     -- Checkpoint Pass (skill tree) grants every checkpoint outright, so
     -- there's nothing left for this row to sell. Coins don't exist at all
     -- until Loose Change is bought, so that row stays hidden rather than
@@ -732,17 +584,7 @@ function M.draw_shop()
     if not (item.kind == "checkpoints" and State.unlock_checkpoints)
         and not (item.kind == "coins" and not State.coins_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
-      if clicked then
-        -- Nirvana ends the loop on the spot, so loop 2+ routes it through a
-        -- confirm instead of buying on the click. The prologue keeps the
-        -- straight-through buy: its rank gate is friction enough, and a
-        -- confirm on top would just be tutorial noise.
-        if item.kind == "nirvana" and State.loop > 1 then
-          State.nirvana_confirm = true
-        else
-          economy.try_buy(item.kind)
-        end
-      end
+      if clicked then economy.try_buy(item.kind) end
       shop_y = shop_y + bh + gap
     end
   end
@@ -756,6 +598,15 @@ function M.draw_shop()
     shop_y = shop_y + bh + gap
   end
 
+  -- Rebirth (Nirvana): the always-available prestige action, reachable from any
+  -- track's shop. Reset and climb again, spending the ¥ this loop's race ranks
+  -- have banked. Routed through a confirm since it wipes the loop on the spot.
+  local rb_clicked, rb_bh = rebirth_row(x, shop_y, w)
+  if rb_clicked and economy.nirvana_affordable() then
+    State.nirvana_confirm = true
+  end
+  shop_y = shop_y + rb_bh + gap
+
   -- Global car-upgrades column, mirrored on the right edge. Wider cost
   -- buttons than the track shop so 5-digit prices fit.
   local uw     = 230
@@ -764,11 +615,10 @@ function M.draw_shop()
   local hw     = usagi.measure_text(header) * 2
   gfx.text_ex(header, ux + math.floor((uw - hw) / 2), nav_y + 10, 2, 0, gfx.COLOR_WHITE, 1)
   local uy = nav_y + th_a * 2 + 16
-  for _, item in ipairs(track_data.upgrades(State.loop)) do
-    -- The magnet only pulls in coins, so it hides alongside them (loop 1
-    -- drops it from LOOP1_UPGRADES outright; this covers coinless loop 2+).
-    -- Launch Control (skill tree) starts every loop at max acceleration, so
-    -- there's nothing left for that row to sell.
+  for _, item in ipairs(track_data.upgrades()) do
+    -- The magnet only pulls in coins, so it hides alongside them (coinless
+    -- loops before Loose Change is bought). Launch Control (skill tree) starts
+    -- every loop at max acceleration, so there's nothing left for that row.
     if not (item.kind == "magnet" and not State.coins_unlocked)
         and not (item.kind == "accel" and State.max_accel) then
       local clicked, bh = shop_button(item, ux, uy, uw, { cost_w = 70 })

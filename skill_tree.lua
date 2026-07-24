@@ -1,7 +1,7 @@
 -- Skill tree: permanent meta-upgrades bought between loops with a currency
 -- separate from race $. Pure module - owns node defs, tree state, purchase
 -- rules, and drawing. Run `usagi dev skill_tree_dev.lua` to try it. The game
--- earns ¥ via persist.LOOP_REWARD and consumes apply ctx in
+-- earns ¥ via economy.bank_race_yen (per-race rank) and consumes apply ctx in
 -- persist.rederive_skill_effects.
 
 local M     = {}

@@ -26,10 +26,23 @@ function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
 end
 
+-- Fraction of the next locked track's unlock_cost that Nirvana/Rebirth costs.
+-- The exit is priced off the wall the player is currently stuck at rather than
+-- escalating per prestige, so prestiging is always affordable soon after the
+-- wall bites. Tuning knob (see nirvana_cost helper below).
+M.NIRVANA_FRACTION = 0.4
+
+-- Cash price of a Rebirth given the reference track's unlock_cost (the next
+-- locked track's, or the last corridor track's when the whole corridor is
+-- cleared - see economy.nirvana_cost). Rounded to a whole dollar.
+function M.nirvana_cost(ref_cost)
+  return math.floor(M.NIRVANA_FRACTION * ref_cost + 0.5)
+end
+
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
 -- by price (plus drift_boost needing drift owned - see economy.try_buy).
-M.UPGRADES           = {
+M.UPGRADES      = {
   {
     kind      = "accel",
     label     = "Acceleration",
@@ -67,47 +80,12 @@ M.UPGRADES           = {
   },
 }
 
--- Loop-1 prologue variant: checkpoint-only economy, so prices are scaled way
--- down, and no magnet (nothing to magnetize - coins arrive with the Loose
--- Change skill node, which needs 2 finished loops). The magnet row is hidden
--- in later coinless loops too - see scenes/buy.lua.
-local LOOP1_UPGRADES = {
-  {
-    kind      = "accel",
-    label     = "Acceleration",
-    max       = 4,
-    base_cost = 5,
-    growth    = 1.45
-  },
-  {
-    kind      = "drift",
-    label     = "Drift",
-    max       = 1,
-    base_cost = 60,
-    growth    = 1.6
-  },
-  {
-    kind      = "drift_boost",
-    label     = "Drift Boost",
-    max       = 1,
-    base_cost = 80,
-    growth    = 1.6
-  },
-  {
-    kind      = "boost",
-    label     = "Boost",
-    max       = 5,
-    base_cost = 300,
-    growth    = 1.3
-  },
-}
-
-function M.upgrades(loop)
-  return loop == 1 and LOOP1_UPGRADES or M.UPGRADES
+function M.upgrades()
+  return M.UPGRADES
 end
 
-function M.upgrade_item(kind, loop)
-  for _, item in ipairs(M.upgrades(loop)) do
+function M.upgrade_item(kind)
+  for _, item in ipairs(M.upgrades()) do
     if item.kind == kind then return item end
   end
   return nil
@@ -131,8 +109,7 @@ M.TRACKS = {
     base_coins    = 1,
     ranks         = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
     -- Thresholds while coins are off (the Loose Change skill node isn't
-    -- bought): checkpoint-and-ghost income only, so scaled way down. Covers
-    -- the whole loop-1 prologue plus every later loop before the node lands.
+    -- bought): checkpoint-and-ghost income only, so scaled way down.
     -- Provisional - tune freely.
     no_coin_ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
     label         = "Track 1",
@@ -154,12 +131,6 @@ M.TRACKS = {
         base_cost = 18,
         growth    = 1.6
       },
-    },
-    -- Loop-1 prologue overrides: checkpoint-only income (no ghosts, no
-    -- coins - the shop is empty and car upgrades live in the global
-    -- UPGRADES column).
-    loop1         = {
-      shop = {},
     },
   },
   basic = {
@@ -207,19 +178,6 @@ M.TRACKS = {
         currency  = "cash",
         base_cost = 300,
         growth    = 1.3
-      },
-    },
-    -- Loop-1 prologue overrides - provisional, tune freely.
-    loop1         = {
-      unlock_cost = 28,
-      shop        = {
-        {
-          kind      = "checkpoints",
-          label     = "Checkpoint",
-          currency  = "cash",
-          base_cost = 30,
-          growth    = 1.3
-        },
       },
     },
   },
@@ -273,36 +231,6 @@ M.TRACKS = {
         growth    = 1.3
       },
     },
-    -- Loop-1 prologue overrides - provisional, tune freely. Nirvana lives
-    -- here in loop 1 (Track 4 doesn't exist yet) and keeps a rank gate - rank
-    -- A on every prologue track - as the prologue's graduation requirement.
-    -- It's the only rank gate left anywhere; loop 2+ buys purely on cash.
-    loop1         = {
-      unlock_cost = 200,
-      shop        = {
-        {
-          kind      = "checkpoints",
-          label     = "Checkpoint",
-          currency  = "cash",
-          base_cost = 120,
-          growth    = 1.3
-        },
-        {
-          -- Priced like Track 4's, scaled to prologue money (~1 A-rank race
-          -- on this track: 3 checkpoints x $45 x the A mult). The rank gate
-          -- is still the prologue's climax - the price is here so "the exit
-          -- costs money" is learned in the tutorial rather than sprung in
-          -- loop 2. Drop it to 0 if the prologue's tail drags.
-          kind              = "nirvana",
-          label             = "Nirvana?",
-          currency          = "cash",
-          max               = 1,
-          base_cost         = 500,
-          growth            = 1,
-          requires_rank_all = "A"
-        },
-      },
-    },
   },
   track4 = {
     map           = track4,
@@ -323,11 +251,8 @@ M.TRACKS = {
     },
     base_coins    = 4,
     ranks         = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
-    -- Track 4 never existed in the loop-1 prologue, so it had no coinless
-    -- thresholds until now: coins used to arrive with loop 2, ahead of this
-    -- track. They're behind a skill node now, so this track can be raced
-    -- coinless. Scaled off `ranks` at roughly the ratio the other tracks use
-    -- (~0.43 up to A, ~0.74 at S) - pure guesses, tune in playtest.
+    -- Scaled off `ranks` at roughly the ratio the other tracks use (~0.43 up
+    -- to A, ~0.74 at S) - pure guesses, tune in playtest.
     no_coin_ranks = { C = 13.0, B = 26.0, A = 34.0, S = 66.0 },
     label         = "Track 4",
     pay           = 135,
@@ -355,29 +280,6 @@ M.TRACKS = {
         base_cost = 9000,
         growth    = 1.3
       },
-      {
-        -- Ungated on rank: the only requirement is having raced this track
-        -- once (see economy.needs_first_race), so the exit reveals itself
-        -- right after the final course lands.
-        --
-        -- Priced, and priced high, because the exit is the last track's
-        -- reason to exist. Free, Track 4 was raced once for the ghost lap and
-        -- abandoned - its only remaining payoff was the loop rank, which a
-        -- player who doesn't care about the score can ignore. At $10k it's
-        -- roughly 1.5 A-rank races on top of the $3,500 unlock (Track 4 pays
-        -- 135/pickup x 10 pickups x the rank mult: ~$1.4k a race at D, ~$6.8k
-        -- at A, ~$13.5k at S), so the fare is paid in Track 4 laps and the
-        -- rank you drive them at sets how many. Race it badly and you pay in
-        -- clock, which the loop rank then charges you for again. Ghost income
-        -- means it's always reachable, just slower. Tuning knob - change
-        -- freely.
-        kind      = "nirvana",
-        label     = "Nirvana?",
-        currency  = "cash",
-        max       = 1,
-        base_cost = 10000,
-        growth    = 1
-      }
     },
   },
 }
@@ -434,62 +336,49 @@ if M.REVERSE_MODE then
   for _, tdata in pairs(M.TRACKS) do mirror_track(tdata) end
 end
 
-M.TRACK_ORDER           = { "track1", "basic", "track2", "track4" }
+-- Full authored track order. A track flagged `hidden = true` exists in TRACKS
+-- (raceable, unlockable if reached) but is excluded from the visible corridor:
+-- it's never offered as the "next track" row and `>` nav skips it, so future
+-- hidden/discovered tracks slot in without reworking reveal. Nothing sets it
+-- yet - it's data-model plumbing for the parked true-end.
+M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
 
--- Loop 1 is a pure-racing prologue: only the first three tracks exist, and
--- Track 4 (along with ghosts, coins, and the idle economy) is hidden until
--- loop 2. A prefix of TRACK_ORDER, so get_track_index works for both.
-local LOOP1_TRACK_ORDER = { "track1", "basic", "track2" }
-
-function M.track_order(loop)
-  return loop == 1 and LOOP1_TRACK_ORDER or M.TRACK_ORDER
+-- The visible corridor: TRACK_ORDER with hidden tracks filtered out. Every
+-- track exists from loop 1 now (no loop-1 prologue prefix), gated purely by
+-- cash, so the order no longer depends on the loop.
+function M.track_order()
+  local out = {}
+  for _, id in ipairs(M.TRACK_ORDER) do
+    if not M.TRACKS[id].hidden then out[#out + 1] = id end
+  end
+  return out
 end
 
--- Track fields below prefer the track's `loop1` override table during the
--- loop-1 prologue. A nil loop always reads the base field. Rank thresholds
--- used to live here too; they key off coin availability now (see M.ranks).
-
-function M.shop(id, loop)
-  local tdata = M.TRACKS[id]
-  return loop == 1 and tdata.loop1 and tdata.loop1.shop or tdata.shop
+function M.shop(id)
+  return M.TRACKS[id].shop
 end
 
 -- Rank thresholds for a track. Keyed on whether coins are unlocked (the
--- Loose Change skill node - see persist.rederive_skill_effects), not on the
--- loop: a coinless track pays checkpoints and ghosts only, whether that's the
--- loop-1 prologue or a loop 2+ save that hasn't bought the node yet.
+-- Loose Change skill node - see persist.rederive_skill_effects): a coinless
+-- track pays checkpoints and ghosts only.
 function M.ranks(id, has_coins)
   local tdata = M.TRACKS[id]
   return has_coins and tdata.ranks or tdata.no_coin_ranks
 end
 
-function M.unlock_cost(id, loop)
-  local tdata = M.TRACKS[id]
-  if loop == 1 and tdata.loop1 and tdata.loop1.unlock_cost ~= nil then
-    return tdata.loop1.unlock_cost
-  end
-  return tdata.unlock_cost
+function M.unlock_cost(id)
+  return M.TRACKS[id].unlock_cost
 end
 
--- Per-course rank as a number for loop scoring: linear (every rank-up worth
--- the same) with a positive D floor so even a D course still contributes -- a
--- freshly unlocked, still-D track adds time to the loop but shouldn't be pure
--- dead weight. Deliberately NOT reused from economy.RANK_MULTS: the pay
--- multipliers are a separate concern, and coupling them would let a payout
--- retune silently shift loop rank. Extend with S+/S++ (=6, =7, ...) when the
--- manual-rank rework lands.
-local LOOP_RANK_POINTS = { D = 1, C = 2, B = 3, A = 4, S = 5 }
-
--- Ascending per-course rank letters above the D floor, checked against
--- M.ranks(id, has_coins). Shared by rank_for_rate; economy.rank_for_rate
--- delegates here so there's a single source.
+-- Ascending per-race rank letters above the D floor, checked against
+-- M.ranks(id, has_coins).
 local RANK_LETTERS = { "C", "B", "A", "S" }
 
 -- Rank earned by a $/sec `rate` on a track, against the coinless or full
 -- thresholds per `has_coins`. Below the lowest threshold is "D". Pure (no
--- State), so loop scoring can reach it from track_data without pulling in
--- economy (economy requires persist, which requires track_data - a cycle).
--- economy.rank_for_rate delegates here.
+-- State), so callers can reach it without pulling in economy (economy requires
+-- persist, which requires track_data - a cycle). economy.rank_for_rate
+-- delegates here.
 function M.rank_for_rate(id, rate, has_coins)
   local thresholds = M.ranks(id, has_coins)
   local rank       = "D"
@@ -501,120 +390,8 @@ function M.rank_for_rate(id, rate, has_coins)
   return rank
 end
 
--- Ordered per-course ranks over this loop's track order, reading each track's
--- best_rate from `tracks`. Feeds both loop_points (summed) and the end-of-loop
--- breakdown modal (shown line by line).
---
--- `raced` distinguishes a course you haven't reached yet from one you raced
--- badly - best_rate is nil until a lap is promoted (see ghost.promote) and
--- resets with the loop, so both otherwise report "D". loop_points banks only
--- raced courses, which is what lets the live tach climb instead of starting
--- pinned at S. By loop end every course is raced, so nothing downstream of a
--- finished loop sees a difference.
-function M.loop_course_ranks(loop, tracks, has_coins)
-  local out = {}
-  for _, id in ipairs(M.track_order(loop)) do
-    local ts      = tracks[id]
-    local rate    = ts and ts.best_rate
-    out[#out + 1] = {
-      id    = id,
-      rank  = M.rank_for_rate(id, rate, has_coins),
-      raced = rate ~= nil,
-    }
-  end
-  return out
-end
-
--- Loop score: total per-course rank points banked divided by the average time
--- per banked course (loop_time / n) -- equivalently n * Σrank / loop_time. So
--- at a fixed average pace more courses banked scores higher (mastering more
--- content is a bigger achievement), and at a fixed course count a faster loop
--- scores higher.
---
--- `n` counts courses actually raced, not the whole roster, and unraced courses
--- contribute nothing. Mid-loop that makes this a score of the loop *so far*
--- rather than a projection off a near-zero clock: the tach starts at the
--- redline (nothing banked) and steps up each time a course lands, instead of
--- opening pinned at S and only ever sinking. A partial loop scoring low is the
--- same N-reward term doing its job - a partial loop is a smaller roster.
---
--- At loop completion n == #track_order and every rank is real, so a finished
--- loop scores exactly what it always did. Guards loop_time <= 0 to 0.
-function M.loop_points(loop, tracks, loop_time, has_coins)
-  if not loop_time or loop_time <= 0 then return 0 end
-  local sum, n = 0, 0
-  for _, entry in ipairs(M.loop_course_ranks(loop, tracks, has_coins)) do
-    if entry.raced then
-      sum = sum + LOOP_RANK_POINTS[entry.rank]
-      n   = n + 1
-    end
-  end
-  return n * sum / loop_time
-end
-
--- Loop-completion thresholds on loop_points (higher = better). Calibrated
--- against the current 4-track roster: an all-A loop (Σrank 16) at ~240s scores
--- 4*16/240 ~= 0.27, landing at the A/B edge to preserve today's difficulty
--- feel. S sits at 4*20/240 ~= 0.33 so an all-S loop at that same competent
--- pace grades S: the S/A split is carried by rank, with time as the
--- tiebreaker, rather than demanding perfect ranks AND a 20% faster clock.
--- Because loop_points scales with track count, these fixed thresholds mean
--- grades inflate as the roster grows -- intended (a bigger game is a bigger
--- achievement), so retune as tracks and S+/S++ ranks are added. Tuning knobs
--- only - change freely (empirical, tune in playtest).
-local LOOP_RANK_POINT_THRESHOLDS = { S = 0.33, A = 0.26, B = 0.15, C = 0.07 }
-local LOOP_RANK_POINT_ORDER      = { "S", "A", "B", "C" }
-
--- Letter a loop_points value earns. Below the C threshold is "D". A typical
--- slow loop 1 (3 tracks, mostly low ranks, lots of learning/modal time) lands
--- here in D as an emergent result of the formula rather than a hard pin.
-function M.loop_rank_for_points(points)
-  for _, letter in ipairs(LOOP_RANK_POINT_ORDER) do
-    if points >= LOOP_RANK_POINT_THRESHOLDS[letter] then return letter end
-  end
-  return "D"
-end
-
--- Buy-screen tachometer, reading loop_points (higher = better) instead of
--- elapsed seconds: the needle points at the S end (f=0) for a high score and
--- sinks toward the redline D (f=1) as the score drops. The dial is still five
--- equal wedges (S at the 0 end through D at 1) and the needle climbs across a
--- wedge as its point thresholds pass -- the same zone-and-needle scheme as the
--- race HUD's rank bar, wrapped onto an arc. This flips the old axis, so the
--- needle now moves BOTH ways: it sinks as the clock ticks (points fall) and
--- jumps up when a course promotes (points rise), making the two levers visible.
--- Above the S threshold the needle climbs through the S wedge over another
--- S-threshold span, then pins at f=0; below C it sinks through the D wedge and
--- pins at the redline.
-function M.loop_rank_gauge(points)
-  local s_hi = LOOP_RANK_POINT_THRESHOLDS.S
-  if points >= s_hi then
-    local p = math.min((points - s_hi) / s_hi, 1)
-    return 0.2 - 0.2 * p, "S"
-  end
-  local hi = s_hi
-  for i = 2, #LOOP_RANK_POINT_ORDER do -- A, B, C (wedge indices 2..4)
-    local letter = LOOP_RANK_POINT_ORDER[i]
-    local lo     = LOOP_RANK_POINT_THRESHOLDS[letter]
-    if points >= lo then
-      local p = (points - lo) / (hi - lo)
-      return i * 0.2 - 0.2 * p, letter
-    end
-    hi = lo
-  end
-  local c = LOOP_RANK_POINT_THRESHOLDS.C
-  local p = math.min((c - points) / c, 1)
-  return 0.8 + 0.2 * p, "D"
-end
-
--- Rank actually awarded for finishing a loop: the letter its loop_points earn,
--- for every loop including loop 1 (the score is honest now - no special case).
-function M.loop_rank(loop, tracks, loop_time, has_coins)
-  return M.loop_rank_for_points(M.loop_points(loop, tracks, loop_time, has_coins))
-end
-
-function M.track_shop_item(track_id, kind, loop)
-  for _, item in ipairs(M.shop(track_id, loop)) do
+function M.track_shop_item(track_id, kind)
+  for _, item in ipairs(M.shop(track_id)) do
     if item.kind == kind then return item end
   end
   return nil
@@ -630,9 +407,15 @@ function M.kind_max(kind)
   return nil
 end
 
+-- Corridor position of a track (its "Track #N" number), skipping hidden
+-- tracks so numbering matches the visible order.
 function M.get_track_index(id)
-  for i, tid in ipairs(M.TRACK_ORDER) do
-    if tid == id then return i end
+  local i = 0
+  for _, tid in ipairs(M.TRACK_ORDER) do
+    if not M.TRACKS[tid].hidden then
+      i = i + 1
+      if tid == id then return i end
+    end
   end
   return 1
 end
@@ -675,6 +458,10 @@ function M.default_track_state(id, has_coins, start_coins)
   return {
     ghost_line  = nil,
     best_rate   = nil,
+    -- Highest rank tier already paid ¥ for on this track this loop, the
+    -- high-water mark that keeps race-¥ credited once per tier (see
+    -- economy.bank_race_yen). Resets with the loop (fresh track state).
+    paid_rank   = "D",
     ghosts      = 0,
     coins       = M.start_coin_floor(id, has_coins, start_coins),
     checkpoints = 1,

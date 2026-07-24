@@ -98,6 +98,10 @@ local function finish_race()
   ghost.promote()
   local new_rank     = economy.track_rank(id)
   local cash_after   = economy.track_cash_rate(id)
+  -- Bank the ¥ this track's best rank is worth this loop (the gap over any
+  -- tier already paid). This is the whole climb economy: racing better here
+  -- funds a stronger next loop. Skill tree stays unspendable until Rebirth.
+  local yen_gained   = economy.bank_race_yen(id)
 
   local rank_changed = not first_lap and new_rank ~= prev_rank
   local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
@@ -110,17 +114,14 @@ local function finish_race()
   -- re-fire every time the balance dips under the price and climbs back.
   local afforded_id
   if locked_id and not State.announced_unlock[locked_id] then
-    local cost = track_data.unlock_cost(locked_id, State.loop)
+    local cost = track_data.unlock_cost(locked_id)
     if cost and State.money >= cost then afforded_id = locked_id end
   end
-  -- Nirvana costs money now, so its announcement edge-triggers on affording
-  -- the fare rather than on the row appearing: "the exit is open" should land
-  -- on the race that paid for it, not on the race that revealed a price the
-  -- player can't meet yet. Same once-per-loop flag shape as announced_unlock,
-  -- for the same reason (the balance dips under the price and climbs back
-  -- every time anything else is bought).
-  local show_nirvana = not State.announced_nirvana
-      and economy.nirvana_ready() and economy.nirvana_affordable()
+  -- Rebirth's announcement edge-triggers on affording the fare: "the exit is
+  -- open" lands on the race that paid for it. Same once-per-loop flag shape as
+  -- announced_unlock, for the same reason (the balance dips under the price and
+  -- climbs back every time anything else is bought).
+  local show_nirvana = not State.announced_nirvana and economy.nirvana_affordable()
 
   -- afforded_id / show_nirvana open the modal on their own: a race that
   -- unlocked something has news to deliver even if the rank and the $/sec
@@ -143,25 +144,20 @@ local function finish_race()
       -- nil unless the rank actually changed: title/body only show the
       -- rank-delta block then.
       prev_rank    = rank_changed and prev_rank or nil,
-      -- Ids of the track that just became purchasable / the track selling
-      -- Nirvana, nil unless this lap flipped it. Ids rather than booleans so
-      -- the modal can name the shop to visit.
+      -- ¥ this race banked toward the climb (nil if none), so the payoff of
+      -- racing better is shown where it's earned - not just at Rebirth.
+      yen          = yen_gained > 0 and yen_gained or nil,
+      -- Id of the track that just became purchasable, nil unless this lap
+      -- flipped it, so the modal can name the shop to visit.
       show_unlock  = afforded_id,
-      show_nirvana = show_nirvana and economy.nirvana_track() or nil,
+      -- Rebirth is a single global action now; a plain flag rather than a
+      -- track id.
+      show_nirvana = show_nirvana or nil,
       -- nil unless the track's ghost $/sec went up (requires an owned
       -- ghost). Merged into this same modal rather than a second popup.
       cash_before  = cash_up and cash_before or nil,
       cash_after   = cash_up and cash_after or nil,
     }
-  end
-
-  -- First race of loop 2 is where the loop tachometer first appears (it's
-  -- hidden during the loop-1 prologue), so introduce loop ranks now. Queued
-  -- behind any race_modal above; the buy scene shows the two-step explainer.
-  -- Gated by seen_modals so it fires exactly once across the whole game.
-  if State.loop == 2 and first_lap and not State.seen_modals.loop_rank then
-    State.seen_modals.loop_rank = true
-    State.loop_intro            = 1
   end
 
   persist.save()

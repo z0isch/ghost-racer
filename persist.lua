@@ -5,42 +5,21 @@ local skill_tree          = require "skill_tree"
 
 local M                   = {}
 
--- ¥ granted for finishing the loop-1 prologue, paid into the skill tree by
--- start_new_loop. Flat, because the prologue is authored and its rank isn't
--- a fair measure of anything yet. Exposed so the garage's first-visit copy
--- ("Here's ¥N to start!") can't drift from what was actually paid.
-M.LOOP_REWARD             = 100
-
--- ¥ paid for completing a loop 2+, by the rank that loop earned. This is what
--- rank is *for* now that track purchases are gated on cash alone: rank is
--- already the in-loop cash multiplier (see economy.pay_for_mult), and this
--- makes it the cross-loop one too. B holds at the old flat 100 so skill-tree
--- pacing keeps its baseline; a bad loop still pays, and a great loop is worth
--- 5x a bad one. Moderate rather than punitive on purpose - a loop can't be
--- finished at all without earning enough to buy all four tracks, so there's
--- no cheap loop to farm. Tuning knobs only - change freely.
-local LOOP_REWARD_BY_RANK = { D = 40, C = 70, B = 100, A = 140, S = 200 }
-
-function M.loop_reward(rank)
-  return LOOP_REWARD_BY_RANK[rank] or M.LOOP_REWARD
-end
-
 local function default_state()
   return {
     mode               = "buy",
     money              = 0,
     seen_help          = false,
     loop               = 1,
-    loop_time          = 0,
     seen_modals        = {},
     -- Track ids whose "Track #N available in the shop!" announcement has
     -- already fired this loop, so it lands once on the race that made the
     -- track affordable instead of every time the balance re-crosses the
     -- price. Per-loop: start_new_loop resets it with the rest of the state.
     announced_unlock   = {},
-    -- Same idea for the "Nirvana available!" announcement, which now fires on
-    -- affording the exit rather than on revealing it. Per-loop, one field
-    -- rather than a set: only one track sells Nirvana in a loop.
+    -- Same idea for the "Rebirth available!" announcement, which fires on
+    -- affording the exit. Per-loop, one flag: Rebirth is a single global
+    -- action now, not a per-track shop row.
     announced_nirvana  = false,
     accel              = 0,
     top_speed          = 0,
@@ -52,7 +31,6 @@ local function default_state()
     drift              = 0,
     drift_boost        = 0,
     boost              = 0,
-    nirvana            = 0,
     magnet             = 0,
     active_track       = "track1",
     unlocked           = { track1 = true },
@@ -78,7 +56,6 @@ local function progression_of_state()
     money             = State.money,
     seen_help         = State.seen_help,
     loop              = State.loop,
-    loop_time         = State.loop_time,
     seen_modals       = State.seen_modals,
     announced_unlock  = State.announced_unlock,
     announced_nirvana = State.announced_nirvana,
@@ -96,7 +73,6 @@ local function progression_of_state()
     drift             = State.drift,
     drift_boost       = State.drift_boost,
     boost             = State.boost,
-    nirvana           = State.nirvana,
     magnet            = State.magnet,
     active_track      = State.active_track,
     unlocked          = State.unlocked,
@@ -110,7 +86,6 @@ local function apply_progression(loaded)
   State.money             = loaded.money or 0
   State.seen_help         = loaded.seen_help or false
   State.loop              = loaded.loop or 1
-  State.loop_time         = loaded.loop_time or 0
   State.seen_modals       = loaded.seen_modals or {}
   State.announced_unlock  = loaded.announced_unlock or {}
   State.announced_nirvana = loaded.announced_nirvana or false
@@ -119,7 +94,6 @@ local function apply_progression(loaded)
   State.drift             = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
   State.drift_boost       = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
   State.boost             = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
-  State.nirvana           = math.min(loaded.nirvana or 0, track_data.kind_max("nirvana") or 0)
   State.magnet            = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
 
   if loaded.active_track and track_data.TRACKS[loaded.active_track] then
@@ -146,6 +120,7 @@ local function apply_progression(loaded)
         local ts       = State.tracks[id]
         ts.ghost_line  = lt.ghost_line
         ts.best_rate   = lt.best_rate
+        ts.paid_rank   = lt.paid_rank or "D"
         ts.ghosts      = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
         -- Raw here; both the coin ceiling and the start_coins floor need the
         -- skill tree, which loads below - rederive_skill_effects clamps at the
@@ -210,22 +185,15 @@ function M.resync_car_and_ghosts()
   end
 end
 
--- Buying Nirvana ends the game... into a new loop: everything resets to a
--- fresh save except the loop counter and dismissed tutorials. Loop 2 opens
--- up the full game (all four tracks, ghosts); coins arrive later still, with
--- the skill tree's Loose Change node, and head-start coins with Head Start
--- above it (see track_data.start_coin_floor).
+-- Rebirth (Nirvana) resets and climbs again: everything resets to a fresh save
+-- except the loop counter, dismissed tutorials, and the skill tree. The tree
+-- carries this loop's ¥ - already banked per race rank (see
+-- economy.bank_race_yen) - so there's no reward term here; the ¥ was earned as
+-- the loop was raced and is now spent in the garage this reset drops into.
 function M.start_new_loop()
   local old_loop            = State.loop or 1
   local next_loop           = old_loop + 1
-  local finished_time       = State.loop_time or 0
-  -- Score the finished loop before the reset wipes State.tracks: the per-course
-  -- ranks, the loop_points they earn at this time, and the letter that lands
-  -- on. All read once by the loop-rank breakdown modal (see scenes/buy.lua).
   local had_coins           = State.coins_unlocked
-  local finished_courses    = track_data.loop_course_ranks(old_loop, State.tracks, had_coins)
-  local finished_points     = track_data.loop_points(old_loop, State.tracks, finished_time, had_coins)
-  local finished_rank       = track_data.loop_rank_for_points(finished_points)
   local seen_help           = State.seen_help
   local seen_modals         = State.seen_modals
   local tree                = State.skill_tree
@@ -233,28 +201,14 @@ function M.start_new_loop()
   State.loop                = next_loop
   State.seen_help           = seen_help
   State.seen_modals         = seen_modals
-  -- Carry the skill tree across the reset (like seen_help) and pay the loop
-  -- reward atomically with the rollover. The prologue pays its flat stipend;
-  -- every loop after that pays by the rank it just earned. fx is transient,
-  -- rebuilt empty.
-  local reward              = old_loop == 1 and M.LOOP_REWARD or M.loop_reward(finished_rank)
+  -- Carry the skill tree across the reset (like seen_help). fx is transient,
+  -- rebuilt empty. Its points already include everything earned this loop.
   State.skill_tree          = tree
   State.skill_tree.fx       = {}
-  State.skill_tree.points   = State.skill_tree.points + reward
-  -- Not part of default_state/progression - only read once by the "Well
-  -- Done!" modal that's about to show, reporting on the loop that just ended.
-  State.last_loop_time      = finished_time
-  State.last_loop_rank      = finished_rank
-  State.last_loop_breakdown = {
-    courses = finished_courses,
-    time    = finished_time,
-    points  = finished_points,
-    rank    = finished_rank,
-  }
   -- The tree survives the reset, so coin availability does too; the coin floor
   -- itself is applied by the rederive below.
   State.tracks.track1       = track_data.default_track_state("track1", had_coins)
-  -- The ending modal always shows, even on repeat loops - it's the payoff,
+  -- The ending fanfare always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
   State.purchase_modal      = "nirvana"
   ghost.clear_all_sims()
