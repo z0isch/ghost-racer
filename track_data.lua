@@ -26,18 +26,10 @@ function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
 end
 
--- Fraction of the next locked track's unlock_cost that Nirvana/Rebirth costs.
--- The exit is priced off the wall the player is currently stuck at rather than
--- escalating per prestige, so prestiging is always affordable soon after the
--- wall bites. Tuning knob (see nirvana_cost helper below).
-M.NIRVANA_FRACTION = 0.4
-
--- Cash price of a Rebirth given the reference track's unlock_cost (the next
--- locked track's, or the last corridor track's when the whole corridor is
--- cleared - see economy.nirvana_cost). Rounded to a whole dollar.
-function M.nirvana_cost(ref_cost)
-  return math.floor(M.NIRVANA_FRACTION * ref_cost + 0.5)
-end
+-- Fixed cash price of Nirvana, the always-available escape item (the eventual
+-- win condition). Ungated - never keyed to rank/loop/track - and unreachable
+-- for now; the buy button renders it trimmed to "1m". Tuning knob.
+M.NIRVANA_COST = 1000000
 
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
@@ -114,7 +106,15 @@ M.TRACKS = {
     no_coin_ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
     label         = "Track 1",
     pay           = 5,
+    -- Cash price to *buy* this track for the current loop. Track 1 is owned free
+    -- at the start of every loop (nil), the rest are re-bought each climb. Loop
+    -- caps how far up the corridor you may buy (see track_data.top_track_index);
+    -- cash is the wall within that cap.
     unlock_cost   = nil,
+    -- Cash price of a Rebirth taken *from* this track (the top owned track for
+    -- the loop). Flat per track, no per-loop escalation - see the rebirth_cost
+    -- table in the loop-track-gating plan.
+    rebirth_cost  = 100,
     shop          = {
       {
         kind      = "ghosts",
@@ -156,6 +156,7 @@ M.TRACKS = {
     label         = "Track 2",
     pay           = 15,
     unlock_cost   = 100,
+    rebirth_cost  = 700,
     shop          = {
       {
         kind      = "checkpoints",
@@ -207,6 +208,7 @@ M.TRACKS = {
     label         = "Track 3",
     pay           = 45,
     unlock_cost   = 700,
+    rebirth_cost  = 3500,
     shop          = {
       {
         kind      = "checkpoints",
@@ -257,6 +259,7 @@ M.TRACKS = {
     label         = "Track 4",
     pay           = 135,
     unlock_cost   = 3500,
+    rebirth_cost  = 17500,
     shop          = {
       {
         kind      = "checkpoints",
@@ -344,8 +347,9 @@ end
 M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
 
 -- The visible corridor: TRACK_ORDER with hidden tracks filtered out. Every
--- track exists from loop 1 now (no loop-1 prologue prefix), gated purely by
--- cash, so the order no longer depends on the loop.
+-- track exists in the corridor from the start; which ones are *owned* is
+-- cash-bought within the loop's ceiling (see M.top_track_index and
+-- economy.try_unlock_track), so the order itself never depends on the loop.
 function M.track_order()
   local out = {}
   for _, id in ipairs(M.TRACK_ORDER) do
@@ -366,8 +370,30 @@ function M.ranks(id, has_coins)
   return has_coins and tdata.ranks or tdata.no_coin_ranks
 end
 
+function M.rebirth_cost(id)
+  return M.TRACKS[id].rebirth_cost
+end
+
+-- Cash price to buy a track for the current loop (nil for Track 1, owned free).
 function M.unlock_cost(id)
   return M.TRACKS[id].unlock_cost
+end
+
+-- Corridor index (1-based) of the loop's purchase ceiling: the first
+-- `min(loop, #tracks)` tracks are buyable, so loop 1 -> Track 1, loop 4+ ->
+-- Track 4 (capped; no new track becomes buyable past the last one). Ownership
+-- is cash-bought within this cap and resets each loop (see persist), so the
+-- ceiling is a wall you may not have climbed to yet.
+function M.top_track_index(loop)
+  return math.min(loop or 1, #M.track_order())
+end
+
+-- Id of the loop's ceiling track - the newest track a loop makes *purchasable*.
+-- Names the reveal for the Rebirth fanfare ("Track #N available to buy!"), and
+-- the track Rebirth/Nirvana fire from (economy.rebirth_track): the top of the
+-- climb, reachable only once bought all the way up to it.
+function M.top_track(loop)
+  return M.track_order()[M.top_track_index(loop)]
 end
 
 -- Ascending per-race rank letters above the D floor, checked against

@@ -94,7 +94,6 @@ local function finish_race()
   local had_ghost   = tstate.ghosts > 0
   local prev_rank   = economy.track_rank(id)
   local cash_before = economy.track_cash_rate(id)
-  local locked_id   = economy.next_locked_track()
   ghost.promote()
   local new_rank     = economy.track_rank(id)
   local cash_after   = economy.track_cash_rate(id)
@@ -106,29 +105,16 @@ local function finish_race()
   local rank_changed = not first_lap and new_rank ~= prev_rank
   local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
 
-  -- Tracks carry no rank gate any more, so the "now available" announcement
-  -- edge-triggers on affordability instead: this race's earnings are what
-  -- crossed the price, which keeps the old feedback shape ("that race changed
-  -- something") and teaches the new rule - racing well is what buys content.
-  -- announced_unlock makes it a real edge rather than a level, so it doesn't
-  -- re-fire every time the balance dips under the price and climbs back.
-  local afforded_id
-  if locked_id and not State.announced_unlock[locked_id] then
-    local cost = track_data.unlock_cost(locked_id)
-    if cost and State.money >= cost then afforded_id = locked_id end
-  end
   -- Rebirth's announcement edge-triggers on affording the fare: "the exit is
-  -- open" lands on the race that paid for it. Same once-per-loop flag shape as
-  -- announced_unlock, for the same reason (the balance dips under the price and
-  -- climbs back every time anything else is bought).
-  local show_nirvana = not State.announced_nirvana and economy.nirvana_affordable()
+  -- open" lands on the race that paid for it. announced_rebirth is a real edge
+  -- rather than a level, so it doesn't re-fire every time the balance dips
+  -- under the price and climbs back (anything else bought would retrigger it).
+  local show_rebirth = not State.announced_rebirth and economy.rebirth_affordable()
 
-  -- afforded_id / show_nirvana open the modal on their own: a race that
-  -- unlocked something has news to deliver even if the rank and the $/sec
-  -- both held steady.
-  if first_lap or rank_changed or cash_up or afforded_id or show_nirvana then
-    if afforded_id then State.announced_unlock[afforded_id] = true end
-    if show_nirvana then State.announced_nirvana = true end
+  -- show_rebirth opens the modal on its own: a race that afforded the exit has
+  -- news to deliver even if the rank and the $/sec both held steady.
+  if first_lap or rank_changed or cash_up or show_rebirth then
+    if show_rebirth then State.announced_rebirth = true end
     local coins_total  = road.active_coin_count(tstate.coins, tdata.coins)
     local coins_got    = 0
     for _ in pairs(race.coins_collected) do coins_got = coins_got + 1 end
@@ -147,12 +133,9 @@ local function finish_race()
       -- ¥ this race banked toward the climb (nil if none), so the payoff of
       -- racing better is shown where it's earned - not just at Rebirth.
       yen          = yen_gained > 0 and yen_gained or nil,
-      -- Id of the track that just became purchasable, nil unless this lap
-      -- flipped it, so the modal can name the shop to visit.
-      show_unlock  = afforded_id,
-      -- Rebirth is a single global action now; a plain flag rather than a
-      -- track id.
-      show_nirvana = show_nirvana or nil,
+      -- Rebirth becomes affordable this lap: a plain flag, since Rebirth fires
+      -- from the top track (reached with the `>` arrow), not a specific shop.
+      show_rebirth = show_rebirth or nil,
       -- nil unless the track's ghost $/sec went up (requires an owned
       -- ghost). Merged into this same modal rather than a second popup.
       cash_before  = cash_up and cash_before or nil,

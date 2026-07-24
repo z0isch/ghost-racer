@@ -65,29 +65,29 @@ local MODAL_INFO       = {
           "Pulls in " .. ui.COIN_CHAR .. " from a larger radius\naround your car."
     end,
   },
-  nirvana = {
+  rebirth = {
     title   = "Loop Complete!",
     rainbow = true,
     button  = "OKAY",
     body    = function()
-      return "You have not escaped the\nendless loop of SAMSARA..."
+      local body = "You have not escaped the\nendless loop of SAMSARA..."
+      return body
     end,
   },
 }
 
--- First-wall onboarding: shown once the first time the next track is out of
--- reach on cash while a Rebirth is affordable - the moment the corridor's cash
--- wall first bites. Teaches the prestige-to-climb loop that replaces "just
--- keep racing." Gated on State.seen_modals.first_wall (persists across loops).
+-- First-wall onboarding: shown once the first time a Rebirth becomes
+-- affordable. Teaches the loop shape - you've unlocked every track you can this
+-- loop, so Rebirth from the top track to reset and open the next one. Gated on
+-- State.seen_modals.first_wall (persists across loops).
 local FIRST_WALL_TITLE = "Hit a Wall?"
 local FIRST_WALL_BODY  = table.concat({
-  "The next track costs more than",
-  "you can earn this loop.",
+  "You've bought every track",
+  "this loop allows.",
   "",
-  "Rebirth to reset the corridor and",
-  "spend the ¥ you've banked on",
-  "permanent upgrades - then climb",
-  "back faster and reach further.",
+  "Rebirth from the top track to",
+  "reset, grow stronger, and open",
+  "the next one to buy.",
 }, "\n")
 
 -- Clears the purchase modal. Dismissing the "Loop Complete!" fanfare drops into
@@ -96,7 +96,7 @@ local FIRST_WALL_BODY  = table.concat({
 local function dismiss_purchase_modal()
   local kind           = State.purchase_modal
   State.purchase_modal = nil
-  if kind == "nirvana" then
+  if kind == "rebirth" then
     SceneGoto("skill_tree")
   end
 end
@@ -106,7 +106,7 @@ local M = {}
 -- Which kind the demo loop was last reset for, so it restarts per modal.
 local demo_kind
 
--- Applause follows the Nirvana fanfare once it finishes, rather than
+-- Applause follows the Rebirth fanfare once it finishes, rather than
 -- overlapping it (see economy.prestige). Edge-triggered on the fanfare
 -- ending rather than tied to the modal, since the modal only re-arms via
 -- demo_kind on the very first Rebirth (seen_modals carries the kind across
@@ -140,14 +140,13 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
-  -- First-wall teach: fire once when the corridor's cash wall first bites (next
-  -- track unaffordable) while a Rebirth is affordable. Held behind any other
-  -- modal so it doesn't stomp them. seen_modals.first_wall keeps it one-time.
+  -- First-wall teach: fire once the first time a Rebirth becomes affordable -
+  -- the player has unlocked every track they can this loop, so the exit is the
+  -- next step. Held behind any other modal so it doesn't stomp them.
+  -- seen_modals.first_wall keeps it one-time.
   if not State.seen_modals.first_wall and not State.purchase_modal
-      and not State.race_modal and not State.nirvana_confirm and not State.first_wall then
-    local locked = economy.next_locked_track()
-    local cost   = locked and track_data.unlock_cost(locked)
-    if locked and cost and State.money < cost and economy.nirvana_affordable() then
+      and not State.race_modal and not State.rebirth_confirm and not State.first_wall then
+    if economy.rebirth_affordable() then
       State.first_wall = true
     end
   end
@@ -158,12 +157,12 @@ function M.update(dt)
   end
   -- BTN1 backs out of the Rebirth confirm rather than accepting it: the safe
   -- answer is the default for an irreversible choice, so a stray press can't
-  -- wipe the loop. YES needs its own click (draw_nirvana_confirm).
-  if State.nirvana_confirm and input.pressed(input.BTN1) then
-    State.nirvana_confirm = nil
+  -- wipe the loop. YES needs its own click (draw_rebirth_confirm).
+  if State.rebirth_confirm and input.pressed(input.BTN1) then
+    State.rebirth_confirm = nil
   end
   if not State.purchase_modal and not State.race_modal and not State.first_wall
-      and not State.nirvana_confirm and input.key_pressed(input.KEY_SPACE) then
+      and not State.rebirth_confirm and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
 end
@@ -222,9 +221,10 @@ local function shop_button(item, x, y, w, opts)
   return clicked, bh
 end
 
--- The next track's row: label and price only. Tracks carry no rank gate, so
--- this is always a live button - it just costs more than the player has until
--- they've raced enough to afford it.
+-- The buy-next-track row: the climb within a loop. Shown on the top owned
+-- track's page (the only page whose next corridor track is unowned) when that
+-- track is within the loop's purchase ceiling. Priced at the track's authored
+-- unlock_cost; buying it (economy.try_unlock_track) opens it to race.
 local function new_track_row(next_id, next_track_idx, x, y, w)
   local label = string.format("Track #%d", next_track_idx)
   local _, th = usagi.measure_text(label)
@@ -241,25 +241,43 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
   return clicked, bh
 end
 
--- The Rebirth row: the always-available prestige action, priced at a fraction
--- of the wall the player is stuck at (economy.nirvana_cost). Shows the ¥ this
--- loop's race ranks have banked as the payoff (Q12c) - that's what carries into
--- the garage on reset. Disabled until the fare is affordable.
+-- The Rebirth row: the loop-ender that stays in Samsara and climbs again,
+-- priced at the loop ceiling track's authored exit cost (economy.rebirth_cost).
+-- Shows the ¥ this loop's race ranks have banked as the payoff (Q12c) - that's
+-- what carries into the garage on reset. Renders only on the loop's ceiling
+-- track (see draw_shop); disabled until the fare is affordable.
 local function rebirth_row(x, y, w)
   local banked = economy.loop_yen_total()
-  local label  = banked > 0 and string.format("Rebirth  +¥%d", banked) or "Rebirth"
+  local label  = banked > 0 and string.format("Rebirth", banked) or "Rebirth"
   local _, th  = usagi.measure_text(label)
   local bh     = th * 2 + 4
   ui.label(label, x, y + math.floor((bh - th * 2) / 2), { color = gfx.COLOR_PINK })
 
-  local cost = economy.nirvana_cost()
-  if not cost then return false, bh end
+  local cost       = economy.rebirth_cost()
   local affordable = State.money >= cost
   local cost_text  = "$" .. tostring(cost)
   local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
   local bx         = x + w - SHOP_COST_W
   local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
   local clicked    = ui.button(cost_text, bx, y, btn_opts)
+  return clicked, bh
+end
+
+-- The Nirvana row: escape the loop - the eventual win, paired directly below
+-- Rebirth on the top track as the other fork (stay in Samsara vs escape).
+-- Fixed $1M price, button trimmed to "1m", affordability-gated like any other
+-- button. Non-functional for now (unreachable price, click is a no-op).
+local function nirvana_row(x, y, w)
+  local label = "Nirvana"
+  local _, th = usagi.measure_text(label)
+  local bh    = th * 2 + 4
+  ui.label(label, x, y + math.floor((bh - th * 2) / 2), { color = gfx.COLOR_YELLOW })
+
+  local affordable = State.money >= track_data.NIRVANA_COST
+  local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
+  local bx         = x + w - SHOP_COST_W
+  local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
+  local clicked    = ui.button("$1 million", bx, y, btn_opts)
   return clicked, bh
 end
 
@@ -285,8 +303,8 @@ function M.draw()
     M.draw_race_modal()
   elseif State.first_wall then
     M.draw_first_wall()
-  elseif State.nirvana_confirm then
-    M.draw_nirvana_confirm()
+  elseif State.rebirth_confirm then
+    M.draw_rebirth_confirm()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
   else
@@ -409,7 +427,7 @@ end
 -- then decides whether one more run to raise a rank is worth more than resetting
 -- now. The fare is already paid (the row's button is dead until affordable), so
 -- the cost isn't restated - the live question is the ranks, not the price.
-function M.draw_nirvana_confirm()
+function M.draw_rebirth_confirm()
   local body, draw_body = breakdown_body(prestige_breakdown_rows())
   -- YES first, NOT YET second: BTN1 dismisses to NOT YET (see M.update), so
   -- the irreversible choice needs a deliberate click on its own button.
@@ -420,7 +438,7 @@ function M.draw_nirvana_confirm()
     buttons   = { "YES", "NOT YET" },
   })
   if pressed then
-    State.nirvana_confirm = nil
+    State.rebirth_confirm = nil
     if pressed == 1 then economy.prestige() end
   end
 end
@@ -468,25 +486,9 @@ function M.draw_race_modal()
     body_parts[#body_parts + 1] = string.format("$/sec: $%.2f -> $%.2f", info.cash_before, info.cash_after)
   end
 
-  -- The ¥ this race banked toward the climb, shown where it's earned so the
-  -- payoff of a better rank is felt now, not only at Rebirth.
-  if info.yen then
-    body_parts[#body_parts + 1] = string.format("+¥%d banked!", info.yen)
-  end
-
-  -- New tracks are bought from the previous track's shop page, hence the -1.
-  -- Both messages only name the shop's track when the player isn't already
-  -- viewing it.
-  if info.show_unlock then
-    local idx = track_data.get_track_index(info.show_unlock)
-    body_parts[#body_parts + 1] = track_data.get_track_index(State.active_track) == idx - 1
-        and string.format("Track #%d available in the shop!", idx)
-        or string.format("Track #%d available in\nTrack #%d's shop!", idx, idx - 1)
-  end
-
-  -- Rebirth is a single global action, reachable from any shop page, so it's
-  -- named plainly rather than routed to a specific track's shop.
-  if info.show_nirvana then
+  -- Rebirth fires from the loop's ceiling track; the announcement names it
+  -- plainly and the player navigates there with the `>` arrow once it's bought.
+  if info.show_rebirth then
     body_parts[#body_parts + 1] = "Rebirth available - reset to grow stronger!"
   end
 
@@ -593,23 +595,38 @@ function M.draw_shop()
     end
   end
 
-  local next_track = idx < #order and order[idx + 1] or nil
-  if next_track and not State.unlocked[next_track] then
-    local clicked, bh = new_track_row(next_track, idx + 1, x, shop_y, w)
-    if clicked and economy.try_unlock_track(next_track) then
-      State.active_track = next_track
+  -- The climb: the buy-next-track row sits on the top owned track's page (the
+  -- only page whose next corridor track is unowned), offering to climb one more
+  -- track this loop while the corridor has a next track within the loop's
+  -- ceiling.
+  if id == economy.top_owned_track() then
+    local next_track = economy.next_locked_track()
+    if next_track and next_track == order[idx + 1] then
+      local nt_clicked, nt_bh = new_track_row(next_track, idx + 1, x, shop_y, w)
+      if nt_clicked and economy.try_unlock_track(next_track) then
+        State.active_track = next_track
+      end
+      shop_y = shop_y + nt_bh + gap
     end
-    shop_y = shop_y + bh + gap
   end
 
-  -- Rebirth (Nirvana): the always-available prestige action, reachable from any
-  -- track's shop. Reset and climb again, spending the ¥ this loop's race ranks
-  -- have banked. Routed through a confirm since it wipes the loop on the spot.
-  local rb_clicked, rb_bh = rebirth_row(x, shop_y, w)
-  if rb_clicked and economy.nirvana_affordable() then
-    State.nirvana_confirm = true
+  -- The loop-enders live on the loop's ceiling track (its top for this loop),
+  -- reachable only once the climb has bought all the way up to it - not on
+  -- whatever track the player has climbed to so far. Rebirth stays in Samsara
+  -- and resets; Nirvana escapes the loop (the eventual win, non-functional for
+  -- now).
+  if id == economy.rebirth_track() then
+    -- Rebirth routes through a confirm since it wipes the loop on the spot.
+    local rb_clicked, rb_bh = rebirth_row(x, shop_y, w)
+    if rb_clicked and economy.rebirth_affordable() then
+      State.rebirth_confirm = true
+    end
+    shop_y = shop_y + rb_bh + gap
+
+    local nv_clicked, nv_bh = nirvana_row(x, shop_y, w)
+    if nv_clicked then economy.buy_nirvana() end
+    shop_y = shop_y + nv_bh + gap
   end
-  shop_y       = shop_y + rb_bh + gap
 
   -- Global car-upgrades column, mirrored on the right edge. Wider cost
   -- buttons than the track shop so 5-digit prices fit.

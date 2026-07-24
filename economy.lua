@@ -181,11 +181,10 @@ function M.rank_at_least(id, letter)
 end
 
 -- True when a shop item's rank gate is met: `requires_rank_all` checks every
--- track in this loop (the loop-1 prologue's Nirvana, needing rank A
--- everywhere, is the only user left). `requires_rank` gates on the given
--- track alone; nothing in the data sets it since Track 4's Nirvana was
--- ungated, but it's kept as the obvious knob for re-gating a shop item during
--- a rebalance. Ungated items always pass.
+-- track in this loop, `requires_rank` the given track alone. Nothing in the
+-- data sets either now (the new Nirvana item is ungated, and it was the last
+-- gated shop row), but both are kept as the obvious knobs for re-gating a shop
+-- item during a rebalance. Ungated items always pass.
 function M.shop_item_unlocked(id, item)
   if item.requires_rank_all then
     for _, tid in ipairs(track_data.track_order()) do
@@ -197,45 +196,99 @@ function M.shop_item_unlocked(id, item)
   return M.rank_at_least(id, item.requires_rank)
 end
 
--- First track in the visible corridor the player hasn't unlocked yet, or nil
--- once the whole corridor is cleared. Hidden tracks are already filtered out
--- of track_order, so they're never offered as the next wall.
+-- The next corridor track the player may buy this loop, or nil. It's the first
+-- unowned track, but only while that track is within the loop's purchase ceiling
+-- (top_track_index) - past the ceiling there's nothing to buy until a Rebirth
+-- raises it. Owned tracks are a contiguous prefix, so the first unowned track is
+-- always the one directly above the top owned track.
 function M.next_locked_track()
   for _, tid in ipairs(track_data.track_order()) do
-    if not State.unlocked[tid] then return tid end
+    if not State.unlocked[tid] then
+      if track_data.get_track_index(tid) > track_data.top_track_index(State.loop) then
+        return nil
+      end
+      return tid
+    end
   end
   return nil
 end
 
--- Cash price of a Rebirth: a fixed fraction of the wall the player is stuck at
--- (the next locked track's unlock_cost), or of the last corridor track once
--- everything is unlocked. No per-prestige escalation - the exit tracks the
--- current wall, so it's affordable soon after that wall bites. track1 has no
--- unlock_cost, so a single-track corridor would return nil; the real corridor
--- always has a priced track to reference.
-function M.nirvana_cost()
+-- Buys `id` for this loop with cash: the loop's climb, re-paid each Rebirth.
+-- Guarded to the current next-buyable track so the loop ceiling can't be skipped.
+-- Seeds fresh track state (with the skill tree's floors applied) and its ghost
+-- sim. Returns true on success so the caller can navigate onto the new track.
+function M.try_unlock_track(id)
+  if id ~= M.next_locked_track() then return end
+  local cost = track_data.unlock_cost(id)
+  if not cost or State.money < cost then return end
+  State.money        = State.money - cost
+  State.unlocked[id] = true
+  if not State.tracks[id] then
+    State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked, State.start_coins)
+    -- Applies the skill tree's floors (Checkpoint Pass, coin floor) to the
+    -- fresh track state.
+    persist.rederive_skill_effects()
+  end
+  ghost.rebuild_sim(id)
+  persist.save()
+  return true
+end
+
+-- Highest-index owned track this loop - the top the player has actually
+-- climbed to. Ownership resets to Track 1 each loop and grows by cash purchase,
+-- so this tracks progress up the corridor, not the loop ceiling. Drives the
+-- buy-next-track row (the next unowned track sits directly above it).
+function M.top_owned_track()
   local order = track_data.track_order()
-  local ref   = M.next_locked_track() or order[#order]
-  local cost  = ref and track_data.unlock_cost(ref)
-  if not cost then return nil end
-  return track_data.nirvana_cost(cost)
+  local top   = order[1]
+  for i = 2, #order do
+    if State.unlocked[order[i]] then top = order[i] end
+  end
+  return top
+end
+
+-- The track Rebirth and Nirvana fire from: the loop's ceiling track - the top
+-- track this loop makes buyable (track_data.top_track), the true top of the
+-- climb. This is the loop ceiling, not merely the top the player has bought so
+-- far, so the loop-enders stay hidden until the climb has reached the top. It's
+-- reachable (navigable, ownable) only once bought all the way up, at which point
+-- it equals top_owned_track.
+function M.rebirth_track()
+  return track_data.top_track(State.loop)
+end
+
+-- Cash price of a Rebirth: the authored exit price of the track it fires from,
+-- the loop's ceiling track (Track 2 on loop 2, Track 4 at loop 4+). Flat per
+-- track, no per-loop escalation - past the last track every loop pays Track 4's
+-- cost.
+function M.rebirth_cost()
+  return track_data.rebirth_cost(M.rebirth_track())
 end
 
 -- True once the player can afford to Rebirth. Edge-triggers the "Rebirth
 -- available!" announcement (see scenes/race.lua finish_race): the race that
 -- earns the fare is the news.
-function M.nirvana_affordable()
-  local cost = M.nirvana_cost()
-  return cost ~= nil and State.money >= cost
+function M.rebirth_affordable()
+  return State.money >= M.rebirth_cost()
 end
 
--- Rebirth (Nirvana): reset and climb again. Always available once the fare is
--- earned; the ¥ banked from this loop's race ranks is already in the skill
--- tree, waiting to be spent in the garage the reset drops the player into.
+-- Rebirth: stay in Samsara, reset, and climb again stronger. Fires only from
+-- the loop's ceiling track (where the row renders) once the fare is earned; the
+-- ¥ banked from this loop's race ranks is already in the skill tree, waiting to
+-- be spent in the garage the reset drops the player into.
 function M.prestige()
-  if not M.nirvana_affordable() then return end
+  if not M.rebirth_affordable() then return end
+  if State.active_track ~= M.rebirth_track() then return end
   sfx.play("loop_complete")
   persist.start_new_loop()
+end
+
+-- Nirvana: escape the loop - the eventual win condition. Non-functional for
+-- now; the row renders and is affordability-gated (players can't reach the $1M
+-- price yet), and clicking is a no-op until the true-end effect (fanfare /
+-- credits / win state) is designed.
+function M.buy_nirvana()
+  -- TBD: true-end.
 end
 
 -- $/sec earned from ghosts before the rank multiplier is applied.
@@ -316,7 +369,8 @@ local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = t
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
 -- completed race on that track (nothing to replay otherwise). It's the only
--- first-race gate left: tracks and Rebirth are gated on cash alone now.
+-- first-race gate: tracks are cash-bought (loop-capped) and Rebirth fires from
+-- the top owned track, neither gated on a first race.
 function M.needs_first_race(id, kind)
   local tstate = State.tracks[id]
   if not tstate then return true end
@@ -377,22 +431,6 @@ function M.try_buy(kind)
   end
   car.apply_upgrades(State.car, State.accel, State.top_speed, State.drift >= 1, State.drift_boost >= 1, State.boost)
   persist.save()
-end
-
-function M.try_unlock_track(id)
-  local cost = track_data.unlock_cost(id)
-  if not cost or State.money < cost then return end
-  State.money        = State.money - cost
-  State.unlocked[id] = true
-  if not State.tracks[id] then
-    State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked, State.start_coins)
-    -- Applies the skill tree's floors (Checkpoint Pass, coin floor) to the
-    -- fresh track state.
-    persist.rederive_skill_effects()
-  end
-  ghost.rebuild_sim(id)
-  persist.save()
-  return true
 end
 
 function M.bank(event)

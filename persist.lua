@@ -1,9 +1,9 @@
-local track_data          = require "track_data"
-local car                 = require "car"
-local ghost               = require "ghost"
-local skill_tree          = require "skill_tree"
+local track_data = require "track_data"
+local car        = require "car"
+local ghost      = require "ghost"
+local skill_tree = require "skill_tree"
 
-local M                   = {}
+local M          = {}
 
 local function default_state()
   return {
@@ -12,15 +12,11 @@ local function default_state()
     seen_help          = false,
     loop               = 1,
     seen_modals        = {},
-    -- Track ids whose "Track #N available in the shop!" announcement has
-    -- already fired this loop, so it lands once on the race that made the
-    -- track affordable instead of every time the balance re-crosses the
-    -- price. Per-loop: start_new_loop resets it with the rest of the state.
-    announced_unlock   = {},
-    -- Same idea for the "Rebirth available!" announcement, which fires on
-    -- affording the exit. Per-loop, one flag: Rebirth is a single global
-    -- action now, not a per-track shop row.
-    announced_nirvana  = false,
+    -- Edge-flag for the "Rebirth available!" announcement, fired once the loop
+    -- the exit fare is first affordable. Per-loop: start_new_loop resets it
+    -- with the rest of the state, so it doesn't re-fire every time the balance
+    -- dips under the price and climbs back.
+    announced_rebirth  = false,
     accel              = 0,
     top_speed          = 0,
     start_coins        = 0,
@@ -59,8 +55,7 @@ local function progression_of_state()
     seen_help         = State.seen_help,
     loop              = State.loop,
     seen_modals       = State.seen_modals,
-    announced_unlock  = State.announced_unlock,
-    announced_nirvana = State.announced_nirvana,
+    announced_rebirth = State.announced_rebirth,
     accel             = State.accel,
     -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
     -- max_accel / ghosts_unlocked / ghost_efficiency are derived caches of the
@@ -78,6 +73,9 @@ local function progression_of_state()
     boost             = State.boost,
     magnet            = State.magnet,
     active_track      = State.active_track,
+    -- The tracks bought this loop. Cash-purchased and reset every loop (the
+    -- climb), so it's real progression state and is saved to survive a mid-loop
+    -- quit - not loop-derived.
     unlocked          = State.unlocked,
     tracks            = State.tracks,
   }
@@ -90,8 +88,7 @@ local function apply_progression(loaded)
   State.seen_help         = loaded.seen_help or false
   State.loop              = loaded.loop or 1
   State.seen_modals       = loaded.seen_modals or {}
-  State.announced_unlock  = loaded.announced_unlock or {}
-  State.announced_nirvana = loaded.announced_nirvana or false
+  State.announced_rebirth = loaded.announced_rebirth or false
 
   State.accel             = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
   State.drift             = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
@@ -103,14 +100,22 @@ local function apply_progression(loaded)
     State.active_track = loaded.active_track
   end
 
+  -- Restore the tracks bought this loop (cash-purchased, saved). Track 1 is
+  -- always owned; defensively drop any owned id beyond the loop's purchase
+  -- ceiling (game is unreleased; this only bites a hand-edited/stale save) and
+  -- seed default track state for each owned id.
+  State.unlocked = { track1 = true }
   if loaded.unlocked then
-    for id, v in pairs(loaded.unlocked) do
-      if track_data.TRACKS[id] then
-        State.unlocked[id] = v
-        if v and not State.tracks[id] then
-          State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked)
-        end
+    for id, owned in pairs(loaded.unlocked) do
+      if owned and track_data.TRACKS[id]
+          and track_data.get_track_index(id) <= track_data.top_track_index(State.loop) then
+        State.unlocked[id] = true
       end
+    end
+  end
+  for id in pairs(State.unlocked) do
+    if not State.tracks[id] then
+      State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked)
     end
   end
 
@@ -191,32 +196,39 @@ function M.resync_car_and_ghosts()
   end
 end
 
--- Rebirth (Nirvana) resets and climbs again: everything resets to a fresh save
--- except the loop counter, dismissed tutorials, and the skill tree. The tree
+-- Rebirth resets and climbs again: everything resets to a fresh save except the
+-- loop counter, dismissed tutorials, and the skill tree. The tree
 -- carries this loop's ¥ - already banked per race rank (see
 -- economy.bank_race_yen) - so there's no reward term here; the ¥ was earned as
 -- the loop was raced and is now spent in the garage this reset drops into.
 function M.start_new_loop()
-  local old_loop            = State.loop or 1
-  local next_loop           = old_loop + 1
-  local had_coins           = State.coins_unlocked
-  local seen_help           = State.seen_help
-  local seen_modals         = State.seen_modals
-  local tree                = State.skill_tree
-  State                     = default_state()
-  State.loop                = next_loop
-  State.seen_help           = seen_help
-  State.seen_modals         = seen_modals
+  local old_loop      = State.loop or 1
+  local next_loop     = old_loop + 1
+  local seen_help     = State.seen_help
+  local seen_modals   = State.seen_modals
+  local tree          = State.skill_tree
+  State               = default_state()
+  State.loop          = next_loop
+  State.seen_help     = seen_help
+  State.seen_modals   = seen_modals
   -- Carry the skill tree across the reset (like seen_help). fx is transient,
   -- rebuilt empty. Its points already include everything earned this loop.
-  State.skill_tree          = tree
-  State.skill_tree.fx       = {}
-  -- The tree survives the reset, so coin availability does too; the coin floor
-  -- itself is applied by the rederive below.
-  State.tracks.track1       = track_data.default_track_state("track1", had_coins)
+  State.skill_tree    = tree
+  State.skill_tree.fx = {}
+  -- Ownership resets to Track 1 for the fresh climb (default_state already seeded
+  -- unlocked = { track1 } and tracks.track1). The higher tracks are re-bought
+  -- with cash this loop, up to the new loop's ceiling. The tree (and its coin
+  -- availability) survives the reset; the coin floor is applied by the rederive
+  -- below.
+  -- Record the track this Rebirth newly made *buyable* (if any) so the fanfare
+  -- can show "Track #N available to buy!". Nothing new opens once the ceiling is
+  -- capped (loop 4+), so leave it nil then.
+  if track_data.top_track_index(next_loop) > track_data.top_track_index(old_loop) then
+    State.rebirth_unlocked_track = track_data.top_track(next_loop)
+  end
   -- The ending fanfare always shows, even on repeat loops - it's the payoff,
   -- not a tutorial.
-  State.purchase_modal      = "nirvana"
+  State.purchase_modal = "rebirth"
   ghost.clear_all_sims()
   M.rederive_skill_effects()
   M.resync_car_and_ghosts()
