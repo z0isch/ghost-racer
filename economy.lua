@@ -38,19 +38,6 @@ function M.rank_yen(rank)
   return RANK_YEN[rank] or 0
 end
 
--- Total ¥ this loop's race ranks are worth across the corridor - what a Rebirth
--- carries into the garage. Sums each raced track's rank ¥; equals what's been
--- banked into the skill tree this loop (bank_race_yen credits the same amounts
--- incrementally).
-function M.loop_yen_total()
-  local total = 0
-  for _, id in ipairs(track_data.track_order()) do
-    local ts = State.tracks[id]
-    if ts and ts.best_rate then total = total + RANK_YEN[M.track_rank(id)] end
-  end
-  return total
-end
-
 -- $ awarded per checkpoint/coin on a given track.
 function M.track_pay(id)
   return track_data.TRACKS[id].pay
@@ -99,12 +86,11 @@ function M.owns_any_ghost()
   return M.owns_any("ghosts")
 end
 
--- Rank earned by a $/sec rate on a track, against the coinless or full
--- thresholds depending on whether coins are unlocked. Below the lowest
--- threshold is "D". Delegates to track_data (the single source), so loop
--- scoring and live ranking share one implementation.
+-- Rank earned by a $/sec rate on a track. Below the lowest threshold is "D".
+-- Delegates to track_data (the single source), so loop scoring and live
+-- ranking share one implementation.
 function M.rank_for_rate(id, rate)
-  return track_data.rank_for_rate(id, rate, State.coins_unlocked)
+  return track_data.rank_for_rate(id, rate)
 end
 
 -- Projected finish $/sec for the run in progress: money already earned plus
@@ -244,38 +230,6 @@ function M.top_owned_track()
   return top
 end
 
--- The track Rebirth and Nirvana fire from: the top track the player has climbed
--- to this loop (top_owned_track). The loop ends as far up the corridor as the
--- player's power reached - climb further or Rebirth from here, the fork lives on
--- the top owned track's page.
-function M.rebirth_track()
-  return M.top_owned_track()
-end
-
--- Cash price of a Rebirth: the authored exit price of the track it fires from,
--- the top owned track. Flat per track, no per-loop escalation.
-function M.rebirth_cost()
-  return track_data.rebirth_cost(M.rebirth_track())
-end
-
--- True once the player can afford to Rebirth. Edge-triggers the "Rebirth
--- available!" announcement (see scenes/race.lua finish_race): the race that
--- earns the fare is the news.
-function M.rebirth_affordable()
-  return State.money >= M.rebirth_cost()
-end
-
--- Rebirth: stay in Samsara, reset, and climb again stronger. Fires only from
--- the loop's ceiling track (where the row renders) once the fare is earned; the
--- ¥ banked from this loop's race ranks is already in the skill tree, waiting to
--- be spent in the garage the reset drops the player into.
-function M.prestige()
-  if not M.rebirth_affordable() then return end
-  if State.active_track ~= M.rebirth_track() then return end
-  sfx.play("loop_complete")
-  persist.start_new_loop()
-end
-
 -- Nirvana: escape the loop - the eventual win condition. Non-functional for
 -- now; the row renders and is affordability-gated (players can't reach the $1M
 -- price yet), and clicking is a no-op until the true-end effect (fanfare /
@@ -363,8 +317,7 @@ local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = t
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
 -- completed race on that track (nothing to replay otherwise). It's the only
--- first-race gate: tracks are cash-bought (loop-capped) and Rebirth fires from
--- the top owned track, neither gated on a first race.
+-- first-race gate: tracks are cash-bought (loop-capped), not gated on a race.
 function M.needs_first_race(id, kind)
   local tstate = State.tracks[id]
   if not tstate then return true end

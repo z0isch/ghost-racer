@@ -65,37 +65,20 @@ local MODAL_INFO       = {
           "Pulls in " .. ui.COIN_CHAR .. " from a larger radius\naround your car."
     end,
   },
-  rebirth = {
-    title   = "Loop Complete!",
-    rainbow = true,
-    button  = "OKAY",
-    body    = function()
-      local body = "You have not escaped the\nendless loop of SAMSARA..."
-      return body
-    end,
-  },
 }
 
--- Clears the purchase modal. Dismissing the "Loop Complete!" fanfare drops into
--- the garage (skill tree) - the between-loops spend, and the only thing left to
--- do once the loop has reset.
+-- Clears the purchase modal.
 local function dismiss_purchase_modal()
-  local kind           = State.purchase_modal
   State.purchase_modal = nil
-  if kind == "rebirth" then
-    SceneGoto("skill_tree")
-  end
 end
 
--- Dismissing the TIME'S UP breakdown fires the forced Rebirth: the timeout
--- variant of start_new_loop (no fanfare), then drops into the garage. This is
--- the *unconditional* Rebirth - it calls start_new_loop directly, bypassing
--- economy.prestige()'s ceiling-track / affordability guards. Banked ¥ already
--- lives in the skill tree (bank_race_yen), so only in-loop money and track
--- ownership reset.
+-- Dismissing the TIME'S UP breakdown fires the Rebirth, then drops into the
+-- garage. The clock is the only loop-ender - the player races until it runs
+-- out. Banked ¥ already lives in the skill tree (bank_race_yen), so only
+-- in-loop money and track ownership reset.
 local function dismiss_timeout()
   State.loop_timeout = nil
-  persist.start_new_loop({ timeout = true })
+  persist.start_new_loop()
   SceneGoto("skill_tree")
 end
 
@@ -103,13 +86,6 @@ local M = {}
 
 -- Which kind the demo loop was last reset for, so it restarts per modal.
 local demo_kind
-
--- Applause follows the Rebirth fanfare once it finishes, rather than
--- overlapping it (see economy.prestige). Edge-triggered on the fanfare
--- ending rather than tied to the modal, since the modal only re-arms via
--- demo_kind on the very first Rebirth (seen_modals carries the kind across
--- loops after that).
-local loop_complete_was_playing = false
 
 function M.enter()
   -- Guarantees engine silence on every path in, including dev live-reload
@@ -127,22 +103,11 @@ function M.update(dt)
     economy.bank(ev)
   end
   popups.update(dt)
-  local loop_complete_playing = sfx.is_playing("loop_complete")
-  if loop_complete_was_playing and not loop_complete_playing then
-    sfx.play("applause")
-  end
-  loop_complete_was_playing = loop_complete_playing
   if State.purchase_modal and input.pressed(input.BTN1) then
     dismiss_purchase_modal()
   end
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
-  end
-  -- BTN1 backs out of the Rebirth confirm rather than accepting it: the safe
-  -- answer is the default for an irreversible choice, so a stray press can't
-  -- wipe the loop. YES needs its own click (draw_rebirth_confirm).
-  if State.rebirth_confirm and input.pressed(input.BTN1) then
-    State.rebirth_confirm = nil
   end
   -- Loop timed out: once the clock hits zero and nothing else is on screen,
   -- raise the TIME'S UP breakdown. Held behind other modals so a just-finished
@@ -151,15 +116,14 @@ function M.update(dt)
   -- loading into buy with a dead clock. State.loop_timeout gates the modal; the
   -- reset happens on its dismissal, not here.
   if not State.loop_timeout and State.loop_time_left <= 0
-      and not State.purchase_modal and not State.race_modal
-      and not State.rebirth_confirm then
+      and not State.purchase_modal and not State.race_modal then
     State.loop_timeout = true
   end
   if State.loop_timeout and input.pressed(input.BTN1) then
     dismiss_timeout()
   end
   if not State.purchase_modal and not State.race_modal
-      and not State.rebirth_confirm and not State.loop_timeout
+      and not State.loop_timeout
       and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
@@ -239,32 +203,11 @@ local function new_track_row(next_id, next_track_idx, x, y, w)
   return clicked, bh
 end
 
--- The Rebirth row: the loop-ender that stays in Samsara and climbs again,
--- priced at the top owned track's authored exit cost (economy.rebirth_cost).
--- Shows the ¥ this loop's race ranks have banked as the payoff (Q12c) - that's
--- what carries into the garage on reset. Renders only on the top owned track
--- (see draw_shop); disabled until the fare is affordable.
-local function rebirth_row(x, y, w)
-  local banked = economy.loop_yen_total()
-  local label  = banked > 0 and string.format("Rebirth", banked) or "Rebirth"
-  local _, th  = usagi.measure_text(label)
-  local bh     = th * 2 + 4
-  ui.label(label, x, y + math.floor((bh - th * 2) / 2), { color = gfx.COLOR_PINK })
-
-  local cost       = economy.rebirth_cost()
-  local affordable = State.money >= cost
-  local cost_text  = "$" .. tostring(cost)
-  local cost_color = affordable and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
-  local bx         = x + w - SHOP_COST_W
-  local btn_opts   = { w = SHOP_COST_W, disabled = not affordable, text = cost_color, dim_text = cost_color }
-  local clicked    = ui.button(cost_text, bx, y, btn_opts)
-  return clicked, bh
-end
-
--- The Nirvana row: escape the loop - the eventual win, paired directly below
--- Rebirth on the top track as the other fork (stay in Samsara vs escape).
--- Fixed $300M price, button trimmed to "$300m", affordability-gated like any other
--- button. Non-functional for now (unreachable price, click is a no-op).
+-- The Nirvana row: escape the loop - the eventual win, and the only loop-ender
+-- the player can buy (Rebirth isn't for sale; the clock ends every loop). Lives
+-- on the top owned track, directly under the climb. Fixed $300M price, button
+-- trimmed to "$300m", affordability-gated like any other button. Non-functional
+-- for now (unreachable price, click is a no-op).
 local function nirvana_row(x, y, w)
   local label = "Nirvana"
   local _, th = usagi.measure_text(label)
@@ -301,8 +244,6 @@ function M.draw()
     M.draw_race_modal()
   elseif State.loop_timeout then
     M.draw_timeout()
-  elseif State.rebirth_confirm then
-    M.draw_rebirth_confirm()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
   else
@@ -355,18 +296,19 @@ end
 
 -- Draws one breakdown row centered at `cx`. Rows with a `rank` draw their
 -- trailing rank letter in that rank's color (rank_color for the list, the
--- animated rank_text for the big `big` RANK line); the rest is light gray.
+-- animated rank_text for the big `big` RANK line); the rest is light gray with
+-- currency glyphs yellow (coin_text), matching modal's default body render.
 local function draw_breakdown_row(row, cx, y, scale)
   local text = row.text
   local w    = usagi.measure_text(text) * scale
   local x    = math.floor(cx - w / 2)
   if not row.rank then
-    gfx.text_ex(text, x, y, scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+    ui.coin_text(text, x, y, scale, gfx.COLOR_LIGHT_GRAY)
     return
   end
   local prefix = text:sub(1, #text - #row.rank)
   local pw     = usagi.measure_text(prefix) * scale
-  gfx.text_ex(prefix, x, y, scale, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  ui.coin_text(prefix, x, y, scale, gfx.COLOR_LIGHT_GRAY)
   if row.big then
     ui.rank_text(row.rank, row.rank, x + pw, y, scale)
   else
@@ -374,13 +316,13 @@ local function draw_breakdown_row(row, cx, y, scale)
   end
 end
 
--- Rows of the Rebirth breakdown: a line per corridor track showing the ¥ its
+-- Rows of the loop breakdown: a line per corridor track showing the ¥ its
 -- best rank this loop is worth (with that rank colored), then the total. This
 -- is the teacher of the whole climb - "race better, bank more ¥, upgrade more"
--- - shown live in the Rebirth confirm. A track not yet raced this loop reads as
+-- - shown when the clock runs out. A track not yet raced this loop reads as
 -- a dash. The rank letter is the trailing token of the value ("¥60 A"), so
 -- draw_breakdown_row colors it.
-local function prestige_breakdown_rows()
+local function loop_breakdown_rows()
   local rows    = {}
   local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
   local total   = 0
@@ -419,35 +361,12 @@ local function breakdown_body(rows)
   end
 end
 
--- Rebirth confirm: the ¥ breakdown live and before the fact. Rebirth wipes the
--- loop on the spot, so this is both the safety on an irreversible click and the
--- pitch: the player reads the ¥ each track's rank has banked toward the climb,
--- then decides whether one more run to raise a rank is worth more than resetting
--- now. The fare is already paid (the row's button is dead until affordable), so
--- the cost isn't restated - the live question is the ranks, not the price.
-function M.draw_rebirth_confirm()
-  local body, draw_body = breakdown_body(prestige_breakdown_rows())
-  -- YES first, NOT YET second: BTN1 dismisses to NOT YET (see M.update), so
-  -- the irreversible choice needs a deliberate click on its own button.
-  local pressed         = modal.draw({
-    title     = "Rebirth?",
-    body      = body,
-    draw_body = draw_body,
-    buttons   = { "YES", "NOT YET" },
-  })
-  if pressed then
-    State.rebirth_confirm = nil
-    if pressed == 1 then economy.prestige() end
-  end
-end
-
--- Loop-timeout modal: the clock hit 0. Shows the same live ¥ breakdown as the
--- Rebirth confirm (read before the reset wipes State.tracks), under a rainbow
--- "TIME'S UP!" title with a single OKAY. It *replaces* the SAMSARA fanfare on
--- this path; dismissal fires the forced Rebirth and drops to the garage. A
--- BTN1 press dismisses in M.update.
+-- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Shows
+-- the ¥ breakdown (read before the reset wipes State.tracks) under a rainbow
+-- "TIME'S UP!" title with a single OKAY; dismissal fires the Rebirth and drops
+-- to the garage. A BTN1 press dismisses in M.update.
 function M.draw_timeout()
-  local body, draw_body = breakdown_body(prestige_breakdown_rows())
+  local body, draw_body = breakdown_body(loop_breakdown_rows())
   local draw_title      = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
   if modal.draw({
         title      = "TIME'S UP!",
@@ -595,18 +514,10 @@ function M.draw_shop()
     end
   end
 
-  -- The loop-enders live on the top owned track (economy.rebirth_track), the
-  -- fork paired with the climb: buy the next track to go higher, or end the loop
-  -- from as far up as you've reached. Rebirth stays in Samsara and resets;
-  -- Nirvana escapes the loop (the eventual win, non-functional for now).
-  if id == economy.rebirth_track() then
-    -- Rebirth routes through a confirm since it wipes the loop on the spot.
-    local rb_clicked, rb_bh = rebirth_row(x, shop_y, w)
-    if rb_clicked and economy.rebirth_affordable() then
-      State.rebirth_confirm = true
-    end
-    shop_y = shop_y + rb_bh + gap
-
+  -- Nirvana lives on the top owned track, under the climb: escaping the loop
+  -- fires from as far up the corridor as the player reached. It's the only
+  -- loop-ender for sale - Rebirth isn't bought, the clock brings it.
+  if id == economy.top_owned_track() then
     local nv_clicked, nv_bh = nirvana_row(x, shop_y, w)
     if nv_clicked then economy.buy_nirvana() end
     shop_y = shop_y + nv_bh + gap

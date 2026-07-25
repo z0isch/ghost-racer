@@ -1,9 +1,9 @@
-local track1 = require "tile-map.track1"
-local track2 = require "tile-map.track2"
-local track3 = require "tile-map.track3"
-local track4 = require "tile-map.track4"
+local track1   = require "tile-map.track1"
+local track2   = require "tile-map.track2"
+local track3   = require "tile-map.track3"
+local track4   = require "tile-map.track4"
 
-local M      = {}
+local M        = {}
 
 -- Reverse-driving prototype: horizontally mirrors every track (tile grid,
 -- checkpoints, coins, spawn) and puts the car in reverse gear (release gas
@@ -13,14 +13,14 @@ local M      = {}
 -- a save that has forward ghost laps -- they'd clip through mirrored walls
 -- and skew idle income. Snapshot via Dev: Save State and test on a fresh
 -- save.
-M.REVERSE_MODE  = false
+M.REVERSE_MODE = false
 
-M.tile_size     = track1.tilewidth
+M.tile_size    = track1.tilewidth
 
 -- Coin-pickup radius (px) granted by each level of the "magnet" upgrade.
 -- Level 0 (no magnet) falls back to plain box-overlap pickup instead of a
 -- circle, so M.MAGNET_RADII[0] is intentionally absent (Lua indexes from 1).
-M.MAGNET_RADII  = { 18, 24, 30 }
+M.MAGNET_RADII = { 18, 24, 30 }
 
 function M.magnet_radius(level)
   return M.MAGNET_RADII[level]
@@ -32,7 +32,7 @@ M.LOOP_SECONDS = 300
 -- Fixed cash price of Nirvana, the always-available escape item (the eventual
 -- win condition). Ungated - never keyed to rank/loop/track - and unreachable
 -- for now; the buy button renders it trimmed to "$300m". Tuning knob.
-M.NIRVANA_COST = 300000000   -- was 1000000
+M.NIRVANA_COST = 300000000 -- was 1000000
 
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
@@ -49,14 +49,14 @@ M.UPGRADES     = {
     kind      = "drift",
     label     = "Drift",
     max       = 1,
-    base_cost = 400,
+    base_cost = 100,
     growth    = 1.6
   },
   {
     kind      = "drift_boost",
     label     = "Drift Boost",
     max       = 1,
-    base_cost = 500,
+    base_cost = 150,
     growth    = 1.6
   },
   {
@@ -88,41 +88,33 @@ end
 
 M.TRACKS = {
   track1 = {
-    map           = track1,
-    spawn         = { col = 5, row = 14 },
-    checkpoints   = {
+    map         = track1,
+    spawn       = { col = 5, row = 14 },
+    checkpoints = {
       { col = 31, row = 8, w = 4, h = 7 },
     },
-    gates         = {
+    gates       = {
       { col = 10, row = 8, len = 7, vertical = true, mode = "reverse" },
       { col = 26, row = 8, len = 7, vertical = true, mode = "forward" },
     },
-    coins         = {
+    coins       = {
       { col = 18, row = 9 },
       { col = 26, row = 9 },
     },
-    base_coins    = 1,
-    ranks         = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
-    -- Thresholds while coins are off (the Loose Change skill node isn't
-    -- bought): checkpoint-and-ghost income only, so scaled way down.
-    -- Provisional - tune freely.
-    no_coin_ranks = { C = .8, B = 1.1, A = 1.5, S = 3 },
-    label         = "Track 1",
-    pay           = 5,
+    base_coins  = 1,
+    ranks       = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
+    label       = "Track 1",
+    pay         = 5,
     -- Cash price to *buy* this track for the current loop. Track 1 is owned free
     -- at the start of every loop (nil), the rest are re-bought each climb. The
     -- whole corridor is buyable regardless of loop; cash is the only wall.
-    unlock_cost   = nil,
-    -- Cash price of a Rebirth taken *from* this track (the top owned track for
-    -- the loop). Flat per track, no per-loop escalation - see the rebirth_cost
-    -- table in the loop-track-gating plan.
-    rebirth_cost  = 100,
-    shop          = {
+    unlock_cost = nil,
+    shop        = {
       {
         kind      = "ghosts",
         label     = "Ghost",
         currency  = "cash",
-        max       = 8,
+        max       = 5,
         base_cost = 5,
         growth    = 1.6
       },
@@ -130,41 +122,39 @@ M.TRACKS = {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 18,
+        base_cost = 10,
         growth    = 1.6
       },
     },
   },
   track2 = {
-    map           = track2,
-    spawn         = { col = 1, row = 9 },
-    checkpoints   = {
+    map         = track2,
+    spawn       = { col = 1, row = 9 },
+    checkpoints = {
       { col = 32, row = 12, w = 2, h = 5 },
       { col = 1,  row = 6,  w = 4, h = 11 },
     },
-    gates         = {
+    gates       = {
       { col = 34, row = 6,  len = 5, vertical = true, mode = "reverse" },
       { col = 26, row = 12, len = 5, vertical = true, mode = "forward" },
     },
-    coins         = {
+    coins       = {
       { col = 18, row = 7 },
       { col = 30, row = 14 },
       { col = 10, row = 16 },
       { col = 6,  row = 8 },
     },
-    base_coins    = 3,
-    ranks         = { C = 5.0, B = 6.5, A = 8.4, S = 11.0 },
-    no_coin_ranks = { C = 2.5, B = 2.7, A = 3, S = 6.0 },
-    label         = "Track 2",
-    pay           = 15,
-    unlock_cost   = 100,
-    rebirth_cost  = 700,
-    shop          = {
+    base_coins  = 3,
+    ranks       = { C = 2.6, B = 6.5, A = 8.4, S = 11.0 },
+    label       = "Track 2",
+    pay         = 15,
+    unlock_cost = 50,
+    shop        = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 180,
+        base_cost = 60,
         growth    = 1.3
       },
       {
@@ -172,46 +162,44 @@ M.TRACKS = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 150,
+        base_cost = 20,
         growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 300,
+        base_cost = 50,
         growth    = 1.3
       },
     },
   },
   track3 = {
-    map           = track3,
-    spawn         = { col = 7, row = 3 },
-    checkpoints   = {
+    map         = track3,
+    spawn       = { col = 7, row = 3 },
+    checkpoints = {
       { col = 34, row = 14, w = 5, h = 2 },
       { col = 8,  row = 16, w = 2, h = 5 },
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
-    gates         = {
+    gates       = {
       { col = 14, row = 1,  len = 5, vertical = true, mode = "reverse" },
       { col = 29, row = 1,  len = 5, vertical = true, mode = "forward" },
       { col = 33, row = 16, len = 5, vertical = true, mode = "reverse" },
     },
-    coins         = {
+    coins       = {
       { col = 36, row = 7 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 3,  row = 11 },
       { col = 20, row = 3 },
     },
-    base_coins    = 4,
-    ranks         = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
-    no_coin_ranks = { C = 5, B = 8, A = 9.5, S = 20.0 },
-    label         = "Track 3",
-    pay           = 45,
-    unlock_cost   = 700,
-    rebirth_cost  = 3500,
-    shop          = {
+    base_coins  = 4,
+    ranks       = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
+    label       = "Track 3",
+    pay         = 45,
+    unlock_cost = 250,
+    shop        = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
@@ -224,7 +212,7 @@ M.TRACKS = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 1000,
+        base_cost = 500,
         growth    = 1.3
       },
       {
@@ -237,37 +225,33 @@ M.TRACKS = {
     },
   },
   track4 = {
-    map           = track4,
-    spawn         = { col = 20, row = 11 },
-    checkpoints   = {
+    map         = track4,
+    spawn       = { col = 20, row = 11 },
+    checkpoints = {
       { col = 34, row = 2,  w = 4, h = 4 },
       { col = 2,  row = 16, w = 4, h = 4 },
       { col = 2,  row = 2,  w = 4, h = 4 },
       { col = 34, row = 16, w = 4, h = 4 },
       { col = 18, row = 9,  w = 4, h = 4 }
     },
-    coins         = {
+    coins       = {
       { col = 36, row = 12 },
       { col = 10, row = 18 },
       { col = 24, row = 16 },
       { col = 4,  row = 11 },
       { col = 10, row = 7 },
     },
-    base_coins    = 4,
-    ranks         = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
-    -- Scaled off `ranks` at roughly the ratio the other tracks use (~0.43 up
-    -- to A, ~0.74 at S) - pure guesses, tune in playtest.
-    no_coin_ranks = { C = 13.0, B = 26.0, A = 34.0, S = 66.0 },
-    label         = "Track 4",
-    pay           = 135,
-    unlock_cost   = 3500,
-    rebirth_cost  = 17500,
-    shop          = {
+    base_coins  = 4,
+    ranks       = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
+    label       = "Track 4",
+    pay         = 135,
+    unlock_cost = 3500,
+    shop        = {
       {
         kind      = "checkpoints",
         label     = "Checkpoint",
         currency  = "cash",
-        base_cost = 9000,
+        base_cost = 3000,
         growth    = 1.3
       },
       {
@@ -275,14 +259,14 @@ M.TRACKS = {
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 9000,
+        base_cost = 1500,
         growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 9000,
+        base_cost = 3000,
         growth    = 1.3
       },
     },
@@ -364,16 +348,9 @@ function M.shop(id)
   return M.TRACKS[id].shop
 end
 
--- Rank thresholds for a track. Keyed on whether coins are unlocked (the
--- Loose Change skill node - see persist.rederive_skill_effects): a coinless
--- track pays checkpoints and ghosts only.
-function M.ranks(id, has_coins)
-  local tdata = M.TRACKS[id]
-  return has_coins and tdata.ranks or tdata.no_coin_ranks
-end
-
-function M.rebirth_cost(id)
-  return M.TRACKS[id].rebirth_cost
+-- Rank thresholds for a track.
+function M.ranks(id)
+  return M.TRACKS[id].ranks
 end
 
 -- Cash price to buy a track for the current loop (nil for Track 1, owned free).
@@ -382,16 +359,15 @@ function M.unlock_cost(id)
 end
 
 -- Ascending per-race rank letters above the D floor, checked against
--- M.ranks(id, has_coins).
+-- M.ranks(id).
 local RANK_LETTERS = { "C", "B", "A", "S" }
 
--- Rank earned by a $/sec `rate` on a track, against the coinless or full
--- thresholds per `has_coins`. Below the lowest threshold is "D". Pure (no
--- State), so callers can reach it without pulling in economy (economy requires
--- persist, which requires track_data - a cycle). economy.rank_for_rate
+-- Rank earned by a $/sec `rate` on a track. Below the lowest threshold is "D".
+-- Pure (no State), so callers can reach it without pulling in economy (economy
+-- requires persist, which requires track_data - a cycle). economy.rank_for_rate
 -- delegates here.
-function M.rank_for_rate(id, rate, has_coins)
-  local thresholds = M.ranks(id, has_coins)
+function M.rank_for_rate(id, rate)
+  local thresholds = M.ranks(id)
   local rank       = "D"
   if rate and rate > 0 then
     for _, letter in ipairs(RANK_LETTERS) do

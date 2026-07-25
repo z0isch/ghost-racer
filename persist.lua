@@ -197,7 +197,9 @@ end
 -- carries this loop's ¥ - already banked per race rank (see
 -- economy.bank_race_yen) - so there's no reward term here; the ¥ was earned as
 -- the loop was raced and is now spent in the garage this reset drops into.
-function M.start_new_loop(opts)
+-- Fires only when the loop clock runs out (scenes/buy dismiss_timeout) - there's
+-- no voluntary Rebirth; the player races the loop until time is up.
+function M.start_new_loop()
   local next_loop     = (State.loop or 1) + 1
   local seen_help     = State.seen_help
   local seen_modals   = State.seen_modals
@@ -215,13 +217,8 @@ function M.start_new_loop(opts)
   -- with cash this loop; the whole corridor is buyable regardless of loop. The
   -- tree (and its coin availability) survives the reset; the coin floor is
   -- applied by the rederive below.
-  -- The ending fanfare shows on a *voluntary* Rebirth (the payoff, not a
-  -- tutorial - it shows even on repeat loops). A timeout already showed its own
-  -- TIME'S UP breakdown and the buy scene routes straight to the garage, so
-  -- suppress the fanfare there to avoid a second, unearned dismissal.
-  if not (opts and opts.timeout) then
-    State.purchase_modal = "rebirth"
-  end
+  -- No fanfare here: the TIME'S UP breakdown that triggers the reset already
+  -- served as it, and the buy scene routes straight to the garage.
   ghost.clear_all_sims()
   M.rederive_skill_effects()
   M.resync_car_and_ghosts()
@@ -241,7 +238,7 @@ function M.load()
   State.mode = loaded and "buy" or "intro"
   -- State.mode isn't persisted, so quitting at the forced skill-tree screen
   -- would otherwise reload into buy and skip the gate. Resume the gate.
-  if loaded and State.loop >= 2 and skill_tree.rank(State.skill_tree, "top_speed") == 0 then
+  if loaded and State.loop >= 2 and skill_tree.rank(State.skill_tree, "ghost") == 0 then
     State.mode = "skill_tree"
   end
 end

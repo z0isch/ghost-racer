@@ -20,10 +20,10 @@ M.NODES     = {
     id        = "max_accel",
     label     = "Launch Control",
     desc      = "Start every loop with maxed\nAcceleration. Off like a shot!",
-    icon      = "A",
+    icon      = "L",
     entry     = true,
     max       = 1,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1.5,
     pos       = { x = 288, y = 144 },
     links     = { "top_speed" },
@@ -36,7 +36,7 @@ M.NODES     = {
     label     = "Engine Tune",
     desc      = "Increase top speed\nGotta go fast!",
     max       = 3,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1.5,
     pos       = { x = 254, y = 90 },
     links     = {},
@@ -50,7 +50,7 @@ M.NODES     = {
     entry     = true,
     desc      = "Coins go on sale on every track.\nDrive through them for cash!",
     max       = 1,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1.5,
     pos       = { x = 352, y = 144 },
     links     = { "start_coins" },
@@ -67,7 +67,7 @@ M.NODES     = {
     label     = "Head Start",
     desc      = "Start with +1 coin on every track.\nEasy money!",
     max       = 1,
-    base_cost = 1,
+    base_cost = 45,
     growth    = 1.5,
     pos       = { x = 400, y = 90 },
     links     = {},
@@ -87,7 +87,7 @@ M.NODES     = {
     desc      = "All checkpoints unlocked\nNo more taking out the liquids for you!",
     max       = 1,
     entry     = true,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1,
     pos       = { x = 352, y = 208 },
     links     = {},
@@ -102,7 +102,7 @@ M.NODES     = {
     icon      = "G",
     entry     = true,
     max       = 1,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1.5,
     pos       = { x = 288, y = 208 },
     links     = { "ghost_efficiency" },
@@ -116,7 +116,7 @@ M.NODES     = {
     desc      = "Ghosts bank +25% cash per rank.\nEvery lap counts for more!",
     icon      = "E",
     max       = 3,
-    base_cost = 1,
+    base_cost = 0,
     growth    = 1.5,
     pos       = { x = 220, y = 200 },
     links     = {},
@@ -274,6 +274,8 @@ end
 -- Immediate-mode: draws the whole tree and handles hover/click itself. Call
 -- from _draw. No M.update - animation is driven off usagi.elapsed and fx
 -- entries carry an absolute expiry, so there's no per-frame bookkeeping.
+-- Returns true on the frame a rank was bought, so the scene can re-derive and
+-- save (a free node spends no ¥, so the caller can't infer this from points).
 local active = nil -- id of the currently armed node (cleared on mouse release)
 
 -- Draws a small filled/empty pip square at (x, y).
@@ -499,6 +501,7 @@ function M.draw(st, stats)
   local mouse      = { x = mx, y = my }
   local in_win     = mx >= 0 and mx < usagi.GAME_W and my >= 0 and my < usagi.GAME_H
   local hovered_id = nil
+  local bought     = false
 
   for _, def in ipairs(M.NODES) do
     local rect    = draw_node(st, def, stats)
@@ -510,7 +513,9 @@ function M.draw(st, stats)
       if input.mouse_pressed(input.MOUSE_LEFT) then active = def.id end
     end
     if input.mouse_released(input.MOUSE_LEFT) then
-      if active == def.id and hovered then M.try_buy(st, def.id, stats) end
+      if active == def.id and hovered and M.try_buy(st, def.id, stats) then
+        bought = true
+      end
       if active == def.id then active = nil end
     end
   end
@@ -526,6 +531,8 @@ function M.draw(st, stats)
 
   -- Points HUD, top-left. Drawn by the module so any future scene gets it free.
   gfx.text_ex("¥ " .. st.points, 8, 8, 2, 0, gfx.COLOR_YELLOW, 1)
+
+  return bought
 end
 
 return M

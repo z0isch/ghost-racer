@@ -67,10 +67,29 @@ local function draw_clock(x, y, scale)
   gfx.text_ex(text, x, y, scale, 0, color, alpha)
 end
 
+-- Draws the cash readout -- the balance, with the passive ghost $/sec beneath
+-- it once any ghost is running -- with its top edge at y. `place(w)` returns
+-- the x for a line of width w, so the caller decides how the block is anchored:
+-- buy centers it, race hangs it off the right edge.
+local function draw_money(place, y, scale)
+  local money_text  = string.format("$%.0f", State.money)
+  local mw, mh      = usagi.measure_text(money_text)
+  local money_x     = place(mw * scale)
+
+  gfx.text_ex(money_text, money_x + 1, y + 1, scale, 0, gfx.COLOR_BLACK, 1)
+  gfx.text_ex(money_text, money_x, y, scale, 0, gfx.COLOR_GREEN, 1)
+
+  if economy.owns_any_ghost() then
+    local rate_text = string.format("$%.2f/sec", economy.ghost_cash_rate())
+    local rate_w    = usagi.measure_text(rate_text)
+    gfx.text_ex(rate_text, place(rate_w), y + mh * scale + 3, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+  end
+end
+
 -- Maps a $/sec rate onto the bar: each rank zone is a fifth of the height,
 -- with the arrow interpolating between that rank's thresholds inside it.
 local function bar_fraction(rate)
-  local t      = track_data.ranks(State.active_track, State.coins_unlocked)
+  local t      = track_data.ranks(State.active_track)
   local bounds = { 0, t.C, t.B, t.A, t.S, t.S * 2 }
   if rate >= bounds[6] then return 1 end
   for i = 5, 1, -1 do
@@ -214,7 +233,6 @@ local function draw_bar()
 end
 
 function M.draw()
-  -- The race HUD is just the rank meter; the cash readouts stay out of it.
   -- With no reference line there's neither geometry nor timing to project from,
   -- so the bar hides entirely rather than falling back to the old meter.
   if State.mode == "race" and State.race and State.race.phase ~= "help" then
@@ -222,37 +240,23 @@ function M.draw()
     -- Compact, top-left, tucked below the race scene's QUIT button so a mid-lap
     -- timeout is never a surprise. Same color states as the buy clock.
     draw_clock(5, 26, 2)
+    -- Cash mirrors the clock across the screen: same row and scale, hung off
+    -- the right margin so it grows leftward as the balance does instead of
+    -- drifting into the clock. Live off State.money like the buy screen, so
+    -- collects and ghost banks tick it up mid-race.
+    draw_money(function(w) return usagi.GAME_W - 5 - w end, 26, 2)
     return
   end
 
-  local scale        = 3
-  local _, th        = usagi.measure_text("0")
   -- Loop countdown, prominent and top-center, above the money block (which is
   -- nudged down below it so the two don't collide).
-  local clock_scale  = 3
-  local clock_str    = clock_text(State.loop_time_left or 0)
-  local clock_w      = usagi.measure_text(clock_str) * clock_scale
-  local _, clock_th  = usagi.measure_text(clock_str)
+  local clock_scale = 3
+  local clock_str   = clock_text(State.loop_time_left or 0)
+  local clock_w     = usagi.measure_text(clock_str) * clock_scale
+  local _, clock_th = usagi.measure_text(clock_str)
   draw_clock(math.floor((usagi.GAME_W - clock_w) / 2), 4, clock_scale)
 
-  local bal_y        = 4 + clock_th * clock_scale + 6
-  local total_rate_y = bal_y + th * scale + 3
-  local rate_y       = total_rate_y
-
-  local money_text   = string.format("$%.0f", State.money)
-  local cash_w       = usagi.measure_text(money_text) * scale
-  local cash_x       = (usagi.GAME_W - cash_w) / 2
-
-  gfx.text_ex(money_text, cash_x + 1, bal_y + 1, scale, 0, gfx.COLOR_BLACK, 1)
-  gfx.text_ex(money_text, cash_x, bal_y, scale, 0, gfx.COLOR_GREEN, 1)
-
-  if economy.owns_any_ghost() then
-    local total_rate_text = string.format("$%.2f/sec", economy.ghost_cash_rate())
-    local total_rate_w    = usagi.measure_text(total_rate_text)
-    local total_rate_x    = (usagi.GAME_W - total_rate_w) / 2
-    gfx.text_ex(total_rate_text, total_rate_x, total_rate_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
-    rate_y = rate_y + th + 4
-  end
+  draw_money(function(w) return (usagi.GAME_W - w) / 2 end, 4 + clock_th * clock_scale + 6, 3)
 end
 
 return M

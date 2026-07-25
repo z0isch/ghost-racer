@@ -56,34 +56,32 @@ function M.draw()
   local blurb_w = usagi.measure_text(blurb)
   gfx.text_ex(blurb, math.floor((usagi.GAME_W - blurb_w) / 2), 46, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
 
-  -- skill_tree.draw both renders and mutates on click (immediate-mode), and
-  -- try_buy's return is swallowed inside it. Detect a purchase without
-  -- touching the module by snapshotting points around the call.
-  local points_before = st.points
-  skill_tree.draw(st, stats)
-  if st.points ~= points_before then
+  -- skill_tree.draw both renders and mutates on click (immediate-mode); it
+  -- reports a purchase itself. A points snapshot wouldn't do - Ghost Racer is
+  -- free, so a buy can leave the balance untouched.
+  if skill_tree.draw(st, stats) then
     persist.rederive_skill_effects()
     persist.resync_car_and_ghosts()
     persist.save()
   end
 
-  -- NEXT button, gated until Engine Tune (top_speed) is bought at least once -
-  -- but only while it's actually affordable, so a player who Rebirthed with too
+  -- NEXT button, gated until Ghost Racer (ghost) is bought at least once - but
+  -- only while it's actually affordable, so a player who Rebirthed with too
   -- little ¥ to buy anything (all-D races bank none) isn't trapped in the
   -- garage. They climb again and buy it once a race earns ¥.
   local w        = 200
   local x        = math.floor((usagi.GAME_W - w) / 2)
   local y        = usagi.GAME_H - 60
-  local ts_cost  = skill_tree.next_cost(st, "top_speed")
-  local gated    = skill_tree.rank(st, "top_speed") == 0
-      and ts_cost ~= nil and st.points >= ts_cost
+  local g_cost   = skill_tree.next_cost(st, "ghost")
+  local gated    = skill_tree.rank(st, "ghost") == 0
+      and g_cost ~= nil and st.points >= g_cost
   if ui.button("NEXT", x, y, { w = w, scale = 3, disabled = gated }) and not gated then
     SceneGoto("intro")
   end
   if gated then
     -- Always-visible popover, node-popover style (black 0.85 fill, white
     -- border), anchored just above the button.
-    local msg    = "Buy Engine Tune to continue"
+    local msg    = "Buy Ghost Racer to continue"
     local tw, th = usagi.measure_text(msg)
     local pad    = 4
     local bw     = tw + pad * 2
