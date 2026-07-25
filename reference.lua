@@ -27,15 +27,15 @@ local MIN_SPACING = 6
 -- can pass near itself) and the search cheap.
 local SEARCH_WINDOW = 16
 
--- Reference lines are loop-aware: loop 1 is a coinless prologue, so its ideal
--- line and pace shape differ from loop 2+, where the representative lap weaves
--- to grab coins. Loop 1 gets a "_l1"-suffixed file; loop 2+ share the bare name
--- (their coin sets differ only by a few Head-Start slots, an accepted
--- representative-line bias - see docs/rank-meter.md). Track 4 doesn't exist in
--- loop 1, so it never needs a loop-1 file.
-local function cur_loop() return State.loop or 1 end
-local function ref_rel(id, loop) return "ref_" .. id .. ((loop or cur_loop()) == 1 and "_l1" or "") .. ".json" end
-local function ref_file(id, loop) return "data/" .. ref_rel(id, loop) end
+-- One reference per track, shared by every loop. The line's absolute speed and
+-- coin route don't feed the projection (only ratios of reference times do), so
+-- a single representative lap serves a coinless early loop and a coin-weaving
+-- late one alike - the same bias already accepted between loop 2 and loop 20.
+-- Keying the file to the loop only bought a slightly better pace shape, at the
+-- cost of a missing file hiding the meter outright on any track/loop pair that
+-- was never captured.
+local function ref_rel(id) return "ref_" .. id .. ".json" end
+local function ref_file(id) return "data/" .. ref_rel(id) end
 
 -- Distance-based downsample of a recording (samples carry x,y,t) into a compact
 -- polyline: always keep the first point, then any point at least MIN_SPACING
@@ -112,8 +112,8 @@ end
 
 -- Loads the stored reference for a track ({ points, checkpoints }), or nil if
 -- none is recorded (or it predates the pace-aware schema).
-function M.load(id, loop)
-  local ok, data = pcall(usagi.read_json, ref_rel(id, loop))
+function M.load(id)
+  local ok, data = pcall(usagi.read_json, ref_rel(id))
   if ok and data and data.points and #data.points > 0
       and data.checkpoints and #data.checkpoints > 0 then
     return data
@@ -127,15 +127,15 @@ local function ref_time(data)
   return cps and #cps > 0 and cps[#cps].t or nil
 end
 
-local function write(id, loop, points, splits)
-  local f, err = io.open(ref_file(id, loop), "w")
+local function write(id, points, splits)
+  local f, err = io.open(ref_file(id), "w")
   if not f then
-    print("[ref] failed to write " .. ref_file(id, loop) .. ": " .. tostring(err))
+    print("[ref] failed to write " .. ref_file(id) .. ": " .. tostring(err))
     return false
   end
   f:write(usagi.to_json({ points = points, checkpoints = splits }))
   f:close()
-  print(string.format("[ref] wrote %s (%d pts, %.2fs)", ref_file(id, loop), #points, splits[#splits].t))
+  print(string.format("[ref] wrote %s (%d pts, %.2fs)", ref_file(id), #points, splits[#splits].t))
   return true
 end
 
@@ -164,15 +164,14 @@ function M.maybe_capture(id, recording, time)
   if not usagi.IS_DEV then return end
   if not recording or #recording == 0 then return end
   if not full_course(id) then return end
-  local loop   = cur_loop()
-  local prev_t = ref_time(M.load(id, loop))
+  local prev_t = ref_time(M.load(id))
   if prev_t and time >= prev_t then return end
   local points, splits = capture(id, recording)
   if not points then
     print("[ref] could not resolve checkpoint crossings for " .. tostring(id))
     return
   end
-  write(id, loop, points, splits)
+  write(id, points, splits)
 end
 
 -- Manual override (dev menu): capture this lap as the reference regardless of
@@ -191,7 +190,7 @@ function M.force_capture(id, recording)
     print("[ref] could not resolve checkpoint crossings for " .. tostring(id))
     return false
   end
-  return write(id, cur_loop(), points, splits)
+  return write(id, points, splits)
 end
 
 -- Live progress ruler for the race in progress. Built from the active track's
@@ -203,7 +202,7 @@ local ruler = nil
 -- ruler when no reference is recorded for the track.
 function M.begin(id)
   ruler      = nil
-  local data = M.load(id, cur_loop())
+  local data = M.load(id)
   if not data then return end
   ruler = {
     points      = data.points,
