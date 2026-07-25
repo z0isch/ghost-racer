@@ -64,7 +64,7 @@ local autosave_left   = AUTOSAVE_PERIOD
 -- the engine pause overlay is open (USAGI.md).
 local function clock_ticking()
   if State.mode == "buy" then
-    return not (State.purchase_modal or State.race_modal or State.first_wall
+    return not (State.purchase_modal or State.race_modal
       or State.rebirth_confirm or State.loop_timeout)
   elseif State.mode == "race" then
     local r = State.race

@@ -76,15 +76,6 @@ local MODAL_INFO       = {
   },
 }
 
--- First-wall onboarding: shown once the first time a Rebirth becomes
--- affordable. Teaches the loop shape - you've unlocked every track you can this
--- loop, so Rebirth from the top track to reset and open the next one. Gated on
--- State.seen_modals.first_wall (persists across loops).
-local FIRST_WALL_TITLE = "Hit a Wall?"
-local FIRST_WALL_BODY  = table.concat({
-  "Buy Rebirth to restart the loop."
-}, "\n")
-
 -- Clears the purchase modal. Dismissing the "Loop Complete!" fanfare drops into
 -- the garage (skill tree) - the between-loops spend, and the only thing left to
 -- do once the loop has reset.
@@ -147,21 +138,6 @@ function M.update(dt)
   if State.race_modal and input.pressed(input.BTN1) then
     State.race_modal = nil
   end
-  -- First-wall teach: fire once the first time a Rebirth becomes affordable -
-  -- the player has unlocked every track they can this loop, so the exit is the
-  -- next step. Held behind any other modal so it doesn't stomp them.
-  -- seen_modals.first_wall keeps it one-time.
-  if not State.seen_modals.first_wall and not State.purchase_modal
-      and not State.race_modal and not State.rebirth_confirm and not State.first_wall then
-    if economy.rebirth_affordable() then
-      State.first_wall = true
-    end
-  end
-  if State.first_wall and input.pressed(input.BTN1) then
-    State.first_wall             = nil
-    State.seen_modals.first_wall = true
-    persist.save()
-  end
   -- BTN1 backs out of the Rebirth confirm rather than accepting it: the safe
   -- answer is the default for an irreversible choice, so a stray press can't
   -- wipe the loop. YES needs its own click (draw_rebirth_confirm).
@@ -176,13 +152,13 @@ function M.update(dt)
   -- reset happens on its dismissal, not here.
   if not State.loop_timeout and State.loop_time_left <= 0
       and not State.purchase_modal and not State.race_modal
-      and not State.first_wall and not State.rebirth_confirm then
+      and not State.rebirth_confirm then
     State.loop_timeout = true
   end
   if State.loop_timeout and input.pressed(input.BTN1) then
     dismiss_timeout()
   end
-  if not State.purchase_modal and not State.race_modal and not State.first_wall
+  if not State.purchase_modal and not State.race_modal
       and not State.rebirth_confirm and not State.loop_timeout
       and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
@@ -325,8 +301,6 @@ function M.draw()
     M.draw_race_modal()
   elseif State.loop_timeout then
     M.draw_timeout()
-  elseif State.first_wall then
-    M.draw_first_wall()
   elseif State.rebirth_confirm then
     M.draw_rebirth_confirm()
   elseif State.purchase_modal then
@@ -487,18 +461,13 @@ function M.draw_timeout()
 end
 
 -- Post-race modal: shown after the very first lap on a track (explains the
--- beat-your-lap loop), after any lap that raised the track's rank (shows the
--- pay-rate changes), and/or after a lap that raised the track's ghost $/sec
--- (shows that rate's change). All three can coincide on one lap; they share
--- this single modal rather than stacking separate popups. See
--- scenes/race.lua finish_race().
+-- beat-your-lap loop) and after any lap that raised the track's rank (shows the
+-- pay-rate changes). Both can coincide on one lap; they share this single modal
+-- rather than stacking separate popups. See scenes/race.lua finish_race().
 function M.draw_race_modal()
   local info         = State.race_modal
   local id           = info.track_id
   local rank_changed = info.prev_rank ~= nil
-  -- A cash-only bump (no rank change, not the first-lap explainer) hides the
-  -- rank entirely rather than showing a bare, unchanged "RANK X".
-  local show_rank    = info.first_lap or rank_changed
 
   local body_parts   = {}
 
@@ -525,46 +494,20 @@ function M.draw_race_modal()
     body_parts[#body_parts + 1] = line
   end
 
-  if info.cash_after then
-    body_parts[#body_parts + 1] = string.format("$/sec: $%.2f -> $%.2f", info.cash_before, info.cash_after)
-  end
+  local body       = table.concat(body_parts, "\n\n")
 
-  -- Rebirth fires from the loop's ceiling track; the announcement names it
-  -- plainly and the player navigates there with the `>` arrow once it's bought.
-  if info.show_rebirth then
-    body_parts[#body_parts + 1] = "Rebirth available - reset to grow stronger!"
-  end
-
-  local body = table.concat(body_parts, "\n\n")
-
-  local title, draw_title
-  if show_rank then
-    title      = "RANK " .. info.rank .. (rank_changed and "!" or "")
-    draw_title = function(x, y, scale)
-      local rx = x
-      rx = rx + ui.coin_text("RANK ", rx, y, scale, gfx.COLOR_WHITE)
-      rx = rx + ui.rank_text(info.rank, info.rank, rx, y, scale)
-      if rank_changed then
-        ui.coin_text("!", rx, y, scale, gfx.COLOR_WHITE)
-      end
+  local title      = "RANK " .. info.rank .. (rank_changed and "!" or "")
+  local draw_title = function(x, y, scale)
+    local rx = x
+    rx = rx + ui.coin_text("RANK ", rx, y, scale, gfx.COLOR_WHITE)
+    rx = rx + ui.rank_text(info.rank, info.rank, rx, y, scale)
+    if rank_changed then
+      ui.coin_text("!", rx, y, scale, gfx.COLOR_WHITE)
     end
-  else
-    title = "$/SEC INCREASE!"
   end
 
   if modal.draw({ title = title, body = body, draw_title = draw_title }) then
     State.race_modal = nil
-  end
-end
-
--- First-wall teach modal (see FIRST_WALL_*). A button click dismisses here; a
--- BTN1 press dismisses in M.update. Both set seen_modals.first_wall so it never
--- shows again.
-function M.draw_first_wall()
-  if modal.draw({ title = FIRST_WALL_TITLE, body = FIRST_WALL_BODY }) then
-    State.first_wall             = nil
-    State.seen_modals.first_wall = true
-    persist.save()
   end
 end
 

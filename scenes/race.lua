@@ -18,12 +18,6 @@ local GHOST_RACE_ALPHA      = 0
 -- purely a beat to let the player read that final landing spot.
 local FINISH_BEAT_SECS      = .5
 
--- $/sec is compared at cent precision so the modal only fires when the
--- displayed "$%.2f -> $%.2f" values actually differ.
-local function cents(v)
-  return math.floor(v * 100 + 0.5)
-end
-
 local countdown_time  = 0
 local countdown_shown = 0
 
@@ -90,31 +84,18 @@ local function finish_race()
   car.stop_engine(State.car)
   sfx.play("applause")
 
-  local first_lap   = tstate.ghost_line == nil
-  local had_ghost   = tstate.ghosts > 0
-  local prev_rank   = economy.track_rank(id)
-  local cash_before = economy.track_cash_rate(id)
+  local first_lap    = tstate.ghost_line == nil
+  local prev_rank    = economy.track_rank(id)
   ghost.promote()
   local new_rank     = economy.track_rank(id)
-  local cash_after   = economy.track_cash_rate(id)
   -- Bank the ¥ this track's best rank is worth this loop (the gap over any
   -- tier already paid). This is the whole climb economy: racing better here
   -- funds a stronger next loop. Skill tree stays unspendable until Rebirth.
   local yen_gained   = economy.bank_race_yen(id)
 
   local rank_changed = not first_lap and new_rank ~= prev_rank
-  local cash_up      = had_ghost and cents(cash_after) > cents(cash_before)
 
-  -- Rebirth's announcement edge-triggers on affording the fare: "the exit is
-  -- open" lands on the race that paid for it. announced_rebirth is a real edge
-  -- rather than a level, so it doesn't re-fire every time the balance dips
-  -- under the price and climbs back (anything else bought would retrigger it).
-  local show_rebirth = not State.announced_rebirth and economy.rebirth_affordable()
-
-  -- show_rebirth opens the modal on its own: a race that afforded the exit has
-  -- news to deliver even if the rank and the $/sec both held steady.
-  if first_lap or rank_changed or cash_up or show_rebirth then
-    if show_rebirth then State.announced_rebirth = true end
+  if first_lap or rank_changed then
     local coins_total  = road.active_coin_count(tstate.coins, tdata.coins)
     local coins_got    = 0
     for _ in pairs(race.coins_collected) do coins_got = coins_got + 1 end
@@ -133,13 +114,6 @@ local function finish_race()
       -- ¥ this race banked toward the climb (nil if none), so the payoff of
       -- racing better is shown where it's earned - not just at Rebirth.
       yen          = yen_gained > 0 and yen_gained or nil,
-      -- Rebirth becomes affordable this lap: a plain flag, since Rebirth fires
-      -- from the top track (reached with the `>` arrow), not a specific shop.
-      show_rebirth = show_rebirth or nil,
-      -- nil unless the track's ghost $/sec went up (requires an owned
-      -- ghost). Merged into this same modal rather than a second popup.
-      cash_before  = cash_up and cash_before or nil,
-      cash_after   = cash_up and cash_after or nil,
     }
   end
 

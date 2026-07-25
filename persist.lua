@@ -13,11 +13,6 @@ local function default_state()
     loop               = 1,
     loop_time_left     = track_data.LOOP_SECONDS,
     seen_modals        = {},
-    -- Edge-flag for the "Rebirth available!" announcement, fired once the loop
-    -- the exit fare is first affordable. Per-loop: start_new_loop resets it
-    -- with the rest of the state, so it doesn't re-fire every time the balance
-    -- dips under the price and climbs back.
-    announced_rebirth  = false,
     accel              = 0,
     top_speed          = 0,
     start_coins        = 0,
@@ -52,55 +47,53 @@ local DEV_SNAPSHOT_FILE = "data/" .. DEV_SNAPSHOT_REL
 -- Fields carried by both the real save file and dev snapshots.
 local function progression_of_state()
   return {
-    money             = State.money,
-    seen_help         = State.seen_help,
-    loop              = State.loop,
+    money          = State.money,
+    seen_help      = State.seen_help,
+    loop           = State.loop,
     -- Remaining loop-countdown seconds, persisted so a quit/reload resumes the
     -- clock where it left off (game time, not wall-clock) rather than at 5:00.
-    loop_time_left    = State.loop_time_left,
-    seen_modals       = State.seen_modals,
-    announced_rebirth = State.announced_rebirth,
-    accel             = State.accel,
+    loop_time_left = State.loop_time_left,
+    seen_modals    = State.seen_modals,
+    accel          = State.accel,
     -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
     -- max_accel / ghosts_unlocked / ghost_efficiency are derived caches of the
     -- skill tree, not saved; the tree is the single source of truth. fx is
     -- transient render state, also dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
-    skill_tree        = {
+    skill_tree     = {
       points    = State.skill_tree.points,
       ranks     = State.skill_tree.ranks,
       bought_at = State.skill_tree.bought_at,
     },
-    drift             = State.drift,
-    drift_boost       = State.drift_boost,
-    boost             = State.boost,
-    magnet            = State.magnet,
-    active_track      = State.active_track,
+    drift          = State.drift,
+    drift_boost    = State.drift_boost,
+    boost          = State.boost,
+    magnet         = State.magnet,
+    active_track   = State.active_track,
     -- The tracks bought this loop. Cash-purchased and reset every loop (the
     -- climb), so it's real progression state and is saved to survive a mid-loop
     -- quit - not loop-derived.
-    unlocked          = State.unlocked,
-    tracks            = State.tracks,
+    unlocked       = State.unlocked,
+    tracks         = State.tracks,
   }
 end
 
 -- Applies a progression table (shape of `progression_of_state`) onto the
 -- current State in place. Shared by the real load path and dev snapshot load.
 local function apply_progression(loaded)
-  State.money             = loaded.money or 0
-  State.seen_help         = loaded.seen_help or false
-  State.loop              = loaded.loop or 1
+  State.money          = loaded.money or 0
+  State.seen_help      = loaded.seen_help or false
+  State.loop           = loaded.loop or 1
   -- Default a full clock for pre-existing saves that predate the field.
-  State.loop_time_left    = loaded.loop_time_left or track_data.LOOP_SECONDS
-  State.seen_modals       = loaded.seen_modals or {}
-  State.announced_rebirth = loaded.announced_rebirth or false
+  State.loop_time_left = loaded.loop_time_left or track_data.LOOP_SECONDS
+  State.seen_modals    = loaded.seen_modals or {}
 
-  State.accel             = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
-  State.drift             = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
-  State.drift_boost       = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
-  State.boost             = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
-  State.magnet            = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
+  State.accel          = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
+  State.drift          = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
+  State.drift_boost    = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
+  State.boost          = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
+  State.magnet         = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
 
   if loaded.active_track and track_data.TRACKS[loaded.active_track] then
     State.active_track = loaded.active_track
