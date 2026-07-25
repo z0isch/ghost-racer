@@ -7,11 +7,13 @@ local modal        = require "modal"
 local M            = {}
 
 -- Opening story beats, shown in order once the player commits to their first
--- race by pressing RACE on the title screen (the intro scene only loads when
--- there's no save file - see persist.load). Each is one CONTINUE click;
--- dismissing the last drops into the race. Not persisted: autosave writes a
--- save within seconds of boot, so a reload lands in `buy` and the intro is
--- genuinely one-shot.
+-- race by pressing RACE on the title screen (on boot the intro scene only loads
+-- when there's no save file - see persist.load - but the garage's NEXT button
+-- returns here every loop). Each is one CONTINUE click; dismissing the last
+-- drops into the race. Loop 1 only: on later loops the story is already told,
+-- so RACE starts the race directly. Not persisted: autosave writes a save
+-- within seconds of boot, so a reload lands in `buy` and the intro is genuinely
+-- one-shot.
 local INTRO_MODALS = {
   '"You want me to do what\nexactly now?"',
   '"300 million dollars,\n5 minutes"',
@@ -87,7 +89,11 @@ function M.draw()
   local w      = 200
   local race_x = math.floor((usagi.GAME_W - w) / 2)
   if ui.button("RACE", race_x, usagi.GAME_H - 120, { w = w, scale = 3 }) then
-    modal_idx = 1
+    if State.loop >= 2 then
+      SceneGoto("race")
+    else
+      modal_idx = 1
+    end
   end
 end
 

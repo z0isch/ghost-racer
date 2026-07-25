@@ -1,9 +1,9 @@
-local basic_map = require "tile-map.basic"
-local track1    = require "tile-map.track1"
-local track2    = require "tile-map.track2"
-local track4    = require "tile-map.track4"
+local track1 = require "tile-map.track1"
+local track2 = require "tile-map.track2"
+local track3 = require "tile-map.track3"
+local track4 = require "tile-map.track4"
 
-local M         = {}
+local M      = {}
 
 -- Reverse-driving prototype: horizontally mirrors every track (tile grid,
 -- checkpoints, coins, spawn) and puts the car in reverse gear (release gas
@@ -135,8 +135,8 @@ M.TRACKS = {
       },
     },
   },
-  basic = {
-    map           = basic_map,
+  track2 = {
+    map           = track2,
     spawn         = { col = 1, row = 9 },
     checkpoints   = {
       { col = 32, row = 12, w = 2, h = 5 },
@@ -184,8 +184,8 @@ M.TRACKS = {
       },
     },
   },
-  track2 = {
-    map           = track2,
+  track3 = {
+    map           = track3,
     spawn         = { col = 7, row = 3 },
     checkpoints   = {
       { col = 34, row = 14, w = 5, h = 2 },
@@ -346,7 +346,7 @@ end
 -- it's never offered as the "next track" row and `>` nav skips it, so future
 -- hidden/discovered tracks slot in without reworking reveal. Nothing sets it
 -- yet - it's data-model plumbing for the parked true-end.
-M.TRACK_ORDER = { "track1", "basic", "track2", "track4" }
+M.TRACK_ORDER = { "track1", "track2", "track3", "track4" }
 
 -- The visible corridor: TRACK_ORDER with hidden tracks filtered out. Every
 -- track exists in the corridor from the start; which ones are *owned* is

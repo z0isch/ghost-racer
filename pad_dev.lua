@@ -4,9 +4,8 @@ local pad        = require "pad"
 local road       = require "road"
 local track_data = require "track_data"
 
--- Pad prototyping playground on Track 2 (the track the player sees as
--- "Track 2" -- code id `basic`). Loads that track's real map, spawn, and
--- gates so zip-pad routing can be felt against the actual walls and racing
+-- Pad prototyping playground on Track 2. Loads that track's real map, spawn,
+-- and gates so zip-pad routing can be felt against the actual walls and racing
 -- line, then lets you scatter pads live:
 --
 --   BTN1 / arrows  drive
@@ -17,7 +16,7 @@ local track_data = require "track_data"
 -- Pads live on State.pads and go through the same pad.apply / pad.draw the
 -- race scene would use, so behaviour here matches a shipped track.
 
-local TRACK_ID   = "basic"
+local TRACK_ID   = "track2"
 local TILE_SIZE  = track_data.tile_size
 
 local M          = {}
