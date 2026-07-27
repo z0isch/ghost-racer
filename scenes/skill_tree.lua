@@ -57,8 +57,8 @@ function M.draw()
   gfx.text_ex(blurb, math.floor((usagi.GAME_W - blurb_w) / 2), 46, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
 
   -- skill_tree.draw both renders and mutates on click (immediate-mode); it
-  -- reports a purchase itself. A points snapshot wouldn't do - Loose Change is
-  -- free, so a buy can leave the balance untouched.
+  -- reports a purchase itself. A points snapshot wouldn't do - a broke player
+  -- buying Loose Change (priced at their whole balance) pays 0.
   if skill_tree.draw(st, stats) then
     persist.rederive_skill_effects()
     persist.resync_car_and_ghosts()
@@ -69,8 +69,8 @@ function M.draw()
   -- forced buy of this garage, which the player first reaches after loop 2 with
   -- every other node locked. Only gated while it's actually affordable, so a
   -- player who Rebirthed with too little ¥ to buy anything (all-D races bank
-  -- none) isn't trapped in the garage; Loose Change is free today, so the clause
-  -- is insurance against a future reprice.
+  -- none) isn't trapped in the garage; Loose Change costs exactly the balance,
+  -- so today it's always affordable and the clause never fires.
   local w        = 200
   local x        = math.floor((usagi.GAME_W - w) / 2)
   local y        = usagi.GAME_H - 60

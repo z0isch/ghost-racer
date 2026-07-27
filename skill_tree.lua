@@ -4,7 +4,7 @@
 -- earns ¥ via economy.bank_race_yen (per-race rank) and consumes apply ctx in
 -- persist.rederive_skill_effects.
 
-local M     = {}
+local M = {}
 
 -- Node defs. `links` is authored one-directional here but treated as
 -- undirected (adjacency is symmetrized at load). `entry = true` marks the
@@ -14,6 +14,9 @@ local M     = {}
 -- but while the callback returns a reason string it can't be bought and the
 -- popover shows the reason. `stats` is the game-owned table passed to draw;
 -- `st` is the tree state, for gates that read other nodes (rank / bought_at).
+-- Cost is base_cost * growth^rank by default; an optional
+-- `cost = function(st, rank) -> yen` overrides that pair for nodes priced off
+-- live state instead of a fixed curve.
 -- Positions are game-space px centers on the 640x352 screen.
 
 -- Loops 1-2 are the scripted opening: loop 1 has no garage at all, and the
@@ -35,7 +38,7 @@ M.NODES     = {
     icon      = "L",
     entry     = true,
     max       = 1,
-    base_cost = 0,
+    base_cost = 20,
     growth    = 1.5,
     pos       = { x = 288, y = 144 },
     links     = { "top_speed" },
@@ -49,7 +52,7 @@ M.NODES     = {
     label     = "Engine Tune",
     desc      = "Increase top speed\nGotta go fast!",
     max       = 3,
-    base_cost = 0,
+    base_cost = 25,
     growth    = 1.5,
     pos       = { x = 254, y = 90 },
     links     = {},
@@ -63,8 +66,9 @@ M.NODES     = {
     entry     = true,
     desc      = "Coins go on sale on every track.\nDrive through them for cash!",
     max       = 1,
-    base_cost = 0,
-    growth    = 1.5,
+    -- Costs whatever the player is holding: it's the only thing on sale at the
+    -- first garage, so it always lands and always empties the wallet.
+    cost      = function(st) return st.points end,
     pos       = { x = 352, y = 144 },
     links     = { "start_coins" },
     locked    = function(stats)
@@ -80,7 +84,7 @@ M.NODES     = {
     label     = "Head Start",
     desc      = "Start with +1 coin on every track.\nEasy money!",
     max       = 1,
-    base_cost = 45,
+    base_cost = 25,
     growth    = 1.5,
     pos       = { x = 400, y = 90 },
     links     = {},
@@ -104,7 +108,7 @@ M.NODES     = {
     icon      = "E",
     entry     = true,
     max       = 3,
-    base_cost = 0,
+    base_cost = 20,
     growth    = 1.5,
     pos       = { x = 288, y = 208 },
     links     = {},
@@ -211,6 +215,7 @@ function M.next_cost(st, id)
   local def = BY_ID[id]
   local rank = M.rank(st, id)
   if rank >= def.max then return nil end
+  if def.cost then return math.floor(def.cost(st, rank)) end
   return math.floor(def.base_cost * def.growth ^ rank)
 end
 
