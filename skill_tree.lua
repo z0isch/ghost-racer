@@ -51,7 +51,7 @@ M.NODES     = {
     id        = "top_speed",
     label     = "Engine Tune",
     desc      = "Increase top speed\nGotta go fast!",
-    max       = 3,
+    max       = 2,
     base_cost = 25,
     growth    = 1.5,
     pos       = { x = 254, y = 90 },
@@ -61,21 +61,21 @@ M.NODES     = {
     end,
   },
   {
-    id        = "coins",
-    label     = "Loose Change",
-    entry     = true,
-    desc      = "Coins go on sale on every track.\nDrive through them for cash!",
-    max       = 1,
+    id     = "coins",
+    label  = "Loose Change",
+    entry  = true,
+    desc   = "Coins go on sale on every track.\nDrive through them for cash!",
+    max    = 1,
     -- Costs whatever the player is holding: it's the only thing on sale at the
     -- first garage, so it always lands and always empties the wallet.
-    cost      = function(st) return st.points end,
-    pos       = { x = 352, y = 144 },
-    links     = { "start_coins" },
-    locked    = function(stats)
+    cost   = function(st) return st.points end,
+    pos    = { x = 352, y = 144 },
+    links  = { "start_coins" },
+    locked = function(stats)
       local loops = stats.loops or 0
       if loops < 2 then return "Finish 2 loops (" .. loops .. "/2)" end
     end,
-    apply     = function(ctx, _rank)
+    apply  = function(ctx, _rank)
       ctx.coins = true
     end,
   },
