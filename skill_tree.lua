@@ -15,6 +15,18 @@ local M     = {}
 -- popover shows the reason. `stats` is the game-owned table passed to draw;
 -- `st` is the tree state, for gates that read other nodes (rank / bought_at).
 -- Positions are game-space px centers on the 640x352 screen.
+
+-- Loops 1-2 are the scripted opening: loop 1 has no garage at all, and the
+-- first garage the player ever lands in (after loop 2) sells nothing but Loose
+-- Change, so the coin economy is the one thing they can act on there.
+-- Everything else opens at the next garage. Only the two entry nodes besides
+-- coins carry this: top_speed is still fogged behind Launch Control at that
+-- visit, and start_coins holds itself shut with its own coins gate.
+local function tutorial_gate(stats)
+  local loops = stats.loops or 0
+  if loops < 3 then return "Finish 3 loops (" .. loops .. "/3)" end
+end
+
 M.NODES     = {
   {
     id        = "max_accel",
@@ -27,6 +39,7 @@ M.NODES     = {
     growth    = 1.5,
     pos       = { x = 288, y = 144 },
     links     = { "top_speed" },
+    locked    = tutorial_gate,
     apply     = function(ctx, _rank)
       ctx.max_accel = true
     end,
@@ -81,31 +94,21 @@ M.NODES     = {
       ctx.start_coins = (ctx.start_coins or 0) + rank
     end,
   },
-  {
-    id        = "ghost",
-    label     = "Ghost Racer",
-    desc      = "Unlock ghosts for sale on every track.\nThey drive your best lap for cash!",
-    icon      = "G",
-    entry     = true,
-    max       = 1,
-    base_cost = 0,
-    growth    = 1.5,
-    pos       = { x = 288, y = 208 },
-    links     = { "ghost_efficiency" },
-    apply     = function(ctx, _rank)
-      ctx.ghosts_unlocked = true
-    end,
-  },
+  -- Ghosts themselves aren't sold here: the story hands them over for good at
+  -- loop 2 (see persist.rederive_skill_effects), so this is the root of the
+  -- ghost branch and stands on its own with nothing to link back to.
   {
     id        = "ghost_efficiency",
     label     = "Slipstream",
     desc      = "Ghosts bank +25% cash per rank.\nEvery lap counts for more!",
     icon      = "E",
+    entry     = true,
     max       = 3,
     base_cost = 0,
     growth    = 1.5,
-    pos       = { x = 220, y = 200 },
+    pos       = { x = 288, y = 208 },
     links     = {},
+    locked    = tutorial_gate,
     apply     = function(ctx, rank)
       -- Multiplier on ghost income only (economy applies State.ghost_efficiency
       -- in bank() and track_raw_cash_rate). +25% per rank over the 1.0 base.

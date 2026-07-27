@@ -57,7 +57,7 @@ function M.draw()
   gfx.text_ex(blurb, math.floor((usagi.GAME_W - blurb_w) / 2), 46, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
 
   -- skill_tree.draw both renders and mutates on click (immediate-mode); it
-  -- reports a purchase itself. A points snapshot wouldn't do - Ghost Racer is
+  -- reports a purchase itself. A points snapshot wouldn't do - Loose Change is
   -- free, so a buy can leave the balance untouched.
   if skill_tree.draw(st, stats) then
     persist.rederive_skill_effects()
@@ -65,15 +65,17 @@ function M.draw()
     persist.save()
   end
 
-  -- NEXT button, gated until Ghost Racer (ghost) is bought at least once - but
-  -- only while it's actually affordable, so a player who Rebirthed with too
-  -- little ¥ to buy anything (all-D races bank none) isn't trapped in the
-  -- garage. They climb again and buy it once a race earns ¥.
+  -- NEXT button, gated until Loose Change (coins) is bought at least once - the
+  -- forced buy of this garage, which the player first reaches after loop 2 with
+  -- every other node locked. Only gated while it's actually affordable, so a
+  -- player who Rebirthed with too little ¥ to buy anything (all-D races bank
+  -- none) isn't trapped in the garage; Loose Change is free today, so the clause
+  -- is insurance against a future reprice.
   local w        = 200
   local x        = math.floor((usagi.GAME_W - w) / 2)
   local y        = usagi.GAME_H - 60
-  local g_cost   = skill_tree.next_cost(st, "ghost")
-  local gated    = skill_tree.rank(st, "ghost") == 0
+  local g_cost   = skill_tree.next_cost(st, "coins")
+  local gated    = skill_tree.rank(st, "coins") == 0
       and g_cost ~= nil and st.points >= g_cost
   if ui.button("NEXT", x, y, { w = w, scale = 3, disabled = gated }) and not gated then
     SceneGoto("intro")
@@ -81,7 +83,7 @@ function M.draw()
   if gated then
     -- Always-visible popover, node-popover style (black 0.85 fill, white
     -- border), anchored just above the button.
-    local msg    = "Buy Ghost Racer to continue"
+    local msg    = "Buy Loose Change to continue"
     local tw, th = usagi.measure_text(msg)
     local pad    = 4
     local bw     = tw + pad * 2

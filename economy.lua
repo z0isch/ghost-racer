@@ -321,6 +321,11 @@ end
 function M.bank_race_yen(id)
   local tstate = State.tracks[id]
   if not tstate then return 0 end
+  -- Loop 1 banks nothing. It ends without a garage (scenes/buy dismiss_timeout),
+  -- so ¥ earned there would be a balance the player never saw earn and can't
+  -- spend until two loops later; the currency introduces itself with the loop-2
+  -- breakdown and the garage it drops into.
+  if State.loop <= 1 then return 0 end
   local rank = M.track_rank(id)
   local gain = RANK_YEN[rank] - (RANK_YEN[tstate.paid_rank or "D"] or 0)
   if gain <= 0 then return 0 end

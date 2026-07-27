@@ -54,10 +54,9 @@ local function progression_of_state()
     loop_time_left = State.loop_time_left,
     seen_modals    = State.seen_modals,
     accel          = State.accel,
-    -- top_speed / start_coins / coins_unlocked / max_accel / ghosts_unlocked /
-    -- ghost_efficiency are derived caches of the skill tree, not saved; the
-    -- tree is the single source of truth. fx is transient render state, also
-    -- dropped.
+    -- top_speed / start_coins / coins_unlocked / max_accel / ghost_efficiency
+    -- are derived caches of the skill tree, and ghosts_unlocked of the loop
+    -- counter, so none are saved. fx is transient render state, also dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
     skill_tree     = {
@@ -146,8 +145,11 @@ local function apply_progression(loaded)
 end
 
 -- State.top_speed / State.start_coins / State.coins_unlocked /
--- State.max_accel / State.ghosts_unlocked / State.ghost_efficiency are caches
--- derived from the skill tree; the tree is the single source of truth.
+-- State.max_accel / State.ghost_efficiency are caches derived from the skill
+-- tree; the tree is the single source of truth. State.ghosts_unlocked is the
+-- exception: ghosts aren't bought at all, the story hands them over at loop 2
+-- (scenes/intro's loop-2 beats announce them), so it's derived from the loop
+-- counter - which every caller assigns before reaching here.
 -- Re-derive after any rank change or load, before resync_car_and_ghosts pushes
 -- results into the car and ghost sims. The coin ceiling/floor is applied live
 -- to existing tracks so a rank bought at the loop gate takes effect that loop,
@@ -158,7 +160,7 @@ function M.rederive_skill_effects()
   State.start_coins      = ctx.start_coins or 0
   State.coins_unlocked   = ctx.coins or false
   State.max_accel        = ctx.max_accel or false
-  State.ghosts_unlocked  = ctx.ghosts_unlocked or false
+  State.ghosts_unlocked  = (State.loop or 1) >= 2
   State.ghost_efficiency = ctx.ghost_efficiency or 1
   -- Launch Control floors accel at max rather than replacing it, so a save
   -- that already bought ranks the hard way reads back unchanged. The shop row
@@ -209,8 +211,10 @@ function M.start_new_loop()
   -- with cash this loop; the whole corridor is buyable regardless of loop. The
   -- tree (and its coin availability) survives the reset; the coin floor is
   -- applied by the rederive below.
-  -- No fanfare here: the TIME'S UP breakdown that triggers the reset already
-  -- served as it, and the buy scene routes straight to the garage.
+  -- No fanfare here: the TIME'S UP modal that triggers the reset already served
+  -- as it, and the buy scene routes on from there - to the garage on every loop
+  -- but the first, which skips it (nothing was banked) for the title screen and
+  -- loop 2's opening beats.
   ghost.clear_all_sims()
   M.rederive_skill_effects()
   M.resync_car_and_ghosts()
@@ -229,8 +233,11 @@ function M.load()
   end
   State.mode = loaded and "buy" or "intro"
   -- State.mode isn't persisted, so quitting at the forced skill-tree screen
-  -- would otherwise reload into buy and skip the gate. Resume the gate.
-  if loaded and State.loop >= 2 and skill_tree.rank(State.skill_tree, "ghost") == 0 then
+  -- would otherwise reload into buy and skip the gate. Resume the gate. Loop 3
+  -- is the first loop reachable only through that garage (loop 1 ends without
+  -- one at all), so an unbought Loose Change there means the player quit
+  -- standing in it.
+  if loaded and State.loop >= 3 and skill_tree.rank(State.skill_tree, "coins") == 0 then
     State.mode = "skill_tree"
   end
 end

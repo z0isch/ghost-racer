@@ -86,14 +86,30 @@ local function dismiss_shop_modal()
   persist.save()
 end
 
--- Dismissing the TIME'S UP breakdown fires the Rebirth, then drops into the
--- garage. The clock is the only loop-ender - the player races until it runs
--- out. Banked ¥ already lives in the skill tree (bank_race_yen), so only
--- in-loop money and track ownership reset.
+-- Loop 1's ending is scripted. It banks no ¥ (economy.bank_race_yen) and has no
+-- garage to spend it in, so the breakdown would be a table of dashes; the
+-- taskmaster who set the $300M task in the intro answers the dead clock
+-- instead, in the same voice. Loops 2+ get the real breakdown.
+local LOOP1_TIMEOUT_BODY = table.concat({
+  '"Too bad, no $300 million."',
+  "",
+  '"That\'s okay - you\'re stuck in',
+  'this loop until you make it."',
+}, "\n")
+
+-- Dismissing the TIME'S UP modal fires the Rebirth, then routes on. The clock
+-- is the only loop-ender - the player races until it runs out. Banked ¥ already
+-- lives in the skill tree (bank_race_yen), so only in-loop money and track
+-- ownership reset.
 local function dismiss_timeout()
   State.loop_timeout = nil
   persist.start_new_loop()
-  SceneGoto("skill_tree")
+  -- start_new_loop already advanced the counter, so this reads the loop being
+  -- entered. Loop 2 skips the garage: nothing was banked to spend, and its one
+  -- new toy (ghosts) is handed over by the story, not bought - so it lands on
+  -- the title screen for its opening beats instead. Every later loop rebirths
+  -- into the garage as usual.
+  SceneGoto(State.loop == 2 and "intro" or "skill_tree")
 end
 
 local M = {}
@@ -403,11 +419,17 @@ end
 
 -- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Shows
 -- the ¥ breakdown (read before the reset wipes State.tracks) under a rainbow
--- "TIME'S UP!" title with a single OKAY; dismissal fires the Rebirth and drops
--- to the garage. A BTN1 press dismisses in M.update.
+-- "TIME'S UP!" title with a single OKAY - except on loop 1, which has no ¥ to
+-- break down and carries the story beat instead. Dismissal fires the Rebirth
+-- and routes on. A BTN1 press dismisses in M.update.
 function M.draw_timeout()
-  local body, draw_body = breakdown_body(loop_breakdown_rows())
-  local draw_title      = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
+  local body, draw_body
+  if State.loop <= 1 then
+    body = LOOP1_TIMEOUT_BODY
+  else
+    body, draw_body = breakdown_body(loop_breakdown_rows())
+  end
+  local draw_title = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
   if modal.draw({
         title      = "TIME'S UP!",
         body       = body,
@@ -527,8 +549,8 @@ function M.draw_shop()
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(track_data.shop(id)) do
     -- Coins don't exist at all until Loose Change is bought, and ghosts until
-    -- Ghost Racer is bought, so those rows stay hidden rather than teasing a
-    -- purchase - the node is the reveal.
+    -- loop 2 hands them over, so those rows stay hidden rather than teasing a
+    -- purchase - their arrival is the reveal.
     if not (item.kind == "coins" and not State.coins_unlocked)
         and not (item.kind == "ghosts" and not State.ghosts_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
