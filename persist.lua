@@ -242,6 +242,61 @@ function M.load()
   end
 end
 
+-- Dev-only: synthetic saves standing where a Rebirth would have dropped the
+-- player at the top of a given loop, so the mid-game is reachable without
+-- playing up to it. `progression` is the same shape apply_progression consumes
+-- (sparse - anything omitted takes its default_state value), and `mode` is the
+-- scene the real Rebirth routes to (scenes/buy dismiss_timeout). Enabled by the
+-- DEV_SCENARIO global in main.lua.
+local DEV_SCENARIOS     = {
+  -- Loop 2, exactly as loop 1's timeout leaves it: only the dismissed tutorials
+  -- carry over. Loop 1 banks no ¥ (economy.bank_race_yen) and the climb resets
+  -- to Track 1, so the tree is empty and there's nothing owned. Ghosts are on
+  -- (derived from the loop counter) and the loop-2 opening beats haven't played,
+  -- so this lands on the title screen like the real Rebirth does - no garage,
+  -- since there's nothing banked to spend.
+  loop2 = {
+    mode        = "intro",
+    progression = {
+      loop        = 2,
+      seen_help   = true,
+      seen_modals = { shop = true },
+    },
+  },
+  -- Loop 3, as loop 2's timeout leaves it: standing in the first garage the
+  -- player ever reaches, with loop 2's ¥ unspent and Loose Change the only thing
+  -- buyable (skill_tree's tutorial_gate). The ¥ is what a loop 2 that climbed to
+  -- Track 2 banks - A on track 1 (60) plus B on track 2 (30), per
+  -- economy.RANK_YEN. The garage explainer hasn't been seen yet, so it shows.
+  loop3 = {
+    mode        = "skill_tree",
+    progression = {
+      loop        = 3,
+      seen_help   = true,
+      seen_modals = { shop = true, ghosts = true },
+      skill_tree  = { points = 90, ranks = {}, bought_at = {} },
+    },
+  },
+}
+
+-- Dev-only: wipes State and rebuilds it as the named scenario, then saves - so
+-- it survives the reload, and a later boot with DEV_SCENARIO cleared resumes the
+-- scenario rather than whatever save it replaced.
+function M.dev_start_scenario(name)
+  local scn = DEV_SCENARIOS[name]
+  if not scn then
+    print("[dev] no scenario named '" .. tostring(name) .. "'")
+    return
+  end
+  State = default_state()
+  apply_progression(scn.progression)
+  State.mode = scn.mode
+  ghost.clear_all_sims()
+  M.resync_car_and_ghosts()
+  M.save()
+  print("[dev] started scenario '" .. name .. "' (loop " .. State.loop .. ")")
+end
+
 -- Dev-only: writes the current progression state as JSON to
 -- data/dev_snapshot.json, so it can be reloaded with `dev_load_snapshot`
 -- (or hand-edited for tuning) across restarts.

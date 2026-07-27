@@ -1,11 +1,18 @@
-local persist     = require "persist"
-local reference   = require "reference"
-local buy         = require "scenes.buy"
-local race        = require "scenes.race"
-local intro       = require "scenes.intro"
-local skill_tree  = require "scenes.skill_tree"
+local persist    = require "persist"
+local reference  = require "reference"
+local buy        = require "scenes.buy"
+local race       = require "scenes.race"
+local intro      = require "scenes.intro"
+local skill_tree = require "scenes.skill_tree"
 
-local scenes  = { buy = buy, race = race, intro = intro, skill_tree = skill_tree }
+local scenes     = { buy = buy, race = race, intro = intro, skill_tree = skill_tree }
+
+-- Dev scenario to boot into instead of the real save: "loop2" or "loop3" (see
+-- persist's DEV_SCENARIOS), nil for normal play. Each stands where that loop's
+-- Rebirth drops the player - loop 2 on the title screen for its opening beats,
+-- loop 3 in the first garage with loop 2's ¥ unspent. Applied only in dev
+-- builds, and it overwrites the save file, so clear it once the run is over.
+DEV_SCENARIO     = nil
 
 function SceneGoto(mode)
   local prev = State.mode
@@ -28,6 +35,7 @@ function _init()
   persist.resync_car_and_ghosts()
 
   if usagi.IS_DEV then
+    if DEV_SCENARIO then persist.dev_start_scenario(DEV_SCENARIO) end
     usagi.menu_item("Dev: Save State", function()
       persist.dev_save_snapshot()
     end)
@@ -70,7 +78,7 @@ local function clock_ticking()
     local r = State.race
     return r ~= nil and r.phase ~= "help"
   end
-  return false   -- skill_tree (garage) + intro never tick
+  return false -- skill_tree (garage) + intro never tick
 end
 
 function _update(dt)

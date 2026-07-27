@@ -47,6 +47,39 @@ local function clock_text(secs)
   return string.format("%d:%02d", math.floor(secs / 60), secs % 60)
 end
 
+-- Unit ladder for the Nirvana ETA line, seconds up through millennia. Each
+-- entry is { name, seconds-per-unit }; duration_text promotes to the next
+-- unit at exactly 1.0 of it, always rendering one decimal.
+local DURATION_UNITS = {
+  { "sec",       1 },
+  { "min",       60 },
+  { "hours",     3600 },
+  { "days",      86400 },
+  { "weeks",     86400 * 7 },
+  { "months",    86400 * 365 / 12 },
+  { "years",     86400 * 365 },
+  { "decades",   86400 * 365 * 10 },
+  { "centuries", 86400 * 365 * 100 },
+  { "millennia", 86400 * 365 * 1000 },
+}
+
+-- Formats a duration in seconds against DURATION_UNITS, picking the largest
+-- unit that rounds to at least 1.0 (falling back to sec for anything under a
+-- second). No cap on the top end -- centuries and millennia just keep growing.
+-- Exported (M.duration_text) so the loop-2 TIME'S UP taunt can quote the same
+-- ETA the HUD shows, instead of re-deriving its own unit ladder.
+local function duration_text(secs)
+  for i = #DURATION_UNITS, 2, -1 do
+    local name, unit_secs = DURATION_UNITS[i][1], DURATION_UNITS[i][2]
+    local value           = secs / unit_secs
+    if math.floor(value * 10 + 0.5) / 10 >= 1.0 then
+      return string.format("%.1f %s", value, name)
+    end
+  end
+  return string.format("%.1f %s", secs, DURATION_UNITS[1][1])
+end
+M.duration_text = duration_text
+
 -- Draws the loop clock with its left edge at (x, y) and the given scale. Color
 -- escalates as the loop drains: white, yellow at/under a minute, red at/under
 -- ten seconds; the red state also pulses (a sine on usagi.elapsed) so a
@@ -80,9 +113,19 @@ local function draw_money(place, y, scale)
   gfx.text_ex(money_text, money_x, y, scale, 0, gfx.COLOR_GREEN, 1)
 
   if economy.owns_any_ghost() then
-    local rate_text = string.format("$%.2f/sec", economy.ghost_cash_rate())
+    local rate      = economy.ghost_cash_rate()
+    local rate_text = string.format("$%.2f/sec", rate)
     local rate_w    = usagi.measure_text(rate_text)
-    gfx.text_ex(rate_text, place(rate_w), y + mh * scale + 3, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+    local rate_y    = y + mh * scale + 3
+    gfx.text_ex(rate_text, place(rate_w), rate_y, 1, 0, gfx.COLOR_LIGHT_GRAY, 1)
+
+    local secs = economy.seconds_to_nirvana(rate)
+    if secs then
+      local eta_text = duration_text(secs) .. " to $300m"
+      local eta_w    = usagi.measure_text(eta_text)
+      local color    = secs < (State.loop_time_left or 0) and gfx.COLOR_GREEN or gfx.COLOR_LIGHT_GRAY
+      gfx.text_ex(eta_text, place(eta_w), rate_y + mh + 3, 1, 0, color, 1)
+    end
   end
 end
 

@@ -256,6 +256,17 @@ function M.ghost_cash_rate()
   return total
 end
 
+-- Seconds of passive income (at `rate`, the same figure ghost_cash_rate
+-- returns) to close the remaining gap to Nirvana. nil when the estimate is
+-- undefined (rate <= 0, a brief transient before a track's ghost_line exists)
+-- or already moot (money has reached NIRVANA_COST).
+function M.seconds_to_nirvana(rate)
+  if not rate or rate <= 0 then return nil end
+  local remaining = track_data.NIRVANA_COST - State.money
+  if remaining <= 0 then return nil end
+  return remaining / rate
+end
+
 function M.lap_cash_rate(line)
   local period = ghost.loop_period(line)
   if period <= 0 then return 0 end

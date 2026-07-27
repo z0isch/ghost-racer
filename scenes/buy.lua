@@ -86,21 +86,58 @@ local function dismiss_shop_modal()
   persist.save()
 end
 
--- Loop 1's ending is scripted. It banks no ¥ (economy.bank_race_yen) and has no
--- garage to spend it in, so the breakdown would be a table of dashes; the
--- taskmaster who set the $300M task in the intro answers the dead clock
--- instead, in the same voice. Loops 2+ get the real breakdown.
-local LOOP1_TIMEOUT_BODY = table.concat({
-  '"Too bad, no $300 million."',
-  "",
-  '"That\'s okay - you\'re stuck in',
-  'this loop until you make it."',
-}, "\n")
+-- Scripted beats that open the TIME'S UP modal, keyed by the loop that just
+-- ended: the taskmaster who set the $300M task in the intro answers the dead
+-- clock, in the same voice. Each is one CONTINUE click, intro-style; after the
+-- last, loops 2+ show the real ¥ breakdown. Loop 1 has no beats after its own:
+-- it banks no ¥ (economy.bank_race_yen) and has no garage to spend it in, so
+-- the breakdown would be a table of dashes and its taunt is the whole modal.
+local TIMEOUT_BEATS = {
+  [1] = {
+    table.concat({
+      '"Too bad, no $300 million."',
+      "",
+      '"That\'s okay - you\'re stuck in',
+      'this loop until you make it."',
+    }, "\n"),
+  },
+  -- Loop 2 ends on the same taunt, but this is the first Rebirth that lands in
+  -- the garage, so the beats hand over the rule that makes it worth anything:
+  -- race better -> higher rank -> more ¥ -> upgrades that outlive the loop.
+  -- The taunt is a function (like MODAL_INFO's body) so it can quote how far
+  -- off Nirvana the player's ghost income actually was, using the same ETA
+  -- math and formatting the HUD's $300m readout uses (hud.duration_text).
+  [2] = {
+    function()
+      local lines = { '"Well that wasn\'t close.' }
+      local secs  = economy.seconds_to_nirvana(economy.ghost_cash_rate())
+      if secs then
+        lines[#lines + 1] = ""
+        lines[#lines + 1] = '"We don\'t have ' .. hud.duration_text(secs) .. ' to wait."'
+      end
+      return table.concat(lines, "\n")
+    end,
+    table.concat({
+      '"Fine. A little more help."',
+      "",
+      '"You now earn ¥ that you can spend on upgrades.',
+      'The better you race, the more ¥ you earn',
+      'and upgrades persist accross loops.'
+    }, "\n"),
+  },
+}
 
--- Dismissing the TIME'S UP modal fires the Rebirth, then routes on. The clock
--- is the only loop-ender - the player races until it runs out. Banked ¥ already
--- lives in the skill tree (bank_race_yen), so only in-loop money and track
--- ownership reset.
+-- Number of modals the timeout sequence runs through: this loop's beats, plus
+-- the ¥ breakdown for every loop that banks any (loop 1 doesn't).
+local function timeout_steps()
+  local beats = TIMEOUT_BEATS[State.loop]
+  return (beats and #beats or 0) + (State.loop >= 2 and 1 or 0)
+end
+
+-- Dismissing the last TIME'S UP step fires the Rebirth, then routes on. The
+-- clock is the only loop-ender - the player races until it runs out. Banked ¥
+-- already lives in the skill tree (bank_race_yen), so only in-loop money and
+-- track ownership reset.
 local function dismiss_timeout()
   State.loop_timeout = nil
   persist.start_new_loop()
@@ -110,6 +147,16 @@ local function dismiss_timeout()
   -- the title screen for its opening beats instead. Every later loop rebirths
   -- into the garage as usual.
   SceneGoto(State.loop == 2 and "intro" or "skill_tree")
+end
+
+-- Advances the timeout sequence one step; past the last, fires the Rebirth.
+local function advance_timeout()
+  local step = State.loop_timeout + 1
+  if step > timeout_steps() then
+    dismiss_timeout()
+  else
+    State.loop_timeout = step
+  end
 end
 
 local M = {}
@@ -157,15 +204,16 @@ function M.update(dt)
   -- raise the TIME'S UP breakdown. Held behind other modals so a just-finished
   -- race's result modal shows first. Detecting here (not just on enter) covers
   -- all arrival paths: idling on buy, returning from a timed-out race, and
-  -- loading into buy with a dead clock. State.loop_timeout gates the modal; the
-  -- reset happens on its dismissal, not here.
+  -- loading into buy with a dead clock. State.loop_timeout gates the modal and
+  -- indexes its step (beats first, then the breakdown); the reset happens when
+  -- the last step is dismissed, not here.
   if not State.loop_timeout and State.loop_time_left <= 0
       and not State.purchase_modal and not State.race_modal
       and not M.shop_modal_open() then
-    State.loop_timeout = true
+    State.loop_timeout = 1
   end
   if State.loop_timeout and input.pressed(input.BTN1) then
-    dismiss_timeout()
+    advance_timeout()
   end
   if not State.purchase_modal and not State.race_modal
       and not State.loop_timeout and not M.shop_modal_open()
@@ -417,27 +465,40 @@ local function breakdown_body(rows)
   end
 end
 
--- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Shows
--- the ¥ breakdown (read before the reset wipes State.tracks) under a rainbow
--- "TIME'S UP!" title with a single OKAY - except on loop 1, which has no ¥ to
--- break down and carries the story beat instead. Dismissal fires the Rebirth
--- and routes on. A BTN1 press dismisses in M.update.
+-- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Runs
+-- this loop's scripted beats (TIMEOUT_BEATS), then the ¥ breakdown (read before
+-- the reset wipes State.tracks) - so loop 1 is beat-only and loops 3+, with no
+-- beats left to play, are breakdown-only. The first step announces the dead
+-- clock under a rainbow "TIME'S UP!" title, and the breakdown carries it again
+-- over its table; the beats between are dialogue-only, like the intro's.
+-- Dismissing the last step fires the Rebirth and routes on. A BTN1 press
+-- advances in M.update.
 function M.draw_timeout()
+  local step   = State.loop_timeout
+  local beats  = TIMEOUT_BEATS[State.loop]
+  local last   = step == timeout_steps()
+  local titled = step == 1 or (beats and step > #beats)
+
   local body, draw_body
-  if State.loop <= 1 then
-    body = LOOP1_TIMEOUT_BODY
+  if beats and step <= #beats then
+    local beat = beats[step]
+    body       = type(beat) == "function" and beat() or beat
   else
     body, draw_body = breakdown_body(loop_breakdown_rows())
   end
-  local draw_title = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
+
+  local draw_title
+  if titled then
+    draw_title = function(x, y, scale) ui.rank_text("TIME'S UP!", "S", x, y, scale) end
+  end
   if modal.draw({
-        title      = "TIME'S UP!",
+        title      = titled and "TIME'S UP!" or "",
         body       = body,
         draw_body  = draw_body,
         draw_title = draw_title,
-        button     = "OKAY",
+        button     = last and "OKAY" or "CONTINUE",
       }) then
-    dismiss_timeout()
+    advance_timeout()
   end
 end
 
