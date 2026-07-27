@@ -32,12 +32,6 @@ local MODAL_INFO       = {
           " pay cash whenever you or a ghost drives\nthrough them."
     end,
   },
-  checkpoints = {
-    title = "Checkpoint Unlocked!",
-    body  = function()
-      return "The race now runs to the newest\ncheckpoint - a longer course\nwith a higher rank ceiling!"
-    end,
-  },
   drift = {
     title = "Drift Unlocked!",
     body  = function()
@@ -67,9 +61,29 @@ local MODAL_INFO       = {
   },
 }
 
+-- First-ever shop visit: a one-shot explainer of what the race $ buys - car
+-- upgrades and the next track - and that a better rank pays more, so racing
+-- better is what funds the climb. Gated on State.seen_modals.shop, which
+-- persists across loops (the ¥/garage counterpart lives in scenes/skill_tree).
+local SHOP_MODAL_TITLE = "Welcome to the Shop!"
+local SHOP_MODAL_BODY  = table.concat({
+  "Spend the $ you earn racing on upgrades for your",
+  "car and on new tracks to race.",
+  "",
+  "The better your rank, the more $ it pays every race.",
+  "",
+  "Don't worry, you can never lose rank once earned.",
+}, "\n")
+
 -- Clears the purchase modal.
 local function dismiss_purchase_modal()
   State.purchase_modal = nil
+end
+
+-- Dismissing the shop explainer records it as seen for good.
+local function dismiss_shop_modal()
+  State.seen_modals.shop = true
+  persist.save()
 end
 
 -- Dismissing the TIME'S UP breakdown fires the Rebirth, then drops into the
@@ -87,6 +101,13 @@ local M = {}
 -- Which kind the demo loop was last reset for, so it restarts per modal.
 local demo_kind
 
+-- True while the first-visit shop explainer is up. It blocks the shop
+-- underneath, and pauses the loop clock (see main.lua clock_ticking) so the
+-- read isn't on the player's dime.
+function M.shop_modal_open()
+  return not State.seen_modals.shop
+end
+
 function M.enter()
   -- Guarantees engine silence on every path in, including dev live-reload
   -- and Reset, which keep the music channel playing across _init.
@@ -103,6 +124,13 @@ function M.update(dt)
     economy.bank(ev)
   end
   popups.update(dt)
+  -- Checked before the dismissals below (which clear their flags in place) so
+  -- the press that clears a just-finished race's result modal doesn't also blow
+  -- past this one - it's held behind them, matching the draw order.
+  if M.shop_modal_open() and not State.purchase_modal and not State.race_modal
+      and not State.loop_timeout and input.pressed(input.BTN1) then
+    dismiss_shop_modal()
+  end
   if State.purchase_modal and input.pressed(input.BTN1) then
     dismiss_purchase_modal()
   end
@@ -116,14 +144,15 @@ function M.update(dt)
   -- loading into buy with a dead clock. State.loop_timeout gates the modal; the
   -- reset happens on its dismissal, not here.
   if not State.loop_timeout and State.loop_time_left <= 0
-      and not State.purchase_modal and not State.race_modal then
+      and not State.purchase_modal and not State.race_modal
+      and not M.shop_modal_open() then
     State.loop_timeout = true
   end
   if State.loop_timeout and input.pressed(input.BTN1) then
     dismiss_timeout()
   end
   if not State.purchase_modal and not State.race_modal
-      and not State.loop_timeout
+      and not State.loop_timeout and not M.shop_modal_open()
       and input.key_pressed(input.KEY_SPACE) then
     SceneGoto("race")
   end
@@ -234,7 +263,7 @@ function M.draw()
   end
   local checkpoints = tdata.checkpoints
   for i, cp in ipairs(checkpoints) do
-    road.draw_checkpoint(cp, i, true, #checkpoints, i > economy.owned_cps(id))
+    road.draw_checkpoint(cp, i, true, #checkpoints)
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins)
   ghost.draw_sim(GHOST_ALPHA)
@@ -246,8 +275,19 @@ function M.draw()
     M.draw_timeout()
   elseif State.purchase_modal then
     M.draw_purchase_modal()
+  elseif M.shop_modal_open() then
+    M.draw_shop_modal()
   else
     M.draw_shop()
+  end
+end
+
+-- First-visit shop explainer, drawn instead of the shop (like the garage's)
+-- so a dismiss click can't fall through onto a shop button. A BTN1 press
+-- dismisses in M.update.
+function M.draw_shop_modal()
+  if modal.draw({ title = SHOP_MODAL_TITLE, body = SHOP_MODAL_BODY }) then
+    dismiss_shop_modal()
   end
 end
 
@@ -486,13 +526,10 @@ function M.draw_shop()
 
   local shop_y = info_y + th_a + 6
   for _, item in ipairs(track_data.shop(id)) do
-    -- Checkpoint Pass (skill tree) grants every checkpoint outright, so
-    -- there's nothing left for this row to sell. Coins don't exist at all
-    -- until Loose Change is bought, and ghosts until Ghost Racer is bought,
-    -- so those rows stay hidden rather than teasing a purchase - the node is
-    -- the reveal.
-    if not (item.kind == "checkpoints" and State.unlock_checkpoints)
-        and not (item.kind == "coins" and not State.coins_unlocked)
+    -- Coins don't exist at all until Loose Change is bought, and ghosts until
+    -- Ghost Racer is bought, so those rows stay hidden rather than teasing a
+    -- purchase - the node is the reveal.
+    if not (item.kind == "coins" and not State.coins_unlocked)
         and not (item.kind == "ghosts" and not State.ghosts_unlocked) then
       local clicked, bh = shop_button(item, x, shop_y, w)
       if clicked then economy.try_buy(item.kind) end

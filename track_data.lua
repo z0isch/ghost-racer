@@ -42,28 +42,28 @@ M.UPGRADES     = {
     kind      = "accel",
     label     = "Acceleration",
     max       = 4,
-    base_cost = 10,
+    base_cost = 5,
     growth    = 1.4
   },
   {
     kind      = "drift",
     label     = "Drift",
     max       = 1,
-    base_cost = 100,
+    base_cost = 75,
     growth    = 1.6
   },
   {
     kind      = "drift_boost",
     label     = "Drift Boost",
     max       = 1,
-    base_cost = 150,
+    base_cost = 100,
     growth    = 1.6
   },
   {
     kind      = "boost",
     label     = "Boost",
     max       = 5,
-    base_cost = 2000,
+    base_cost = 450,
     growth    = 1.3
   },
   {
@@ -102,7 +102,7 @@ M.TRACKS = {
       { col = 26, row = 9 },
     },
     base_coins  = 1,
-    ranks       = { C = 1.0, B = 2.15, A = 2.65, S = 4 },
+    ranks       = { C = 1.05, B = 2.15, A = 2.65, S = 4 },
     label       = "Track 1",
     pay         = 5,
     -- Cash price to *buy* this track for the current loop. Track 1 is owned free
@@ -148,15 +148,8 @@ M.TRACKS = {
     ranks       = { C = 2.6, B = 6.5, A = 8.4, S = 11.0 },
     label       = "Track 2",
     pay         = 15,
-    unlock_cost = 50,
+    unlock_cost = 25,
     shop        = {
-      {
-        kind      = "checkpoints",
-        label     = "Checkpoint",
-        currency  = "cash",
-        base_cost = 60,
-        growth    = 1.3
-      },
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -195,31 +188,24 @@ M.TRACKS = {
       { col = 20, row = 3 },
     },
     base_coins  = 4,
-    ranks       = { C = 12.0, B = 18.0, A = 22.0, S = 27.0 },
+    ranks       = { C = 9.0, B = 18.0, A = 22.0, S = 27.0 },
     label       = "Track 3",
     pay         = 45,
-    unlock_cost = 250,
+    unlock_cost = 200,
     shop        = {
-      {
-        kind      = "checkpoints",
-        label     = "Checkpoint",
-        currency  = "cash",
-        base_cost = 1000,
-        growth    = 1.3
-      },
       {
         kind      = "ghosts",
         label     = "Ghost",
         currency  = "cash",
         max       = 8,
-        base_cost = 500,
+        base_cost = 200,
         growth    = 1.3
       },
       {
         kind      = "coins",
         label     = "Coin",
         currency  = "cash",
-        base_cost = 1000,
+        base_cost = 500,
         growth    = 1.3
       },
     },
@@ -245,15 +231,8 @@ M.TRACKS = {
     ranks       = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
     label       = "Track 4",
     pay         = 135,
-    unlock_cost = 3500,
+    unlock_cost = 1500,
     shop        = {
-      {
-        kind      = "checkpoints",
-        label     = "Checkpoint",
-        currency  = "cash",
-        base_cost = 3000,
-        growth    = 1.3
-      },
       {
         kind      = "ghosts",
         label     = "Ghost",
@@ -443,15 +422,14 @@ end
 
 function M.default_track_state(id, has_coins, start_coins)
   return {
-    ghost_line  = nil,
-    best_rate   = nil,
+    ghost_line = nil,
+    best_rate  = nil,
     -- Highest rank tier already paid ¥ for on this track this loop, the
     -- high-water mark that keeps race-¥ credited once per tier (see
     -- economy.bank_race_yen). Resets with the loop (fresh track state).
-    paid_rank   = "D",
-    ghosts      = 0,
-    coins       = M.start_coin_floor(id, has_coins, start_coins),
-    checkpoints = 1,
+    paid_rank  = "D",
+    ghosts     = 0,
+    coins      = M.start_coin_floor(id, has_coins, start_coins),
   }
 end
 

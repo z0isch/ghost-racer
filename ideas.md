@@ -25,3 +25,8 @@ Boost pad placement — your idea, and a good "wacky but not just numbers" one: 
 Time capsule — spend Echoes to start the new loop with a one-shot "ghost" that replays your exact final lap from the loop you just finished, banking cash before you've even driven once.
 
 Cosmetic-only rewards — car paint/trail, alternate palette per track. Zero power creep, good filler tiers between the meaningful ones so the shop doesn't feel like 100% pure power math.
+
+Loop 1 -> Time's up with some flavor modal explaining restarting the loop somehow clue the player in that they may have better luck next time do to some help from ghosts
+Loop 2 -> Now have the ghosts buyable and earn yen and go to the garage after the loop
+-> Forced to buy coins for the first garage
+Loop 3 -> Go ape

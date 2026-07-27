@@ -82,20 +82,6 @@ M.NODES     = {
     end,
   },
   {
-    id        = "unlock_checkpoints",
-    label     = "TSA Pre-check",
-    desc      = "All checkpoints unlocked\nNo more taking out the liquids for you!",
-    max       = 1,
-    entry     = true,
-    base_cost = 0,
-    growth    = 1,
-    pos       = { x = 352, y = 208 },
-    links     = {},
-    apply     = function(ctx, _rank)
-      ctx.unlock_checkpoints = true
-    end,
-  },
-  {
     id        = "ghost",
     label     = "Ghost Racer",
     desc      = "Unlock ghosts for sale on every track.\nThey drive your best lap for cash!",

@@ -7,30 +7,29 @@ local M          = {}
 
 local function default_state()
   return {
-    mode               = "buy",
-    money              = 0,
-    seen_help          = false,
-    loop               = 1,
-    loop_time_left     = track_data.LOOP_SECONDS,
-    seen_modals        = {},
-    accel              = 0,
-    top_speed          = 0,
-    start_coins        = 0,
-    coins_unlocked     = false,
-    unlock_checkpoints = false,
-    max_accel          = false,
-    ghosts_unlocked    = false,
-    ghost_efficiency   = 1,
-    skill_tree         = skill_tree.new(),
-    drift              = 0,
-    drift_boost        = 0,
-    boost              = 0,
-    magnet             = 0,
-    active_track       = "track1",
-    unlocked           = { track1 = true },
-    tracks             = { track1 = track_data.default_track_state("track1", false) },
-    car                = car.default_state(),
-    race               = {
+    mode             = "buy",
+    money            = 0,
+    seen_help        = false,
+    loop             = 1,
+    loop_time_left   = track_data.LOOP_SECONDS,
+    seen_modals      = {},
+    accel            = 0,
+    top_speed        = 0,
+    start_coins      = 0,
+    coins_unlocked   = false,
+    max_accel        = false,
+    ghosts_unlocked  = false,
+    ghost_efficiency = 1,
+    skill_tree       = skill_tree.new(),
+    drift            = 0,
+    drift_boost      = 0,
+    boost            = 0,
+    magnet           = 0,
+    active_track     = "track1",
+    unlocked         = { track1 = true },
+    tracks           = { track1 = track_data.default_track_state("track1", false) },
+    car              = car.default_state(),
+    race             = {
       next_checkpoint = 1,
       time            = 0,
       phase           = "countdown",
@@ -55,10 +54,10 @@ local function progression_of_state()
     loop_time_left = State.loop_time_left,
     seen_modals    = State.seen_modals,
     accel          = State.accel,
-    -- top_speed / start_coins / coins_unlocked / unlock_checkpoints /
-    -- max_accel / ghosts_unlocked / ghost_efficiency are derived caches of the
-    -- skill tree, not saved; the tree is the single source of truth. fx is
-    -- transient render state, also dropped.
+    -- top_speed / start_coins / coins_unlocked / max_accel / ghosts_unlocked /
+    -- ghost_efficiency are derived caches of the skill tree, not saved; the
+    -- tree is the single source of truth. fx is transient render state, also
+    -- dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
     skill_tree     = {
@@ -121,17 +120,15 @@ local function apply_progression(loaded)
         if not State.tracks[id] then
           State.tracks[id] = track_data.default_track_state(id, State.coins_unlocked)
         end
-        local ts       = State.tracks[id]
-        ts.ghost_line  = lt.ghost_line
-        ts.best_rate   = lt.best_rate
-        ts.paid_rank   = lt.paid_rank or "D"
-        ts.ghosts      = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
+        local ts      = State.tracks[id]
+        ts.ghost_line = lt.ghost_line
+        ts.best_rate  = lt.best_rate
+        ts.paid_rank  = lt.paid_rank or "D"
+        ts.ghosts     = math.min(lt.ghosts or 0, track_data.kind_max("ghosts"))
         -- Raw here; both the coin ceiling and the start_coins floor need the
         -- skill tree, which loads below - rederive_skill_effects clamps at the
         -- end.
-        ts.coins       = lt.coins or 0
-        ts.checkpoints = math.max(1,
-          math.min(lt.checkpoints or 1, #track_data.TRACKS[id].checkpoints))
+        ts.coins      = lt.coins or 0
       end
     end
   end
@@ -149,22 +146,20 @@ local function apply_progression(loaded)
 end
 
 -- State.top_speed / State.start_coins / State.coins_unlocked /
--- State.unlock_checkpoints / State.max_accel / State.ghosts_unlocked /
--- State.ghost_efficiency are caches derived from the skill tree; the tree is
--- the single source of truth. Re-derive after any rank change
--- or load, before resync_car_and_ghosts pushes results into the car and ghost
--- sims. The coin ceiling/floor and the checkpoint unlock are applied live to
--- existing tracks so a rank bought at the loop gate takes effect that loop, not
--- the next.
+-- State.max_accel / State.ghosts_unlocked / State.ghost_efficiency are caches
+-- derived from the skill tree; the tree is the single source of truth.
+-- Re-derive after any rank change or load, before resync_car_and_ghosts pushes
+-- results into the car and ghost sims. The coin ceiling/floor is applied live
+-- to existing tracks so a rank bought at the loop gate takes effect that loop,
+-- not the next.
 function M.rederive_skill_effects()
-  local ctx                = skill_tree.apply_all(State.skill_tree, {})
-  State.top_speed          = ctx.top_speed or 0
-  State.start_coins        = ctx.start_coins or 0
-  State.coins_unlocked     = ctx.coins or false
-  State.unlock_checkpoints = ctx.unlock_checkpoints or false
-  State.max_accel          = ctx.max_accel or false
-  State.ghosts_unlocked    = ctx.ghosts_unlocked or false
-  State.ghost_efficiency   = ctx.ghost_efficiency or 1
+  local ctx              = skill_tree.apply_all(State.skill_tree, {})
+  State.top_speed        = ctx.top_speed or 0
+  State.start_coins      = ctx.start_coins or 0
+  State.coins_unlocked   = ctx.coins or false
+  State.max_accel        = ctx.max_accel or false
+  State.ghosts_unlocked  = ctx.ghosts_unlocked or false
+  State.ghost_efficiency = ctx.ghost_efficiency or 1
   -- Launch Control floors accel at max rather than replacing it, so a save
   -- that already bought ranks the hard way reads back unchanged. The shop row
   -- hides itself once this is on (see scenes/buy.lua).
@@ -177,9 +172,6 @@ function M.rederive_skill_effects()
     ts.coins = math.min(ts.coins, track_data.max_coins(id, State.coins_unlocked))
     ts.coins = math.max(ts.coins,
       track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins))
-    if State.unlock_checkpoints then
-      ts.checkpoints = #track_data.TRACKS[id].checkpoints
-    end
   end
 end
 

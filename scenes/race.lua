@@ -73,8 +73,7 @@ local function finish_race()
   local tstate  = State.tracks[id]
   local tdata   = track_data.TRACKS[id]
 
-  race.run_rate = race.time > 0
-      and (race.raw_earned / race.time) * economy.cp_fraction(id) or 0
+  race.run_rate = race.time > 0 and race.raw_earned / race.time or 0
   race.phase    = "finished"
 
   -- Dev builds keep the fastest full-course lap per track as the reference
@@ -228,7 +227,7 @@ function M.update(dt)
         y      = car_rect.y,
       })
       race.next_checkpoint = race.next_checkpoint + 1
-      if race.next_checkpoint > economy.owned_cps(id) then
+      if race.next_checkpoint > economy.cp_count(id) then
         finish_race()
       end
     end
@@ -291,9 +290,8 @@ function M.draw()
     end
     local checkpoints = tdata.checkpoints
     local active      = race.next_checkpoint
-    local owned       = economy.owned_cps(id)
     for i = active, #checkpoints do
-      road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints, i > owned)
+      road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints)
     end
   end
   road.draw_coins(tdata.coins, State.tracks[id].coins, race.coins_collected)

@@ -4,7 +4,7 @@ local track_data         = require "track_data"
 
 local CAR_SIZE           = 16
 local CAR_MARGIN         = 3
-local ACCEL_BASE         = 30
+local ACCEL_BASE         = 35
 local ACCEL_STEP         = 10
 local TOP_VEL_BASE       = 120
 local TOP_VEL_STEP       = 50

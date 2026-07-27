@@ -43,16 +43,9 @@ function M.track_pay(id)
   return track_data.TRACKS[id].pay
 end
 
--- Owned checkpoint count on a track, clamped to what exists.
-function M.owned_cps(id)
-  local tstate = State.tracks[id]
-  local total  = #track_data.TRACKS[id].checkpoints
-  return math.min(tstate and tstate.checkpoints or 1, total)
-end
-
--- Fraction of the course owned; scales every measured rate before ranking.
-function M.cp_fraction(id)
-  return M.owned_cps(id) / #track_data.TRACKS[id].checkpoints
+-- Checkpoints on a track. Every track runs its full course from the start.
+function M.cp_count(id)
+  return #track_data.TRACKS[id].checkpoints
 end
 
 -- $ paid per checkpoint/coin at a given rank mult, scaled by mult over the D
@@ -94,11 +87,11 @@ function M.rank_for_rate(id, rate)
 end
 
 -- Projected finish $/sec for the run in progress: money already earned plus
--- every owned-but-uncrossed checkpoint's pay (all of them are guaranteed --
--- the race only ends once each has been crossed in order -- so they're priced
--- in for the whole race rather than at the crossing; race.lua mutes their
--- collect-juice to match, so no pop fires there), divided by the projected
--- time to reach the owned finish. That time is projected against the
+-- every uncrossed checkpoint's pay (all of them are guaranteed -- the race only
+-- ends once each has been crossed in order -- so they're priced in for the
+-- whole race rather than at the crossing; race.lua mutes their collect-juice to
+-- match, so no pop fires there), divided by the projected time to reach the
+-- finish. That time is projected against the
 -- reference's pace shape: t_ref is the reference's own time to reach the car's
 -- current arc position, so time/t_ref is the run's pace ratio versus the
 -- reference, and the remaining reference time scaled by that ratio is the time
@@ -117,8 +110,7 @@ function M.projected_rate()
   local race = State.race
   local id   = State.active_track
   if not race or not race.time or race.time <= 0 then return nil end
-  local owned     = M.owned_cps(id)
-  local s_N, t_N  = reference.owned_finish(owned)
+  local s_N, t_N  = reference.finish()
   if not s_N or s_N <= 0 or not t_N or t_N <= 0 then return nil end
   if not race.s_live or race.s_live <= 0 then return nil end
   if not race.t_ref or race.t_ref <= 0 then return nil end
@@ -135,18 +127,18 @@ function M.projected_rate()
   local proj_time = race.time + FINISH_FUDGE * race.time * remaining / race.t_ref
   if proj_time <= 0 then return nil end
 
-  local pending_cps = math.max(0, owned - race.next_checkpoint + 1)
+  local pending_cps = math.max(0, M.cp_count(id) - race.next_checkpoint + 1)
   local expected    = race.raw_earned + pending_cps * track_data.TRACKS[id].pay
-  return expected * M.cp_fraction(id) / proj_time
+  return expected / proj_time
 end
 
--- Fraction of the owned course the car has covered, by arc length along the
+-- Fraction of the course the car has covered, by arc length along the
 -- reference line. Drives the meter's warmup (park at D until this crosses a
 -- small threshold). 0 with no reference or before the car is mapped on.
 function M.race_progress()
   local race = State.race
   if not race or not race.s_live then return 0 end
-  local s_N = reference.owned_finish(M.owned_cps(State.active_track))
+  local s_N = reference.finish()
   if not s_N or s_N <= 0 then return 0 end
   return race.s_live / s_N
 end
@@ -278,7 +270,7 @@ end
 
 -- Shop item definition for `kind` in the current context: global car
 -- upgrades first (track-independent), then the active track's shop
--- (ghosts/coins/checkpoints).
+-- (ghosts/coins).
 function M.shop_item(kind)
   return track_data.upgrade_item(kind)
       or track_data.track_shop_item(State.active_track, kind)
@@ -295,11 +287,6 @@ function M.upgrade_cost(kind)
     if bought >= track_data.buyable_coins(id, State.coins_unlocked) then return nil end
     return math.floor(u.base_cost * (u.growth ^ bought))
   end
-  if kind == "checkpoints" then
-    local owned = State.tracks[id].checkpoints
-    if owned >= #track_data.TRACKS[id].checkpoints then return nil end
-    return math.floor(u.base_cost * (u.growth ^ (owned - 1)))
-  end
   local lvl
   if kind == "ghosts" then
     lvl = State.tracks[id][kind]
@@ -313,7 +300,7 @@ end
 -- Kinds that show a one-time explainer modal in the buy scene the first time
 -- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, checkpoints = true }
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true }
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
 -- completed race on that track (nothing to replay otherwise). It's the only
@@ -355,7 +342,7 @@ function M.try_buy(kind)
   if kind == "magnet" and not State.coins_unlocked then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
-  if kind == "ghosts" or kind == "coins" or kind == "checkpoints" then
+  if kind == "ghosts" or kind == "coins" then
     local was_first_ghost  = kind == "ghosts" and State.tracks[id][kind] == 0
     State.tracks[id][kind] = State.tracks[id][kind] + 1
     if was_first_ghost then

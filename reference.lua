@@ -217,11 +217,11 @@ function M.has()
   return ruler ~= nil
 end
 
--- Arc length (s_N) and reference time (t_N) at the owned finish, checkpoint N,
--- or nil if the ruler is missing / N is out of range.
-function M.owned_finish(n)
+-- Arc length (s_N) and reference time (t_N) at the finish - the last
+-- checkpoint - or nil if the ruler is missing or has no checkpoints.
+function M.finish()
   if not ruler then return nil end
-  local cp = ruler.checkpoints[n]
+  local cp = ruler.checkpoints[#ruler.checkpoints]
   if not cp then return nil end
   return cp.s, cp.t
 end
