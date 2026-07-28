@@ -28,7 +28,9 @@ local BOUNCE_DECAY       = 550
 -- (boost stacking, dt spike) can't jump its collision samples over a wall
 -- tile in a single frame.
 local MAX_MOVE_STEP      = 4
-local SQUEEL_MIN_VEL     = 80
+-- Low enough that a slow drift keeps squealing all the way down instead of
+-- going silent for the seconds it takes drift scrub to finish the job.
+local SQUEEL_MIN_VEL     = 15
 -- The engine loop plays on the music channel: unlike sfx voices,
 -- music.mutate can retune volume and pitch every frame without restarting
 -- the sample.
@@ -77,7 +79,16 @@ local function default_car()
     turn_ref_speed       = TOP_VEL_BASE,
     drift_turn_rate      = 3.2,
     drift_slide          = math.pi / 8,
-    drift_deccel         = 200,
+    -- Drift scrub is a flat floor plus a speed-proportional term:
+    -- drift_deccel + drift_drag * |vel|, in px/s^2. The two ends pull opposite
+    -- ways -- all-flat stalls a slow car dead, all-proportional turns a fast
+    -- drift into a handbrake while a slow one slides on ice forever -- so the
+    -- dial that matters is where the curve crosses, around 82 px/s here.
+    -- drift_deccel is deliberately above max accel (75) so a drift always ends
+    -- eventually, but from 40 px/s that takes ~2.7s: slow corners still roll
+    -- through rather than stalling.
+    drift_deccel         = 80,
+    drift_drag           = 0.7,
     accel                = ACCEL_BASE,
     deccel               = 150,
     is_drifitng          = false,
@@ -321,11 +332,10 @@ function M.update(car, dt, map)
   end
 
   if is_drifitng then
-    if car.vel > 0 then
-      car.vel = math.max(0, car.vel - car.drift_deccel * dt)
-    else
-      car.vel = math.min(0, car.vel + car.drift_deccel * dt)
-    end
+    bleed_vel((car.drift_deccel + math.abs(car.vel) * car.drift_drag) * dt)
+    -- Separate from bleed_vel's own stop-at-zero: this catches the coast
+    -- branch above, which flips to `accel` at vel == 0 and would otherwise
+    -- push a forward drift into reverse.
     if car.drift_dir < 0 then
       car.vel = math.min(0, car.vel)
     else
