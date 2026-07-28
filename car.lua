@@ -177,7 +177,7 @@ function M.apply_upgrades(car, accel_lvl, top_speed_lvl, drift_enabled, drift_bo
   car.drift_enabled       = drift_enabled or false
   car.drift_boost_enabled = drift_boost_enabled or false
   car.max_boosts          = boost_ranks or 0
-  car.reverse_enabled     = reverse_enabled or track_data.REVERSE_MODE
+  car.reverse_enabled     = true --reverse_enabled or track_data.REVERSE_MODE
 end
 
 function M.pose(car)
@@ -191,6 +191,13 @@ end
 function M.update(car, dt, map)
   local holding_left  = input.held(input.LEFT)
   local holding_right = input.held(input.RIGHT)
+
+  local drift_held = car.drift_enabled and input.held(input.BTN2)
+  -- Grabbing the handbrake mid-spin snaps the flip to finished rather than
+  -- being swallowed by it, so the drift starts in the orientation and gear the
+  -- player is already steering for. Read before this frame's tap so a flip
+  -- begun while the handbrake is down still spins at normal speed.
+  local cut_flip   = drift_held and car.flip_t > 0
 
   if car.flip_tap_t > 0 then car.flip_tap_t = math.max(0, car.flip_tap_t - dt) end
   if input.pressed(input.BTN1) and car.flip_t <= 0 and car.reverse_enabled then
@@ -207,7 +214,7 @@ function M.update(car, dt, map)
   end
 
   if car.flip_t > 0 then
-    car.flip_t       = math.max(0, car.flip_t - dt)
+    car.flip_t       = cut_flip and 0 or math.max(0, car.flip_t - dt)
     local progress   = 1 - car.flip_t / FLIP_DURATION
     car.facing_angle = angle.normalize(car.flip_from + car.flip_dir * progress * math.pi)
     if car.flip_t <= 0 then
@@ -216,16 +223,22 @@ function M.update(car, dt, map)
       -- throttle keeps pushing that way until the next flip.
       car.vel  = -car.vel
       car.gear = -car.gear
+      -- Negating vel turns the pre-flip line into the same line read from the
+      -- new nose, so vel_angle has to come along. The non-drift path below
+      -- reassigns this anyway; a drift starting this frame lerps from it, and
+      -- would otherwise swing a full 180 off the stale pre-flip value.
+      car.vel_angle = car.facing_angle
     end
   end
-  local flipping = car.flip_t > 0
+  local flipping    = car.flip_t > 0
   -- The tap that starts a flip is a BTN1 press like any other, so brakes are
   -- off for the whole spin: the car carries its line through the 180 instead
   -- of the second tap doubling as a stab of brake.
-  local braking  = input.held(input.BTN1) and not flipping
+  local braking     = input.held(input.BTN1) and not flipping
 
-  local is_drifitng = false
-  if car.drift_enabled and input.held(input.BTN2) and not flipping then is_drifitng = true end
+  -- A spin already underway was cut short above, so the only flip that can
+  -- still be running here is one started this frame; that one runs its course.
+  local is_drifitng = drift_held and not flipping
   -- A drift locks in the direction of travel it started with; vel may bleed
   -- to 0 during the drift but never crosses to the other sign. Taken from the
   -- gear rather than sign(vel) so a drift begun from a standstill still slides

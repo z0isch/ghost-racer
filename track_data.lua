@@ -28,7 +28,7 @@ function M.magnet_radius(level)
 end
 
 -- Seconds in a loop's countdown before it force-Rebirths. Tuning knob.
-M.LOOP_SECONDS = 300
+M.LOOP_SECONDS  = 300
 
 -- Multi-lap knobs (see docs/laps-plan.md). Both start at 2x rather than
 -- something gentler: the lap-2 payoff has to be unmistakable for the fun test
@@ -48,12 +48,12 @@ M.LAP_CP_MULT   = 2
 -- Fixed cash price of Nirvana, the always-available escape item (the eventual
 -- win condition). Ungated - never keyed to rank/loop/track - and unreachable
 -- for now; the buy button renders it trimmed to "$300m". Tuning knob.
-M.NIRVANA_COST = 300000000 -- was 1000000
+M.NIRVANA_COST  = 300000000 -- was 1000000
 
 -- Car/player upgrades sold in the global UPGRADES column of the buy scene,
 -- available on every track from the start. Later upgrades are gated purely
 -- by price (plus drift_boost needing drift owned - see economy.try_buy).
-M.UPGRADES     = {
+M.UPGRADES      = {
   {
     kind      = "accel",
     label     = "Acceleration",
@@ -209,9 +209,12 @@ M.TRACKS = {
       { col = 1,  row = 1,  w = 5, h = 5 },
     },
     gates       = {
-      { col = 14, row = 1,  len = 5, vertical = true, mode = "reverse" },
-      { col = 29, row = 1,  len = 5, vertical = true, mode = "forward" },
-      { col = 33, row = 16, len = 5, vertical = true, mode = "reverse" },
+      { col = 14, row = 1,  len = 5, vertical = true,  mode = "reverse" },
+      { col = 29, row = 1,  len = 5, vertical = true,  mode = "forward" },
+      { col = 33, row = 16, len = 5, vertical = true,  mode = "reverse" },
+      { col = 17, row = 10, len = 3, vertical = true,  mode = "forward" },
+      { col = 6,  row = 16, len = 5, vertical = true,  mode = "reverse" },
+      { col = 1,  row = 8,  len = 5, vertical = false, mode = "forward" },
     },
     coins       = {
       { col = 36, row = 7 },
@@ -228,7 +231,7 @@ M.TRACKS = {
       { col = 11, row = 10 }, -- inner chamber, upper-left
       { col = 21, row = 12 }, -- inner chamber, right
       { col = 13, row = 14 }, -- inner chamber, lower-left
-      { col = 36, row = 2 },  -- top-right outer corner, outside the turn
+      { col = 36, row = 19 }, -- top-right outer corner, outside the turn
       { col = 28, row = 19 }, -- bottom band, deep below the inner line
     },
     laps        = 2,

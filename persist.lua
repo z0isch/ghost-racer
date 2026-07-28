@@ -284,9 +284,16 @@ local DEV_SCENARIOS = {
     mode        = "skill_tree",
     progression = {
       loop        = 3,
+      money       = 100000000,
       seen_help   = true,
       seen_modals = { shop = true, ghosts = true },
-      skill_tree  = { points = 90, ranks = {}, bought_at = {} },
+      skill_tree  = {
+        points    = 200,
+        ranks     = { coins = 1, start_coins = 1, laps = 1, top_speed = 2, max_accel = 1 },
+        -- Bought loops back, so both downstream gates read as long satisfied
+        -- if the garage is opened mid-test.
+        bought_at = { coins = 2, start_coins = 3, laps = 3, top_speed = 3, max_accel = 3 },
+      },
     },
   },
   -- Multi-lap bench (docs/laps-plan.md). Mid-loop so bank_race_yen is live and
