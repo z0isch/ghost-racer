@@ -95,7 +95,8 @@ end
 -- Draws both of a track's coin lists. `collected` is the race's per-list
 -- collected sets ({ lap1, lap2 }), nil on the buy-screen preview; `lap` is the
 -- race's current lap, nil for that same preview (which shows everything live).
-function M.draw_coins(id, unlocked, collected, lap)
+-- `unlocked` and `unlocked2` are each list's own independent unlock count.
+function M.draw_coins(id, unlocked, unlocked2, collected, lap)
   local tdata = track_data.TRACKS[id]
   local bob   = math.sin(usagi.elapsed * COIN_BOB_HZ * 2 * math.pi) * COIN_BOB_AMP
   draw_coin_list(tdata.coins, unlocked, collected and collected[1], COIN_SPRITE, bob)
@@ -106,7 +107,7 @@ function M.draw_coins(id, unlocked, collected, lap)
   -- *inactive* everywhere else (open gates, ghosts) - so a still, opaque coin
   -- says "real, but not yet" without spending the contrast against the road.
   local live = lap == nil or lap > 1
-  draw_coin_list(tdata.coins2, unlocked, collected and collected[2], COIN2_SPRITE,
+  draw_coin_list(tdata.coins2, unlocked2, collected and collected[2], COIN2_SPRITE,
     live and bob or 0, live and 1 or 0.3)
 end
 

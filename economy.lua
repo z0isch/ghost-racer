@@ -291,7 +291,7 @@ function M.lap_cash_rate(line)
   local laps   = track_data.effective_laps(id)
   local radius = track_data.magnet_radius(State.magnet)
   local pay    = (ghost.pay_units(ghost.compute_cp_crossings(line, tdata.checkpoints, laps))
-    + ghost.pay_units(ghost.compute_all_coin_pickups(line, tdata, tstate.coins, radius, laps)))
+    + ghost.pay_units(ghost.compute_all_coin_pickups(line, tdata, tstate.coins, tstate.coins2, radius, laps)))
     * tdata.pay
   return pay / period
 end
@@ -305,15 +305,63 @@ function M.shop_item(kind)
 end
 
 
+-- Gold coins still for sale on `id`. The Head Start freebies sit on top of the
+-- buyable set rather than inside it, so the floor is subtracted out before the
+-- purchases are counted.
+function M.gold_coins_left(id)
+  local free = track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins)
+  return track_data.buyable_coins(id, State.coins_unlocked) - (State.tracks[id].coins - free)
+end
+
+-- Magenta (lap-2) coins still for sale on `id`. None until the track's Extra
+-- Lap is actually bought: magenta only exists on a lap the race runs, so
+-- selling it earlier would be selling a coin the player can't reach. Reads
+-- effective_laps rather than ts.extra_laps so a track whose `laps` field is
+-- dropped during tuning stops offering them too. No start-coin floor to
+-- subtract - Head Start is gold-only, so the bought count *is* the count.
+function M.lap2_coins_left(id)
+  if track_data.effective_laps(id) <= 1 then return 0 end
+  return track_data.buyable_coins2(id, State.coins_unlocked) - State.tracks[id].coins2
+end
+
+-- Which list the single Coin row sells out of next: the whole gold set first,
+-- then the lap-2 magenta set. nil once neither has stock. Gold-first is the
+-- order that matches the race - lap 1 is the one every run drives - and it
+-- keeps the row from selling a lap-2 coin over a cheaper lap-1 one.
+function M.next_coin_field(id)
+  if M.gold_coins_left(id) > 0 then return "coins" end
+  if M.lap2_coins_left(id) > 0 then return "coins2" end
+  return nil
+end
+
+-- True when the Coin row has sold out its gold set and everything it has left
+-- sits behind the track's Extra Lap. The row names that wall instead of
+-- reading MAX, which would claim there's nothing left to sell. Only when the
+-- lap is genuinely on sale here (Victory Lap owned, track supports laps) -
+-- otherwise there really is nothing more to buy and MAX is the truth.
+function M.coins_need_lap(id)
+  if M.gold_coins_left(id) > 0 then return false end
+  if track_data.effective_laps(id) > 1 then return false end
+  if not (State.laps > 1 and track_data.TRACKS[id].laps) then return false end
+  return track_data.buyable_coins2(id, State.coins_unlocked) > 0
+end
+
 function M.upgrade_cost(kind)
   local id = State.active_track
   local u  = M.shop_item(kind)
   if not u then return nil end
   if kind == "coins" then
+    if not M.next_coin_field(id) then return nil end
+    -- One price ladder across both lists: the row's Nth coin costs the same
+    -- whichever list it comes out of, so crossing into the lap-2 set is a
+    -- continuation of the climb rather than a price reset.
     local free   = track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins)
-    local bought = State.tracks[id].coins - free
-    if bought >= track_data.buyable_coins(id, State.coins_unlocked) then return nil end
+    local bought = (State.tracks[id].coins - free) + State.tracks[id].coins2
     return math.floor(u.base_cost * (u.growth ^ bought))
+  end
+  if kind == "laps" then
+    if State.tracks[id].extra_laps >= u.max then return nil end
+    return u.base_cost
   end
   local lvl
   if kind == "ghosts" then
@@ -328,7 +376,10 @@ end
 -- Kinds that show a one-time explainer modal in the buy scene the first time
 -- they're purchased (rank 1 for multi-rank items like `boost`; first-ever
 -- across any track for `ghosts` / `coins`, since those counts are per-track).
-local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true }
+-- The lap-2 coins have no explainer of their own: they're sold by the same
+-- Coin row, and `laps` already names both halves of what buying the lap
+-- unlocks (see scenes/buy.lua MODAL_INFO.laps).
+local FIRST_PURCHASE_MODAL_KINDS = { drift = true, drift_boost = true, boost = true, ghosts = true, coins = true, magnet = true, laps = true }
 
 -- Ghosts replay the track's recorded lap, so they stay locked behind one
 -- completed race on that track (nothing to replay otherwise). It's the only
@@ -373,17 +424,32 @@ function M.try_buy(kind)
   -- skill node puts coins on sale (State.coins_unlocked). The buy scene hides the
   -- row until then too; this refuses the buy on any other path.
   if kind == "magnet" and not State.coins_unlocked then return end
+  -- The lap row is hidden without a purchasable ceiling or a track that
+  -- supports one, but every other path (dev tools, a stale click) refuses too.
+  if kind == "laps" and (State.laps <= 1 or not track_data.TRACKS[id].laps) then return end
   if cost > 0 and State.money < cost then return end
   State.money = State.money - cost
-  if kind == "ghosts" or kind == "coins" then
-    local was_first_ghost  = kind == "ghosts" and State.tracks[id][kind] == 0
-    State.tracks[id][kind] = State.tracks[id][kind] + 1
+  if kind == "ghosts" or kind == "coins" or kind == "laps" then
+    -- `laps` is tracked as ts.extra_laps (effective_laps reads it by that
+    -- name), and the one Coin row fills the gold list before the lap-2 magenta
+    -- one; `ghosts` is the only kind whose field is just its shop kind.
+    local field             = kind == "laps" and "extra_laps"
+        or (kind == "coins" and M.next_coin_field(id))
+        or kind
+    local was_first_ghost   = kind == "ghosts" and State.tracks[id][field] == 0
+    State.tracks[id][field] = State.tracks[id][field] + 1
     if was_first_ghost then
       ghost.restart_schedule(id)
     elseif kind == "ghosts" then
       ghost.reset_track_phases(id)
     end
-    if kind == "coins" then ghost.rebuild_sim(id) end
+    -- Coin lists change what a ghost's stored line banks; a bought lap changes
+    -- effective_laps itself. Rebuilding on `laps` isn't strictly required --
+    -- compute_cp_crossings over a stored 1-lap line finds only N crossings even
+    -- when asked for 2N, and compute_all_coin_pickups clamps to ts.coins2 = 0
+    -- -- but leaving a sim built against the old value is a trap for the next
+    -- person.
+    if kind == "coins" or kind == "laps" then ghost.rebuild_sim(id) end
     if FIRST_PURCHASE_MODAL_KINDS[kind] and not State.seen_modals[kind] then
       State.seen_modals[kind] = true
       State.purchase_modal    = kind

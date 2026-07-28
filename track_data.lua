@@ -30,9 +30,9 @@ end
 -- Seconds in a loop's countdown before it force-Rebirths. Tuning knob.
 M.LOOP_SECONDS = 300
 
--- Multi-lap prototype knobs (see docs/laps-prototype-plan.md). Both start at 2x
--- rather than something gentler: the lap-2 payoff has to be unmistakable for
--- the fun test to read at all.
+-- Multi-lap knobs (see docs/laps-plan.md). Both start at 2x rather than
+-- something gentler: the lap-2 payoff has to be unmistakable for the fun test
+-- to read at all.
 --
 -- The asymmetry between the two is load-bearing, not an implementation detail.
 -- LAP_COIN_MULT is *list*-attached: a `coins2` coin pays it whenever it's
@@ -191,6 +191,13 @@ M.TRACKS = {
         base_cost = 50,
         growth    = 1.3
       },
+      {
+        kind      = "laps",
+        label     = "Extra Lap",
+        currency  = "cash",
+        max       = 1,
+        base_cost = 75
+      },
     },
   },
   track3 = {
@@ -246,6 +253,13 @@ M.TRACKS = {
         base_cost = 500,
         growth    = 1.3
       },
+      {
+        kind      = "laps",
+        label     = "Extra Lap",
+        currency  = "cash",
+        max       = 1,
+        base_cost = 750
+      },
     },
   },
   track4 = {
@@ -296,6 +310,13 @@ M.TRACKS = {
         currency  = "cash",
         base_cost = 3000,
         growth    = 1.3
+      },
+      {
+        kind      = "laps",
+        label     = "Extra Lap",
+        currency  = "cash",
+        max       = 1,
+        base_cost = 4500
       },
     },
   },
@@ -388,16 +409,19 @@ function M.ranks(id)
   return M.TRACKS[id].ranks
 end
 
--- Laps a race on this track runs. The per-track `laps` field is a *ceiling*,
--- not a switch: Victory Lap turns laps on globally (State.laps), and a track
--- opts in by declaring how many it can support. Track 1 has no `laps` field and
--- so stays single-lap without a special case anywhere -- it has exactly one
--- checkpoint, so on lap 2 the next target would be the rect the car is already
--- sitting in and the race would end on the same frame. Reading the field as a
--- ceiling also means laps can be disabled per-track during tuning by editing
--- data rather than code.
+-- Laps a race on this track runs: the min of three independent gates. Victory
+-- Lap (State.laps) sets a ceiling on how many laps may be *purchased*, not a
+-- grant - the lap itself is bought per track, per loop, tracked as
+-- ts.extra_laps. The track's own `laps` field is its own ceiling. Track 1 has
+-- no `laps` field and so stays single-lap without a special case anywhere --
+-- it has exactly one checkpoint, so on lap 2 the next target would be the rect
+-- the car is already sitting in and the race would end on the same frame.
+-- The `(State.tracks[id] or {})` guard matters: road.draw_coins reaches this on
+-- the buy-screen preview, and economy.try_unlock_track seeds track state after
+-- State.unlocked[id] is already set.
 function M.effective_laps(id)
-  return (State.laps or 1) > 1 and (M.TRACKS[id].laps or 1) or 1
+  local bought = (State.tracks[id] or {}).extra_laps or 0
+  return math.min(1 + bought, State.laps or 1, M.TRACKS[id].laps or 1)
 end
 
 -- Payout multiplier on a checkpoint crossed on `lap` (1-based).
@@ -485,19 +509,33 @@ function M.start_coin_floor(id, has_coins, start_coins)
   return math.max(0, math.min(start_coins or 0, spare))
 end
 
--- Highest total coin count reachable on a track: none without Loose Change,
--- the full authored list with it (the slots beyond base_coins are reachable
--- only via Head Start, which sits downstream of Loose Change in the tree).
---
--- `tstate.coins` is one count with prefix semantics shared by both lists (Coin
--- #k lights lap-1 slot k *and* lap-2 slot k), so the ceiling is the longer
--- list. Taking only #coins would leave a dead tail on any track whose coins2
--- is longer: persist clamps ts.coins to this, so those slots would be
--- unreachable even with Head Start.
+-- Highest total gold-coin count reachable on a track: none without Loose
+-- Change, the full authored list with it (the slots beyond base_coins are
+-- reachable only via Head Start, which sits downstream of Loose Change in the
+-- tree). Gold-only now that each coin list is sold and clamped independently
+-- - see M.max_coins2 for the magenta twin.
 function M.max_coins(id, has_coins)
   if not has_coins then return 0 end
+  return #M.TRACKS[id].coins
+end
+
+-- Highest total magenta-coin count reachable on a track: 0 without Loose
+-- Change (same gate as gold) and 0 on any track with no `coins2` list at all.
+function M.max_coins2(id, has_coins)
+  if not has_coins then return 0 end
+  return #(M.TRACKS[id].coins2 or {})
+end
+
+-- Magenta coins the shop will sell on a track: base_coins once the track has
+-- a coins2 list at all, else 0 (no lap-2 coins to sell on a non-lap track).
+-- No Head Start freebie here - Head Start is gold-only by decision. These are
+-- sold through the same Coin row as gold, after the gold set runs out and only
+-- once the Extra Lap is bought - see economy.next_coin_field.
+function M.buyable_coins2(id, has_coins)
+  if not has_coins then return 0 end
   local tdata = M.TRACKS[id]
-  return math.max(#tdata.coins, #(tdata.coins2 or {}))
+  if not tdata.coins2 then return 0 end
+  return tdata.base_coins
 end
 
 function M.default_track_state(id, has_coins, start_coins)
@@ -510,6 +548,10 @@ function M.default_track_state(id, has_coins, start_coins)
     paid_rank  = "D",
     ghosts     = 0,
     coins      = M.start_coin_floor(id, has_coins, start_coins),
+    -- Laps purchased this loop, per track (0 or 1 today - see M.effective_laps).
+    extra_laps = 0,
+    -- Magenta coins bought this loop. No floor: Head Start is gold-only.
+    coins2     = 0,
   }
 end
 

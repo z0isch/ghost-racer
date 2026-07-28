@@ -59,6 +59,13 @@ local MODAL_INFO       = {
           "Pulls in " .. ui.COIN_CHAR .. " from a larger radius\naround your car."
     end,
   },
+  laps = {
+    title = "Extra Lap Unlocked!",
+    body  = function()
+      return
+      "This track now runs twice.\nLap 2 pays double at every\ncheckpoint - and opens a\nsecond set of coins."
+    end,
+  },
 }
 
 -- First-ever shop visit: a one-shot explainer of what the race $ buys - car
@@ -329,7 +336,7 @@ function M.draw()
   for i, cp in ipairs(checkpoints) do
     road.draw_checkpoint(cp, i, true, #checkpoints)
   end
-  road.draw_coins(id, State.tracks[id].coins)
+  road.draw_coins(id, State.tracks[id].coins, State.tracks[id].coins2)
   ghost.draw_sim(GHOST_ALPHA)
   popups.draw()
   hud.draw()
@@ -611,9 +618,13 @@ function M.draw_shop()
   for _, item in ipairs(track_data.shop(id)) do
     -- Coins don't exist at all until Loose Change is bought, and ghosts until
     -- loop 2 hands them over, so those rows stay hidden rather than teasing a
-    -- purchase - their arrival is the reveal.
+    -- purchase - their arrival is the reveal. Extra Lap needs both the node's
+    -- purchase ceiling and the track's own laps ceiling. The lap-2 coins have
+    -- no row of their own: the Coin row sells them once the gold set is gone
+    -- and the lap is bought (see economy.next_coin_field).
     if not (item.kind == "coins" and not State.coins_unlocked)
-        and not (item.kind == "ghosts" and not State.ghosts_unlocked) then
+        and not (item.kind == "ghosts" and not State.ghosts_unlocked)
+        and not (item.kind == "laps" and not (State.laps > 1 and track_data.TRACKS[id].laps)) then
       local clicked, bh = shop_button(item, x, shop_y, w)
       if clicked then economy.try_buy(item.kind) end
       shop_y = shop_y + bh + gap

@@ -68,7 +68,7 @@ M.NODES     = {
     max    = 1,
     -- Costs whatever the player is holding: it's the only thing on sale at the
     -- first garage, so it always lands and always empties the wallet.
-    cost   = function(st) return st.points end,
+    cost   = function(st) return 0 end, --st.points end,
     pos    = { x = 352, y = 144 },
     links  = { "start_coins", "laps" },
     locked = function(stats)
@@ -102,11 +102,13 @@ M.NODES     = {
     id        = "laps",
     label     = "Victory Lap",
     icon      = "V",
-    desc      = "Every race runs twice.\nSecond time round pays double!",
+    desc      = "Extra laps go on sale on every\ntrack. Go round again for more!",
     max       = 1,
-    -- ~2x the standard node (the others sit at 20-25): this is 3x cash per race
-    -- and 1.5x idle income with no trade-off. Chosen, not requested - retune
-    -- freely once the prototype has been driven.
+    -- ~2x the standard node (the others sit at 20-25): it permanently opens
+    -- the Extra Lap row on every lap-capable track, and with it the lap-2 half
+    -- of that track's Coin row, for every loop after this one. The cash cost of
+    -- actually using it - buying the lap, then the coins it unlocks - is paid
+    -- per-track per-loop, not here.
     base_cost = 40,
     growth    = 1.5,
     pos       = { x = 448, y = 144 },
@@ -120,6 +122,9 @@ M.NODES     = {
     end,
     -- Written as 1 + rank so raising `max` for a third lap later is a
     -- one-character change; per-track `laps` caps how far any track follows.
+    -- State.laps is a ceiling on purchases now, not the lap count itself - the
+    -- lap a track actually races is bought with cash (ts.extra_laps), and this
+    -- only bounds how many of those purchases can ever land.
     apply     = function(ctx, rank)
       ctx.laps = 1 + rank
     end,

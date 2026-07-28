@@ -98,10 +98,10 @@ local function sample_overlaps(s, rect, radius)
   return util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
 end
 
--- `coin_count` is the track's shared unlock count, which reaches the *longer*
--- of the two coin lists (track_data.max_coins), so it's clamped to this list's
--- own length. `mult` rides each event: it's list-attached, so a lap-2 coin pays
--- double whenever the ghost grabs it, on either lap.
+-- `coin_count` is this list's own unlock count (gold and magenta are sold and
+-- clamped independently), clamped to this list's own length. `mult` rides each
+-- event: it's list-attached, so a lap-2 coin pays double whenever the ghost
+-- grabs it, on either lap.
 local function compute_coin_pickups(line, coins, coin_count, radius, mult)
   if not line or #line == 0 then return nil end
   local pickups = {}
@@ -125,11 +125,12 @@ M.compute_coin_pickups = compute_coin_pickups
 
 -- Pickups across both of a track's coin lists, merged into one event list. The
 -- lap-2 list only exists on a lap track and only when laps are switched on.
-function M.compute_all_coin_pickups(line, tdata, coin_count, radius, laps)
+-- `coin_count` and `coin2_count` are each list's own independent unlock count.
+function M.compute_all_coin_pickups(line, tdata, coin_count, coin2_count, radius, laps)
   local pickups = compute_coin_pickups(line, tdata.coins, coin_count, radius, 1)
   if not pickups then return nil end
   if laps > 1 and tdata.coins2 then
-    local lap2 = compute_coin_pickups(line, tdata.coins2, coin_count, radius,
+    local lap2 = compute_coin_pickups(line, tdata.coins2, coin2_count, radius,
       track_data.LAP_COIN_MULT)
     for _, ev in ipairs(lap2 or {}) do pickups[#pickups + 1] = ev end
   end
@@ -146,7 +147,7 @@ function M.rebuild_sim(id)
   local tdata           = track_data.TRACKS[id]
   local laps            = track_data.effective_laps(id)
   ts.ghost_cp_crossings = compute_cp_crossings(tstate.ghost_line, tdata.checkpoints, laps)
-  ts.ghost_coin_pickups = M.compute_all_coin_pickups(tstate.ghost_line, tdata, tstate.coins,
+  ts.ghost_coin_pickups = M.compute_all_coin_pickups(tstate.ghost_line, tdata, tstate.coins, tstate.coins2,
     track_data.magnet_radius(State.magnet), laps)
   ts.ghost_prev_phase   = {}
 end

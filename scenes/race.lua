@@ -113,7 +113,7 @@ local function finish_race()
   if first_lap or rank_changed then
     local coins_total = road.active_coin_count(tstate.coins, tdata.coins)
     if track_data.effective_laps(id) > 1 and tdata.coins2 then
-      coins_total = coins_total + road.active_coin_count(tstate.coins, tdata.coins2)
+      coins_total = coins_total + road.active_coin_count(tstate.coins2, tdata.coins2)
     end
     local coins_got = 0
     for _, set in ipairs(race.coins_collected) do
@@ -263,13 +263,13 @@ function M.update(dt)
 
     local pay = economy.player_pay(id)
 
-    local unlocked = State.tracks[id].coins
-    collect_coins(tdata.coins, unlocked, race.coins_collected[1], 1,
+    local tstate = State.tracks[id]
+    collect_coins(tdata.coins, tstate.coins, race.coins_collected[1], 1,
       car_rect, magnet_r, pay, tdata.pay)
     -- The lap-2 list is inert until lap 2 opens; road.draw_coins freezes their
     -- bob to match, so what's collectable and what looks collectable agree.
     if race.lap > 1 and tdata.coins2 then
-      collect_coins(tdata.coins2, unlocked, race.coins_collected[2], track_data.LAP_COIN_MULT,
+      collect_coins(tdata.coins2, tstate.coins2, race.coins_collected[2], track_data.LAP_COIN_MULT,
         car_rect, magnet_r, pay, tdata.pay)
     end
 
@@ -376,7 +376,7 @@ function M.draw()
       road.draw_checkpoint(checkpoints[i], i, i ~= active, #checkpoints)
     end
   end
-  road.draw_coins(id, State.tracks[id].coins, race.coins_collected, race.lap)
+  road.draw_coins(id, State.tracks[id].coins, State.tracks[id].coins2, race.coins_collected, race.lap)
   car.draw_skid_marks(State.car)
   ghost.draw_sim(GHOST_RACE_ALPHA)
   ghost.draw_race_ghost()

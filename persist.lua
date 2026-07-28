@@ -132,6 +132,9 @@ local function apply_progression(loaded)
         -- skill tree, which loads below - rederive_skill_effects clamps at the
         -- end.
         ts.coins      = lt.coins or 0
+        -- Raw here too; the coins2 ceiling needs the skill tree the same way.
+        ts.coins2     = lt.coins2 or 0
+        ts.extra_laps = math.min(lt.extra_laps or 0, track_data.kind_max("laps") or 0)
       end
     end
   end
@@ -179,6 +182,10 @@ function M.rederive_skill_effects()
     ts.coins = math.min(ts.coins, track_data.max_coins(id, State.coins_unlocked))
     ts.coins = math.max(ts.coins,
       track_data.start_coin_floor(id, State.coins_unlocked, State.start_coins))
+    -- Ceiling only - magenta gets no floor, Head Start is gold-only. The same
+    -- protection falls out for free: max_coins2 is 0 without Loose Change, so
+    -- a coinless save reads back with no magenta coins either.
+    ts.coins2 = math.min(ts.coins2 or 0, track_data.max_coins2(id, State.coins_unlocked))
   end
 end
 
@@ -282,14 +289,16 @@ local DEV_SCENARIOS = {
       skill_tree  = { points = 90, ranks = {}, bought_at = {} },
     },
   },
-  -- Multi-lap prototype bench (docs/laps-prototype-plan.md). Mid-loop so
-  -- bank_race_yen is live and ranks/¥ behave normally, every track owned and
-  -- stocked to its full coin count, Victory Lap bought, and enough cash that
-  -- the shop is never the gate. Parked on track 4: it's the only race long
-  -- enough (10.6s on the reference line) for lap-2 coin placement to express
-  -- itself -- track 2 is a six-second race, and two three-second laps prove
-  -- nothing. Ghosts start at 0 so the "$/sec went up, not down" check has a
-  -- clean before/after.
+  -- Multi-lap bench (docs/laps-plan.md). Mid-loop so bank_race_yen is live and
+  -- ranks/¥ behave normally, every track owned and stocked to its full coin
+  -- count, Victory Lap bought, and enough cash that the shop is never the
+  -- gate. Parked on track 4: it's the only race long enough (10.6s on the
+  -- reference line) for lap-2 coin placement to express itself -- track 2 is
+  -- a six-second race, and two three-second laps prove nothing. Ghosts start
+  -- at 0 so the "$/sec went up, not down" check has a clean before/after.
+  -- ranks = { laps = 1 } only opens the shop rows now (the node is a ceiling,
+  -- not a grant), so track 4's extra_laps and coins2 are seeded explicitly -
+  -- otherwise the bench would boot single-lap and stop being a lap bench.
   laps = {
     mode        = "buy",
     progression = {
@@ -303,13 +312,13 @@ local DEV_SCENARIOS = {
       unlocked     = {
         track1 = true, track2 = true, track3 = true, track4 = true,
       },
-      -- coins is the max_coins ceiling per track (both lists share the count),
-      -- so every authored slot on both lists is live.
+      -- coins/coins2 are each list's own ceiling now, so every authored slot
+      -- on both lists is live.
       tracks       = {
         track1 = { ghosts = 0, coins = 2, paid_rank = "D" },
         track2 = { ghosts = 0, coins = 4, paid_rank = "D" },
         track3 = { ghosts = 0, coins = 5, paid_rank = "D" },
-        track4 = { ghosts = 0, coins = 5, paid_rank = "D" },
+        track4 = { ghosts = 0, coins = 5, coins2 = 5, extra_laps = 1, paid_rank = "D" },
       },
       skill_tree   = {
         points    = 200,
