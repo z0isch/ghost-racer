@@ -14,7 +14,7 @@ local scenes     = { buy = buy, race = race, intro = intro, skill_tree = skill_t
 -- "laps" is the multi-lap prototype bench, parked in track 4's shop. Applied
 -- only in dev builds, and it overwrites the save file, so clear it once the run
 -- is over.
-DEV_SCENARIO     = "laps"
+DEV_SCENARIO     = nil
 
 function SceneGoto(mode)
   local prev = State.mode

@@ -6,9 +6,10 @@ local track4   = require "tile-map.track4"
 local M        = {}
 
 -- Reverse-driving prototype: horizontally mirrors every track (tile grid,
--- checkpoints, coins, spawn) and puts the car in reverse gear (release gas
--- to accelerate backwards). Spawn facing stays east, which lands facing away
--- from checkpoint 1 on the mirrored layout. Everything downstream (ghosts,
+-- checkpoints, coins, spawn) and unlocks the flip (double-tap BTN1) that puts
+-- the car in reverse gear, where the always-on throttle accelerates it
+-- backwards. Spawn facing stays east, which lands facing away from checkpoint 1
+-- on the mirrored layout, so the first move is a flip. Everything downstream (ghosts,
 -- ranks, economy) runs unchanged on the mirrored data, so don't flip this on
 -- a save that has forward ghost laps -- they'd clip through mirrored walls
 -- and skew idle income. Snapshot via Dev: Save State and test on a fresh

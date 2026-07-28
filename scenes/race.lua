@@ -1,37 +1,39 @@
-local ui                    = require "ui"
-local dim                   = require "dim"
-local hud                   = require "hud"
-local car                   = require "car"
-local road                  = require "road"
-local ghost                 = require "ghost"
-local gates                 = require "gates"
-local economy               = require "economy"
-local popups                = require "popups"
-local track_data            = require "track_data"
-local persist               = require "persist"
-local modal                 = require "modal"
-local reference             = require "reference"
+local ui               = require "ui"
+local dim              = require "dim"
+local hud              = require "hud"
+local car              = require "car"
+local road             = require "road"
+local ghost            = require "ghost"
+local gates            = require "gates"
+local economy          = require "economy"
+local popups           = require "popups"
+local track_data       = require "track_data"
+local persist          = require "persist"
+local modal            = require "modal"
+local reference        = require "reference"
 
-local GHOST_RACE_ALPHA      = 0
+local GHOST_RACE_ALPHA = 0
 -- Held on the finished phase before cutting to the buy scene. The rank meter's
 -- needle teleports straight to the earned rank on finish (hud.lua), so this is
 -- purely a beat to let the player read that final landing spot.
-local FINISH_BEAT_SECS      = .5
+local FINISH_BEAT_SECS = .5
 -- Neon headline flashes: GO! at the start, LAP n at each lap rollover. Same
 -- decay so the lap flash reads as the same kind of event as the start.
-local GO_FLASH_SECS         = 0.6
-local LAP_FLASH_SECS        = 0.6
+local GO_FLASH_SECS    = 0.6
+local LAP_FLASH_SECS   = 0.6
 
-local countdown_time  = 0
-local countdown_shown = 0
+local countdown_time   = 0
+local countdown_shown  = 0
 
-local M               = {}
+local M                = {}
 
 local function get_hints()
-  local accel_hint = input.mapping_for(input.BTN1) .. " to accelerate\n"
-  local right_hint = input.mapping_for(input.RIGHT) .. " to turn clockwise\n"
-  local left_hint  = input.mapping_for(input.LEFT) .. " to turn counter clockwise"
-  local hints      = accel_hint .. right_hint .. left_hint
+  local hints = input.mapping_for(input.BTN1) .. " to brake\n"
+  -- Only worth naming once the car can actually flip: with no reverse the
+  -- throttle is the whole story and there's no gear to talk about.
+  if State.car.reverse_enabled then
+    hints = hints .. "\ndouble tap " .. input.mapping_for(input.BTN1) .. " to flip into reverse"
+  end
   if State.drift >= 1 then
     hints = hints .. "\n" .. input.mapping_for(input.BTN2) .. " to drift while turning"
   end
@@ -92,8 +94,8 @@ local function finish_race()
   car.stop_engine(State.car)
   sfx.play("applause")
 
-  local first_lap    = tstate.ghost_line == nil
-  local prev_rank    = economy.track_rank(id)
+  local first_lap = tstate.ghost_line == nil
+  local prev_rank = economy.track_rank(id)
   ghost.promote()
   local new_rank     = economy.track_rank(id)
   -- Bank the ¥ this track's best rank is worth this loop (the gap over any
@@ -109,29 +111,29 @@ local function finish_race()
   end
 
   if first_lap or rank_changed then
-    local coins_total  = road.active_coin_count(tstate.coins, tdata.coins)
+    local coins_total = road.active_coin_count(tstate.coins, tdata.coins)
     if track_data.effective_laps(id) > 1 and tdata.coins2 then
       coins_total = coins_total + road.active_coin_count(tstate.coins, tdata.coins2)
     end
-    local coins_got    = 0
+    local coins_got = 0
     for _, set in ipairs(race.coins_collected) do
       for _ in pairs(set) do coins_got = coins_got + 1 end
     end
     State.race_modal = {
-      track_id     = id,
-      rank         = new_rank,
-      first_lap    = first_lap,
-      time         = race.time,
+      track_id    = id,
+      rank        = new_rank,
+      first_lap   = first_lap,
+      time        = race.time,
       -- Collected/total coin counts, nil unless the track has coins on it,
       -- so the modal skips the coin stat entirely on coinless tracks.
-      coins_got    = coins_total > 0 and coins_got or nil,
-      coins_total  = coins_total > 0 and coins_total or nil,
+      coins_got   = coins_total > 0 and coins_got or nil,
+      coins_total = coins_total > 0 and coins_total or nil,
       -- nil unless the rank actually changed: title/body only show the
       -- rank-delta block then.
-      prev_rank    = rank_changed and prev_rank or nil,
+      prev_rank   = rank_changed and prev_rank or nil,
       -- ¥ this race banked toward the climb (nil if none), so the payoff of
       -- racing better is shown where it's earned - not just at Rebirth.
-      yen          = yen_gained > 0 and yen_gained or nil,
+      yen         = yen_gained > 0 and yen_gained or nil,
     }
   end
 
@@ -304,7 +306,7 @@ function M.update(dt)
 end
 
 local function draw_help()
-  if modal.draw({ title = "How To Race", body = "Hit checkpoints to make $$$!\n\n" .. get_hints() .. "\n" }) then
+  if modal.draw({ title = "How To Race", body = "Hit checkpoints to make $$$!\n\nThe car automatically accelerates\n\nUse the left/right arrow keys to turn\n\n" .. get_hints() }) then
     dismiss_help()
   end
 end

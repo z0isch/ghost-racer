@@ -8,7 +8,7 @@ local track_data = require "track_data"
 -- and gates so zip-pad routing can be felt against the actual walls and racing
 -- line, then lets you scatter pads live:
 --
---   BTN1 / arrows  drive
+--   arrows         steer (the car is always on the gas; BTN1 brakes)
 --   R              reset car to spawn
 --   P              drop a pad under the car, facing its heading
 --   X              clear all pads

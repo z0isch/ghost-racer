@@ -49,9 +49,15 @@ local TAILLIGHT_FLICKER  = 0.2
 local TAILLIGHT_OFFSET   = 4
 local BOOST_ORBIT_RADIUS = 12
 local BOOST_ORBIT_SPEED  = 3
--- Double-tapping BTN2 within FLIP_TAP_WINDOW spins the car 180 over
--- FLIP_DURATION while it keeps sliding along its original line, then swaps
--- gears: forward at v becomes reverse at v in the same travel direction.
+-- The throttle is always on -- BTN1 is the brake, not the gas -- so the flip is
+-- the only thing that decides which end of the car leads. Double-tapping BTN1
+-- within FLIP_TAP_WINDOW spins the car 180 over FLIP_DURATION while it keeps
+-- sliding along its original line, then swaps gears: forward at v becomes
+-- reverse at v in the same travel direction. car.gear is what makes that
+-- sticky. The throttle always pushes toward gear * top_vel, so a car in reverse
+-- keeps accelerating backwards, and braking all the way to a standstill leaves
+-- the gear alone -- let go and it pulls away in the same orientation it stopped
+-- in. Nothing but another flip changes it.
 local FLIP_TAP_WINDOW    = 0.3
 local FLIP_DURATION      = 0.3
 
@@ -106,6 +112,7 @@ local function default_car()
     drift_boost_enabled  = false,
     reverse_enabled      = false,
     drift_dir            = 0,
+    gear                 = 1,
     flip_tap_t           = 0,
     flip_t               = 0,
     flip_from            = 0,
@@ -131,6 +138,7 @@ function M.reset(car, spawn)
   car.is_drifitng          = false
   car.drift_time           = 0
   car.drift_dir            = 0
+  car.gear                 = 1
   car.flip_tap_t           = 0
   car.flip_t               = 0
   car.boost_ready          = false
@@ -155,7 +163,7 @@ end
 -- Shared by pickup pads (see pad.lua); the manual BTN3 boost inlines the same
 -- rule against this frame's freshly-computed drift state.
 function M.apply_boost(car, impulse)
-  local boost_dir = car.vel < 0 and -1 or 1
+  local boost_dir = car.gear
   if car.is_drifitng then boost_dir = car.drift_dir end
   local max_vel = car.top_vel + OVERSPEED_MAX
   car.vel = util.clamp(car.vel + boost_dir * impulse, -max_vel, max_vel)
@@ -185,7 +193,7 @@ function M.update(car, dt, map)
   local holding_right = input.held(input.RIGHT)
 
   if car.flip_tap_t > 0 then car.flip_tap_t = math.max(0, car.flip_tap_t - dt) end
-  if input.pressed(input.BTN2) and car.flip_t <= 0 and car.reverse_enabled then
+  if input.pressed(input.BTN1) and car.flip_t <= 0 and car.reverse_enabled then
     if car.flip_tap_t > 0 then
       -- Second tap inside the window: spin toward whichever way the player
       -- is steering (defaults right).
@@ -203,19 +211,27 @@ function M.update(car, dt, map)
     local progress   = 1 - car.flip_t / FLIP_DURATION
     car.facing_angle = angle.normalize(car.flip_from + car.flip_dir * progress * math.pi)
     if car.flip_t <= 0 then
-      -- Spin finished: swap gears. Travel continues in the original
-      -- direction, now driven in reverse (or forward if it was reversing).
-      car.vel = -car.vel
+      -- Spin finished: swap gears. Travel continues in the original direction
+      -- at the same speed, now with the other end of the car leading, and the
+      -- throttle keeps pushing that way until the next flip.
+      car.vel  = -car.vel
+      car.gear = -car.gear
     end
   end
   local flipping = car.flip_t > 0
+  -- The tap that starts a flip is a BTN1 press like any other, so brakes are
+  -- off for the whole spin: the car carries its line through the 180 instead
+  -- of the second tap doubling as a stab of brake.
+  local braking  = input.held(input.BTN1) and not flipping
 
   local is_drifitng = false
   if car.drift_enabled and input.held(input.BTN2) and not flipping then is_drifitng = true end
   -- A drift locks in the direction of travel it started with; vel may bleed
-  -- to 0 during the drift but never crosses to the other sign.
+  -- to 0 during the drift but never crosses to the other sign. Taken from the
+  -- gear rather than sign(vel) so a drift begun from a standstill still slides
+  -- the way the car is about to pull away.
   if is_drifitng and not car.is_drifitng then
-    car.drift_dir = car.vel < 0 and -1 or 1
+    car.drift_dir = car.gear
   end
 
   local target_vel_angle = car.facing_angle
@@ -308,7 +324,7 @@ function M.update(car, dt, map)
   local min_vel           = car.reverse_enabled and -effective_top_vel or 0
 
   if input.pressed(input.BTN3) and car.boosts > 0 then
-    local boost_dir = car.vel < 0 and -1 or 1
+    local boost_dir = car.gear
     if is_drifitng then boost_dir = car.drift_dir end
     car.vel = util.clamp(car.vel + boost_dir * OVERSPEED_IMPULSE, -max_vel, max_vel)
     car.boosts = car.boosts - 1
@@ -316,26 +332,28 @@ function M.update(car, dt, map)
     sfx.play("boost")
   end
 
-  -- deccel is the braking rate (fighting the current direction of travel),
-  -- accel builds speed in the direction already headed -- symmetric for
-  -- forward and reverse.
+  -- The throttle is always on, pushing toward top speed in the current gear --
+  -- so reverse accelerates backwards exactly the way forward accelerates
+  -- forwards. deccel is the brake rate, and it only ever bleeds toward a
+  -- standstill: the brake can't drag the car through zero into the other gear,
+  -- because a flip is the only thing that changes gear. Stopping dead and
+  -- letting go therefore pulls away the same way the car was already pointed.
   if car.vel > effective_top_vel then
     car.vel = math.max(effective_top_vel, car.vel - OVERSPEED_DECAY * dt)
   elseif car.vel < min_vel then
     car.vel = math.min(min_vel, car.vel + OVERSPEED_DECAY * dt)
-  elseif input.held(input.BTN1) then
-    local rate = car.vel < 0 and car.deccel or car.accel
-    car.vel = util.clamp(car.vel + rate * dt, min_vel, effective_top_vel)
+  elseif braking then
+    bleed_vel(car.deccel * dt)
   else
-    local rate = car.vel > 0 and car.deccel or car.accel
-    car.vel = util.clamp(car.vel - rate * dt, min_vel, effective_top_vel)
+    car.vel = util.clamp(car.vel + car.gear * car.accel * dt, min_vel, effective_top_vel)
   end
 
   if is_drifitng then
     bleed_vel((car.drift_deccel + math.abs(car.vel) * car.drift_drag) * dt)
-    -- Separate from bleed_vel's own stop-at-zero: this catches the coast
-    -- branch above, which flips to `accel` at vel == 0 and would otherwise
-    -- push a forward drift into reverse.
+    -- Belt and braces on the drift's sign lock. drift_dir is taken from the
+    -- gear and the throttle only ever pushes along the gear, so nothing here
+    -- should cross zero on its own; this keeps a scrubbed-out drift pinned at
+    -- a standstill if some later impulse ever tries to.
     if car.drift_dir < 0 then
       car.vel = math.min(0, car.vel)
     else
