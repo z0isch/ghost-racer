@@ -36,8 +36,9 @@ function _init()
   persist.load()
   persist.resync_car_and_ghosts()
 
+  if DEV_SCENARIO then persist.dev_start_scenario(DEV_SCENARIO) end
+
   if usagi.IS_DEV then
-    if DEV_SCENARIO then persist.dev_start_scenario(DEV_SCENARIO) end
     usagi.menu_item("Dev: Save State", function()
       persist.dev_save_snapshot()
     end)
