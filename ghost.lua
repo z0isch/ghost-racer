@@ -36,18 +36,31 @@ function M.restart_schedule(id)
 end
 
 -- Checkpoints only count in order (like the live race): a sample overlapping
--- checkpoint N's rect is ignored unless N is the next one expected.
-local function compute_cp_crossings(line, checkpoints)
+-- checkpoint N's rect is ignored unless N is the next one expected. Over `laps`
+-- laps the course repeats, so the expected index wraps -- crossing 2N is
+-- checkpoint N of lap 2, and carries that lap's payout multiplier.
+--
+-- The wrap is safe on every lap track: cp_N and cp_1 are far apart (track 2:
+-- cols 32-33 to cols 1-4; track 4: center to top-right), so the seam can never
+-- double-trigger off one sample.
+local function compute_cp_crossings(line, checkpoints, laps)
   if not line or #line == 0 then return nil end
+  local n         = #checkpoints
+  local total     = (laps or 1) * n
   local crossings = {}
   local next_cp   = 1
   for _, s in ipairs(line) do
-    local cp = checkpoints[next_cp]
-    if not cp then break end
+    if next_cp > total then break end
+    local cp   = checkpoints[((next_cp - 1) % n) + 1]
     local rect = track_data.checkpoint_rect(cp)
     if util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect) then
-      crossings[next_cp] = { t = s.t, x = s.x + CAR_SIZE / 2, y = s.y }
-      next_cp            = next_cp + 1
+      crossings[next_cp] = {
+        t    = s.t,
+        x    = s.x + CAR_SIZE / 2,
+        y    = s.y,
+        mult = track_data.lap_mult(math.floor((next_cp - 1) / n) + 1),
+      }
+      next_cp = next_cp + 1
     end
   end
   return crossings
@@ -55,11 +68,24 @@ end
 
 M.compute_cp_crossings = compute_cp_crossings
 
--- Checkpoints the stored line genuinely crosses, building the sim if needed.
-function M.crossed_cp_count(id)
+-- Pay units a list of crossing/pickup events is worth: each event's multiplier
+-- summed, rather than a plain count. economy.bank pays `track_pay * ev.mult`
+-- per event, so anything that quotes a rate has to sum the same weights or a
+-- lap track's income reads low.
+local function pay_units(events)
+  local units = 0
+  for _, ev in ipairs(events or {}) do units = units + (ev.mult or 1) end
+  return units
+end
+
+M.pay_units = pay_units
+
+-- Pay units the stored line banks per ghost lap - every crossing and pickup it
+-- genuinely makes, weighted. Builds the sim if needed.
+function M.banked_pay_units(id)
   local ts = get_track_sim(id)
   if not ts.ghost_cp_crossings then M.rebuild_sim(id) end
-  return ts.ghost_cp_crossings and #ts.ghost_cp_crossings or 0
+  return pay_units(ts.ghost_cp_crossings) + pay_units(ts.ghost_coin_pickups)
 end
 
 -- Whether a sample point `s` (the car's top-left corner) overlaps a coin's
@@ -72,17 +98,21 @@ local function sample_overlaps(s, rect, radius)
   return util.rect_overlap({ x = s.x, y = s.y, w = CAR_SIZE, h = CAR_SIZE }, rect)
 end
 
-local function compute_coin_pickups(line, coins, coin_count, radius)
+-- `coin_count` is the track's shared unlock count, which reaches the *longer*
+-- of the two coin lists (track_data.max_coins), so it's clamped to this list's
+-- own length. `mult` rides each event: it's list-attached, so a lap-2 coin pays
+-- double whenever the ghost grabs it, on either lap.
+local function compute_coin_pickups(line, coins, coin_count, radius, mult)
   if not line or #line == 0 then return nil end
   local pickups = {}
   local ts      = track_data.tile_size
-  for ci = 1, coin_count do
+  for ci = 1, math.min(coin_count, #coins) do
     local rect        = track_data.coin_rect(coins[ci])
     local inside_prev = sample_overlaps(line[1], rect, radius)
     for _, s in ipairs(line) do
       local inside = sample_overlaps(s, rect, radius)
       if inside and not inside_prev then
-        pickups[#pickups + 1] = { t = s.t, x = rect.x + ts / 2, y = rect.y }
+        pickups[#pickups + 1] = { t = s.t, x = rect.x + ts / 2, y = rect.y, mult = mult or 1 }
         break
       end
       inside_prev = inside
@@ -93,13 +123,31 @@ end
 
 M.compute_coin_pickups = compute_coin_pickups
 
+-- Pickups across both of a track's coin lists, merged into one event list. The
+-- lap-2 list only exists on a lap track and only when laps are switched on.
+function M.compute_all_coin_pickups(line, tdata, coin_count, radius, laps)
+  local pickups = compute_coin_pickups(line, tdata.coins, coin_count, radius, 1)
+  if not pickups then return nil end
+  if laps > 1 and tdata.coins2 then
+    local lap2 = compute_coin_pickups(line, tdata.coins2, coin_count, radius,
+      track_data.LAP_COIN_MULT)
+    for _, ev in ipairs(lap2 or {}) do pickups[#pickups + 1] = ev end
+  end
+  return pickups
+end
+
+-- ghost.promote stores the whole multi-lap recording, so loop_period is already
+-- the multi-lap time. Both event sets have to cover the same span or the
+-- track's income would be lap-1 pay divided by lap-2 time - a silent halving of
+-- the entire idle economy, buried inside a laps experiment.
 function M.rebuild_sim(id)
   local ts              = get_track_sim(id)
   local tstate          = State.tracks[id]
   local tdata           = track_data.TRACKS[id]
-  ts.ghost_cp_crossings = compute_cp_crossings(tstate.ghost_line, tdata.checkpoints)
-  ts.ghost_coin_pickups = compute_coin_pickups(tstate.ghost_line, tdata.coins, tstate.coins,
-    track_data.magnet_radius(State.magnet))
+  local laps            = track_data.effective_laps(id)
+  ts.ghost_cp_crossings = compute_cp_crossings(tstate.ghost_line, tdata.checkpoints, laps)
+  ts.ghost_coin_pickups = M.compute_all_coin_pickups(tstate.ghost_line, tdata, tstate.coins,
+    track_data.magnet_radius(State.magnet), laps)
   ts.ghost_prev_phase   = {}
 end
 
@@ -179,6 +227,7 @@ function M.update(dt)
                     track_id = id,
                     x        = ev.x,
                     y        = ev.y,
+                    mult     = ev.mult,
                   }
                 end
               end
@@ -196,6 +245,7 @@ function M.update(dt)
                       track_id = id,
                       x        = ev.x,
                       y        = ev.y,
+                      mult     = ev.mult,
                     }
                   end
                 end

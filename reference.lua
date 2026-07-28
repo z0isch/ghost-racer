@@ -164,6 +164,12 @@ function M.maybe_capture(id, recording, time)
   if not usagi.IS_DEV then return end
   if not recording or #recording == 0 then return end
   if not full_course(id) then return end
+  -- A multi-lap recording can't become a reference: cp_splits resolves only the
+  -- first N crossings out of a 2N-crossing run, so it would write lap-1 splits
+  -- attached to two-lap points - a corrupt ruler. The stored refs are
+  -- single-lap by definition and the whole lap-offset scheme below depends on
+  -- them staying that way.
+  if track_data.effective_laps(id) > 1 then return end
   local prev_t = ref_time(M.load(id))
   if prev_t and time >= prev_t then return end
   local points, splits = capture(id, recording)
@@ -185,6 +191,10 @@ function M.force_capture(id, recording)
     print("[ref] refusing partial-course lap for " .. tostring(id) .. "; own all checkpoints first")
     return false
   end
+  if track_data.effective_laps(id) > 1 then
+    print("[ref] refusing multi-lap recording for " .. tostring(id) .. "; references are single-lap")
+    return false
+  end
   local points, splits = capture(id, recording)
   if not points then
     print("[ref] could not resolve checkpoint crossings for " .. tostring(id))
@@ -195,6 +205,13 @@ end
 
 -- Live progress ruler for the race in progress. Built from the active track's
 -- reference; nil when no reference exists (the meter hides in that case).
+--
+-- The stored reference is always a single lap. A multi-lap race reuses that one
+-- polyline per lap, with the finished laps' arc length and time folded into
+-- `s_off` / `t_off` -- so the ruler measures a 2-lap race against a 2-lap
+-- yardstick without duplicating the points in memory, and the one seam
+-- discontinuity is handled at a known event (M.next_lap) instead of being left
+-- for locate's nearest-point search window to stumble over.
 local ruler = nil
 
 -- Load the active track's reference and prime the ruler (cumulative arc
@@ -209,7 +226,30 @@ function M.begin(id)
     cum         = cumulative(data.points),
     checkpoints = data.checkpoints,
     cursor      = 1,
+    laps        = track_data.effective_laps(id),
+    lap         = 1,
+    s_off       = 0,
+    t_off       = 0,
   }
+end
+
+-- Roll the ruler over into the next lap: rewind the forward-only cursor to the
+-- start of the line and bank the completed lap's arc length and time as an
+-- offset. Called from the race scene when the lap increments.
+--
+-- Without this the cursor pins at the end of the line after the last
+-- checkpoint: s_live would stick at s_N, t_ref at t_N, and the projection's
+-- `remaining` at 0 - freezing the rank needle at a pegged 1.0 for the entire
+-- second half of every race. That's worse than no meter, and it would make laps
+-- feel bad for a reason that has nothing to do with laps.
+function M.next_lap()
+  if not ruler then return end
+  local cp = ruler.checkpoints[#ruler.checkpoints]
+  if not cp then return end
+  ruler.lap    = ruler.lap + 1
+  ruler.cursor = 1
+  ruler.s_off  = ruler.s_off + cp.s
+  ruler.t_off  = ruler.t_off + cp.t
 end
 
 -- Whether a reference ruler is active for the current race.
@@ -217,23 +257,25 @@ function M.has()
   return ruler ~= nil
 end
 
--- Arc length (s_N) and reference time (t_N) at the finish - the last
--- checkpoint - or nil if the ruler is missing or has no checkpoints.
+-- Arc length (s_N) and reference time (t_N) at the finish - the last checkpoint
+-- of the last lap - or nil if the ruler is missing or has no checkpoints.
 function M.finish()
   if not ruler then return nil end
   local cp = ruler.checkpoints[#ruler.checkpoints]
   if not cp then return nil end
-  return cp.s, cp.t
+  return cp.s * ruler.laps, cp.t * ruler.laps
 end
 
 -- Map the live car at (x,y) onto the reference line and advance the forward-only
 -- cursor. Returns the car's arc position s_live and the interpolated reference
--- time t_ref(s_live), or nil with no ruler.
+-- time t_ref(s_live), both measured across the whole multi-lap race (the
+-- current lap's position plus every finished lap's offset), or nil with no
+-- ruler.
 function M.locate(x, y)
   if not ruler then return nil end
   local pts, cum = ruler.points, ruler.cum
   local n        = #pts
-  if n < 2 then return 0, pts[1] and pts[1].t or 0 end
+  if n < 2 then return ruler.s_off, ruler.t_off + (pts[1] and pts[1].t or 0) end
 
   local lo = ruler.cursor
   local hi = math.min(n - 1, lo + SEARCH_WINDOW)
@@ -258,7 +300,7 @@ function M.locate(x, y)
   ruler.cursor = best_i
   local s      = cum[best_i] + best_ft * (cum[best_i + 1] - cum[best_i])
   local t_ref  = util.lerp(pts[best_i].t, pts[best_i + 1].t, best_ft)
-  return s, t_ref
+  return ruler.s_off + s, ruler.t_off + t_ref
 end
 
 return M

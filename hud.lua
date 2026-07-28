@@ -283,6 +283,15 @@ function M.draw()
     -- Compact, top-left, tucked below the race scene's QUIT button so a mid-lap
     -- timeout is never a surprise. Same color states as the buy clock.
     draw_clock(5, 26, 2)
+    -- Lap readout directly under the clock, same left column and scale. The
+    -- LAP flash says the rollover *happened*; this says where you are, which
+    -- the flash can't once it's decayed. Hidden entirely on single-lap tracks.
+    local laps = track_data.effective_laps(State.active_track)
+    if laps > 1 then
+      local lap_text = "LAP " .. (State.race.lap or 1) .. "/" .. laps
+      gfx.text_ex(lap_text, 6, 45, 2, 0, gfx.COLOR_BLACK, 1)
+      gfx.text_ex(lap_text, 5, 44, 2, 0, gfx.COLOR_WHITE, 1)
+    end
     -- Cash mirrors the clock across the screen: same row and scale, hung off
     -- the right margin so it grows leftward as the balance does instead of
     -- drifting into the clock. Live off State.money like the buy screen, so

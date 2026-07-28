@@ -7,12 +7,14 @@ local skill_tree = require "scenes.skill_tree"
 
 local scenes     = { buy = buy, race = race, intro = intro, skill_tree = skill_tree }
 
--- Dev scenario to boot into instead of the real save: "loop2" or "loop3" (see
--- persist's DEV_SCENARIOS), nil for normal play. Each stands where that loop's
--- Rebirth drops the player - loop 2 on the title screen for its opening beats,
--- loop 3 in the first garage with loop 2's ¥ unspent. Applied only in dev
--- builds, and it overwrites the save file, so clear it once the run is over.
-DEV_SCENARIO     = nil
+-- Dev scenario to boot into instead of the real save: "loop2", "loop3" or
+-- "laps" (see persist's DEV_SCENARIOS), nil for normal play. The first two
+-- stand where that loop's Rebirth drops the player - loop 2 on the title screen
+-- for its opening beats, loop 3 in the first garage with loop 2's ¥ unspent.
+-- "laps" is the multi-lap prototype bench, parked in track 4's shop. Applied
+-- only in dev builds, and it overwrites the save file, so clear it once the run
+-- is over.
+DEV_SCENARIO     = "laps"
 
 function SceneGoto(mode)
   local prev = State.mode

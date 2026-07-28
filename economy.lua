@@ -48,6 +48,11 @@ function M.cp_count(id)
   return #track_data.TRACKS[id].checkpoints
 end
 
+-- Checkpoint crossings a whole race takes: the course, once per lap.
+function M.race_cp_count(id)
+  return track_data.effective_laps(id) * M.cp_count(id)
+end
+
 -- $ paid per checkpoint/coin at a given rank mult, scaled by mult over the D
 -- floor so D rank keeps base pay and each rank above it multiplies it (with
 -- the current RANK_MULTS: C 2x, B 3x, A 5x, S 10x) - a constant 1/RANK_MULTS.D
@@ -127,8 +132,16 @@ function M.projected_rate()
   local proj_time = race.time + FINISH_FUDGE * race.time * remaining / race.t_ref
   if proj_time <= 0 then return nil end
 
-  local pending_cps = math.max(0, M.cp_count(id) - race.next_checkpoint + 1)
-  local expected    = race.raw_earned + pending_cps * track_data.TRACKS[id].pay
+  -- Every checkpoint still to come, across every lap, each weighted by its own
+  -- lap multiplier. Counting them unweighted would park the needle low through
+  -- lap 1 and jump it at the lap boundary - exactly the lie the lap-offset
+  -- ruler exists to prevent.
+  local n        = M.cp_count(id)
+  local pending  = 0
+  for k = race.next_checkpoint, M.race_cp_count(id) do
+    pending = pending + track_data.lap_mult(math.floor((k - 1) / n) + 1)
+  end
+  local expected = race.raw_earned + pending * track_data.TRACKS[id].pay
   return expected / proj_time
 end
 
@@ -236,9 +249,11 @@ function M.track_raw_cash_rate(id)
   if not tstate or not tstate.ghost_line then return 0 end
   local period = ghost.loop_period(tstate.ghost_line)
   if period <= 0 then return 0 end
-  local tdata   = track_data.TRACKS[id]
-  local pickups = ghost.get_track_sim(id).ghost_coin_pickups
-  local pay     = (ghost.crossed_cp_count(id) + (pickups and #pickups or 0)) * tdata.pay
+  local tdata = track_data.TRACKS[id]
+  -- Pay *units*, not event counts: a lap-2 crossing or a lap-2 coin banks its
+  -- multiplier through M.bank, so summing plain counts here would under-report
+  -- a lap track's income against what it actually pays.
+  local pay   = ghost.banked_pay_units(id) * tdata.pay
   return tstate.ghosts * (pay / period) * ghost.SPEED_MULT * State.ghost_efficiency
 end
 
@@ -270,12 +285,14 @@ end
 function M.lap_cash_rate(line)
   local period = ghost.loop_period(line)
   if period <= 0 then return 0 end
-  local tdata     = track_data.TRACKS[State.active_track]
-  local tstate    = State.tracks[State.active_track]
-  local radius    = track_data.magnet_radius(State.magnet)
-  local pickups   = ghost.compute_coin_pickups(line, tdata.coins, tstate.coins, radius)
-  local crossings = ghost.compute_cp_crossings(line, tdata.checkpoints)
-  local pay       = (#crossings + (pickups and #pickups or 0)) * tdata.pay
+  local id     = State.active_track
+  local tdata  = track_data.TRACKS[id]
+  local tstate = State.tracks[id]
+  local laps   = track_data.effective_laps(id)
+  local radius = track_data.magnet_radius(State.magnet)
+  local pay    = (ghost.pay_units(ghost.compute_cp_crossings(line, tdata.checkpoints, laps))
+    + ghost.pay_units(ghost.compute_all_coin_pickups(line, tdata, tstate.coins, radius, laps)))
+    * tdata.pay
   return pay / period
 end
 
@@ -393,7 +410,8 @@ function M.bank(event)
   local mult   = M.rank_mult(id, tstate.best_rate)
   -- Ghost income only, so the Slipstream skill multiplier applies here but not
   -- to the player's live-race pay (player_pay / pay_for_mult stay unscaled).
-  local pay    = M.track_pay(id) * mult * State.ghost_efficiency
+  -- event.mult is the lap/list weight the crossing or pickup carries.
+  local pay    = M.track_pay(id) * mult * (event.mult or 1) * State.ghost_efficiency
   State.money  = State.money + pay
   if id == State.active_track then
     popups.spawn({

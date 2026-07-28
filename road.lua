@@ -73,17 +73,41 @@ function M.active_coin_count(unlocked, coins)
 end
 
 local COIN_SPRITE  = 4
+-- The lap-2 coin: the same coin art recolored to PICO-8 pink, which the
+-- project palette maps to #ff5fd0. A literal purple would read as a hole in the
+-- track - the road is already indigo #715f9e, and every darker purple in this
+-- palette sits below it in brightness. Tinting can't get there either: spr_ex's
+-- tint is a multiply and the coin's blue channel is 0x36, so any tint crushes
+-- blue to nothing. Hence a second painted sprite rather than a tinted draw.
+local COIN2_SPRITE = 5
 local COIN_BOB_AMP = 0.6
 local COIN_BOB_HZ  = 1.5
 
-function M.draw_coins(coins, unlocked, collected)
-  local bob = math.sin(usagi.elapsed * COIN_BOB_HZ * 2 * math.pi) * COIN_BOB_AMP
+local function draw_coin_list(coins, unlocked, collected, sprite, bob, alpha)
   for ci = 1, M.active_coin_count(unlocked, coins) do
     if not (collected and collected[ci]) then
       local coin = coins[ci]
-      gfx.spr(COIN_SPRITE, coin.col * tile_size, coin.row * tile_size + bob)
+      gfx.spr(sprite, coin.col * tile_size, coin.row * tile_size + bob, alpha)
     end
   end
+end
+
+-- Draws both of a track's coin lists. `collected` is the race's per-list
+-- collected sets ({ lap1, lap2 }), nil on the buy-screen preview; `lap` is the
+-- race's current lap, nil for that same preview (which shows everything live).
+function M.draw_coins(id, unlocked, collected, lap)
+  local tdata = track_data.TRACKS[id]
+  local bob   = math.sin(usagi.elapsed * COIN_BOB_HZ * 2 * math.pi) * COIN_BOB_AMP
+  draw_coin_list(tdata.coins, unlocked, collected and collected[1], COIN_SPRITE, bob)
+
+  if not tdata.coins2 or track_data.effective_laps(id) < 2 then return end
+  -- Full alpha with the bob frozen while lap 1 is still running. The bob is
+  -- this game's "alive and collectable" tell, and low alpha already means
+  -- *inactive* everywhere else (open gates, ghosts) - so a still, opaque coin
+  -- says "real, but not yet" without spending the contrast against the road.
+  local live = lap == nil or lap > 1
+  draw_coin_list(tdata.coins2, unlocked, collected and collected[2], COIN2_SPRITE,
+    live and bob or 0, live and 1 or 0.3)
 end
 
 return M

@@ -17,6 +17,7 @@ local function default_state()
     top_speed        = 0,
     start_coins      = 0,
     coins_unlocked   = false,
+    laps             = 1,
     max_accel        = false,
     ghosts_unlocked  = false,
     ghost_efficiency = 1,
@@ -31,9 +32,11 @@ local function default_state()
     car              = car.default_state(),
     race             = {
       next_checkpoint = 1,
+      lap             = 1,
       time            = 0,
       phase           = "countdown",
-      coins_collected = {},
+      -- One collected-set per coin list (lap-1, lap-2); see scenes/race.
+      coins_collected = { {}, {} },
     },
   }
 end
@@ -54,8 +57,9 @@ local function progression_of_state()
     loop_time_left = State.loop_time_left,
     seen_modals    = State.seen_modals,
     accel          = State.accel,
-    -- top_speed / start_coins / coins_unlocked / max_accel / ghost_efficiency
-    -- are derived caches of the skill tree, and ghosts_unlocked of the loop
+    -- top_speed / start_coins / coins_unlocked / laps / max_accel /
+    -- ghost_efficiency are derived caches of the skill tree, and
+    -- ghosts_unlocked of the loop
     -- counter, so none are saved. fx is transient render state, also dropped.
     -- (accel itself is race-shop progression and is saved, but Launch Control
     -- floors it at max on every rederive.)
@@ -144,7 +148,7 @@ local function apply_progression(loaded)
   M.rederive_skill_effects()
 end
 
--- State.top_speed / State.start_coins / State.coins_unlocked /
+-- State.top_speed / State.start_coins / State.coins_unlocked / State.laps /
 -- State.max_accel / State.ghost_efficiency are caches derived from the skill
 -- tree; the tree is the single source of truth. State.ghosts_unlocked is the
 -- exception: ghosts aren't bought at all, the story hands them over at loop 2
@@ -159,6 +163,7 @@ function M.rederive_skill_effects()
   State.top_speed        = ctx.top_speed or 0
   State.start_coins      = ctx.start_coins or 0
   State.coins_unlocked   = ctx.coins or false
+  State.laps             = ctx.laps or 1
   State.max_accel        = ctx.max_accel or false
   State.ghosts_unlocked  = (State.loop or 1) >= 2
   State.ghost_efficiency = ctx.ghost_efficiency or 1
@@ -248,7 +253,7 @@ end
 -- (sparse - anything omitted takes its default_state value), and `mode` is the
 -- scene the real Rebirth routes to (scenes/buy dismiss_timeout). Enabled by the
 -- DEV_SCENARIO global in main.lua.
-local DEV_SCENARIOS     = {
+local DEV_SCENARIOS = {
   -- Loop 2, exactly as loop 1's timeout leaves it: only the dismissed tutorials
   -- carry over. Loop 1 banks no ¥ (economy.bank_race_yen) and the climb resets
   -- to Track 1, so the tree is empty and there's nothing owned. Ghosts are on
@@ -275,6 +280,44 @@ local DEV_SCENARIOS     = {
       seen_help   = true,
       seen_modals = { shop = true, ghosts = true },
       skill_tree  = { points = 90, ranks = {}, bought_at = {} },
+    },
+  },
+  -- Multi-lap prototype bench (docs/laps-prototype-plan.md). Mid-loop so
+  -- bank_race_yen is live and ranks/¥ behave normally, every track owned and
+  -- stocked to its full coin count, Victory Lap bought, and enough cash that
+  -- the shop is never the gate. Parked on track 4: it's the only race long
+  -- enough (10.6s on the reference line) for lap-2 coin placement to express
+  -- itself -- track 2 is a six-second race, and two three-second laps prove
+  -- nothing. Ghosts start at 0 so the "$/sec went up, not down" check has a
+  -- clean before/after.
+  laps = {
+    mode        = "buy",
+    progression = {
+      loop         = 5,
+      seen_help    = true,
+      seen_modals  = { shop = true, ghosts = true, coins = true, magnet = true },
+      money        = 50000,
+      active_track = "track4",
+      accel        = 4,
+      drift        = 1,
+      unlocked     = {
+        track1 = true, track2 = true, track3 = true, track4 = true,
+      },
+      -- coins is the max_coins ceiling per track (both lists share the count),
+      -- so every authored slot on both lists is live.
+      tracks       = {
+        track1 = { ghosts = 0, coins = 2, paid_rank = "D" },
+        track2 = { ghosts = 0, coins = 4, paid_rank = "D" },
+        track3 = { ghosts = 0, coins = 5, paid_rank = "D" },
+        track4 = { ghosts = 0, coins = 5, paid_rank = "D" },
+      },
+      skill_tree   = {
+        points    = 200,
+        ranks     = { coins = 1, start_coins = 1, laps = 1, top_speed = 1 },
+        -- Bought loops back, so both downstream gates read as long satisfied
+        -- if the garage is opened mid-test.
+        bought_at = { coins = 2, start_coins = 3, laps = 3, top_speed = 3 },
+      },
     },
   },
 }

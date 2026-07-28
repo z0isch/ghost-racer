@@ -29,6 +29,21 @@ end
 -- Seconds in a loop's countdown before it force-Rebirths. Tuning knob.
 M.LOOP_SECONDS = 300
 
+-- Multi-lap prototype knobs (see docs/laps-prototype-plan.md). Both start at 2x
+-- rather than something gentler: the lap-2 payoff has to be unmistakable for
+-- the fun test to read at all.
+--
+-- The asymmetry between the two is load-bearing, not an implementation detail.
+-- LAP_COIN_MULT is *list*-attached: a `coins2` coin pays it whenever it's
+-- grabbed, and a `coins` coin always pays 1x, including when swept up on lap 2.
+-- Applying a multiplier at collection time instead would make skipping lap-1
+-- coins strictly better whenever the detour is cheap -- rank is pure $/sec, so
+-- the optimal line would stop being "race well" and become "drive past coins on
+-- purpose". LAP_CP_MULT is *lap*-attached, which is safe because checkpoints
+-- are mandatory and in-order: there's nothing to sandbag.
+M.LAP_COIN_MULT = 2
+M.LAP_CP_MULT   = 2
+
 -- Fixed cash price of Nirvana, the always-available escape item (the eventual
 -- win condition). Ungated - never keyed to rank/loop/track - and unreachable
 -- for now; the buy button renders it trimmed to "$300m". Tuning knob.
@@ -144,6 +159,16 @@ M.TRACKS = {
       { col = 10, row = 16 },
       { col = 6,  row = 8 },
     },
+    -- A wide room (rows 6-16) with a center bar at row 11: it races as an oval,
+    -- and the fast line hugs the inside of each lane. Off-line is therefore the
+    -- outer edge, rows 6 and 16.
+    coins2      = {
+      { col = 12, row = 6 },  -- top lane, outermost, mid-left
+      { col = 26, row = 6 },  -- top lane, outermost, mid-right
+      { col = 20, row = 16 }, -- bottom lane, outermost
+      { col = 36, row = 16 }, -- deep bottom-right corner, overshooting cp1
+    },
+    laps        = 2,
     base_coins  = 3,
     ranks       = { C = 2.6, B = 6.5, A = 8.4, S = 11.0 },
     label       = "Track 2",
@@ -187,6 +212,18 @@ M.TRACKS = {
       { col = 3,  row = 11 },
       { col = 20, row = 3 },
     },
+    -- The route is the outer ring. The inner chamber (rows 10-14, cols 10-21,
+    -- reachable only from below) is territory the ring never touches, so it's
+    -- the ideal lap-2 detour here; three coins spread across it make a mini
+    -- route inside rather than one cluster to clip.
+    coins2      = {
+      { col = 11, row = 10 }, -- inner chamber, upper-left
+      { col = 21, row = 12 }, -- inner chamber, right
+      { col = 13, row = 14 }, -- inner chamber, lower-left
+      { col = 36, row = 2 },  -- top-right outer corner, outside the turn
+      { col = 28, row = 19 }, -- bottom band, deep below the inner line
+    },
+    laps        = 2,
     base_coins  = 4,
     ranks       = { C = 9.0, B = 18.0, A = 22.0, S = 27.0 },
     label       = "Track 3",
@@ -227,6 +264,17 @@ M.TRACKS = {
       { col = 4,  row = 11 },
       { col = 10, row = 7 },
     },
+    -- An empty box with the four corners plus center as checkpoints, so the
+    -- route is a star crossing the middle over and over. The dead zones are
+    -- top-center, bottom-center, and the mid-edge pockets between diagonals.
+    coins2      = {
+      { col = 20, row = 2 },  -- top center
+      { col = 20, row = 19 }, -- bottom center
+      { col = 10, row = 3 },  -- upper-left, above the cp3->cp4 diagonal
+      { col = 32, row = 10 }, -- right pocket, between the cp5->cp1 and cp4->cp5 legs
+      { col = 8,  row = 11 }, -- left, midway between the two main diagonals
+    },
+    laps        = 2,
     base_coins  = 4,
     ranks       = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
     label       = "Track 4",
@@ -284,6 +332,13 @@ local function mirror_track(tdata)
     coins[i] = { col = mw - 1 - coin.col, row = coin.row }
   end
   tdata.coins = coins
+  if tdata.coins2 then
+    local coins2 = {}
+    for i, coin in ipairs(tdata.coins2) do
+      coins2[i] = { col = mw - 1 - coin.col, row = coin.row }
+    end
+    tdata.coins2 = coins2
+  end
   if tdata.gates then
     local gates = {}
     for i, g in ipairs(tdata.gates) do
@@ -330,6 +385,23 @@ end
 -- Rank thresholds for a track.
 function M.ranks(id)
   return M.TRACKS[id].ranks
+end
+
+-- Laps a race on this track runs. The per-track `laps` field is a *ceiling*,
+-- not a switch: Victory Lap turns laps on globally (State.laps), and a track
+-- opts in by declaring how many it can support. Track 1 has no `laps` field and
+-- so stays single-lap without a special case anywhere -- it has exactly one
+-- checkpoint, so on lap 2 the next target would be the rect the car is already
+-- sitting in and the race would end on the same frame. Reading the field as a
+-- ceiling also means laps can be disabled per-track during tuning by editing
+-- data rather than code.
+function M.effective_laps(id)
+  return (State.laps or 1) > 1 and (M.TRACKS[id].laps or 1) or 1
+end
+
+-- Payout multiplier on a checkpoint crossed on `lap` (1-based).
+function M.lap_mult(lap)
+  return lap > 1 and M.LAP_CP_MULT or 1
 end
 
 -- Cash price to buy a track for the current loop (nil for Track 1, owned free).
@@ -415,9 +487,16 @@ end
 -- Highest total coin count reachable on a track: none without Loose Change,
 -- the full authored list with it (the slots beyond base_coins are reachable
 -- only via Head Start, which sits downstream of Loose Change in the tree).
+--
+-- `tstate.coins` is one count with prefix semantics shared by both lists (Coin
+-- #k lights lap-1 slot k *and* lap-2 slot k), so the ceiling is the longer
+-- list. Taking only #coins would leave a dead tail on any track whose coins2
+-- is longer: persist clamps ts.coins to this, so those slots would be
+-- unreachable even with Head Start.
 function M.max_coins(id, has_coins)
   if not has_coins then return 0 end
-  return #M.TRACKS[id].coins
+  local tdata = M.TRACKS[id]
+  return math.max(#tdata.coins, #(tdata.coins2 or {}))
 end
 
 function M.default_track_state(id, has_coins, start_coins)

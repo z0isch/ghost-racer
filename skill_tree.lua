@@ -70,7 +70,7 @@ M.NODES     = {
     -- first garage, so it always lands and always empties the wallet.
     cost   = function(st) return st.points end,
     pos    = { x = 352, y = 144 },
-    links  = { "start_coins" },
+    links  = { "start_coins", "laps" },
     locked = function(stats)
       local loops = stats.loops or 0
       if loops < 2 then return "Finish 2 loops (" .. loops .. "/2)" end
@@ -96,6 +96,32 @@ M.NODES     = {
     end,
     apply     = function(ctx, rank)
       ctx.start_coins = (ctx.start_coins or 0) + rank
+    end,
+  },
+  {
+    id        = "laps",
+    label     = "Victory Lap",
+    icon      = "V",
+    desc      = "Every race runs twice.\nSecond time round pays double!",
+    max       = 1,
+    -- ~2x the standard node (the others sit at 20-25): this is 3x cash per race
+    -- and 1.5x idle income with no trade-off. Chosen, not requested - retune
+    -- freely once the prototype has been driven.
+    base_cost = 40,
+    growth    = 1.5,
+    pos       = { x = 448, y = 144 },
+    -- Reached through coins.links; nothing hangs off it yet.
+    links     = {},
+    -- Gated behind Loose Change for a real reason, not for pacing: without it
+    -- max_coins is 0, so the lap-2 coin lists are invisible and the node
+    -- degrades to "drive the same course twice".
+    locked    = function(_stats, st)
+      if not (st.bought_at and st.bought_at.coins) then return "Buy Loose Change" end
+    end,
+    -- Written as 1 + rank so raising `max` for a third lap later is a
+    -- one-character change; per-track `laps` caps how far any track follows.
+    apply     = function(ctx, rank)
+      ctx.laps = 1 + rank
     end,
   },
   -- Ghosts themselves aren't sold here: the story hands them over for good at
