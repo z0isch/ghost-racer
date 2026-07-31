@@ -61,6 +61,12 @@ local BOOST_ORBIT_SPEED  = 3
 local FLIP_TAP_WINDOW    = 0.3
 local FLIP_DURATION      = 0.3
 
+-- Gear the car spawns in. REVERSE_MODE mirrors every track but leaves spawn
+-- facing east, which now points the *trunk* at checkpoint 1: starting in
+-- reverse means the always-on throttle carries the car toward it off the line
+-- instead of making the first move a flip.
+local START_GEAR         = track_data.REVERSE_MODE and -1 or 1
+
 local M                  = {}
 
 M.SIZE                   = CAR_SIZE
@@ -112,7 +118,7 @@ local function default_car()
     drift_boost_enabled  = false,
     reverse_enabled      = false,
     drift_dir            = 0,
-    gear                 = 1,
+    gear                 = START_GEAR,
     flip_tap_t           = 0,
     flip_t               = 0,
     flip_from            = 0,
@@ -138,7 +144,7 @@ function M.reset(car, spawn)
   car.is_drifitng          = false
   car.drift_time           = 0
   car.drift_dir            = 0
-  car.gear                 = 1
+  car.gear                 = START_GEAR
   car.flip_tap_t           = 0
   car.flip_t               = 0
   car.boost_ready          = false

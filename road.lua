@@ -2,17 +2,67 @@ local track_data             = require "track_data"
 
 local tile_size              = track_data.tile_size
 
-local tile_colors            = {
-  [0] = gfx.COLOR_DARK_BLUE,
-  [1] = gfx.COLOR_INDIGO,
-  [2] = gfx.COLOR_BLACK,
-  [3] = gfx.COLOR_WHITE,
+-- Level colors, in two sets: the normal one and the one REVERSE_MODE swaps in,
+-- so a mirrored level is recognizable as its own place rather than as track N
+-- with the pixels flipped.
+--
+-- The reverse set re-hues rather than inverts: the violet/blue normal theme
+-- becomes teal-on-black, the same darkness with a different temperature. A
+-- literal photo-negative was the first cut and read far too bright -- it landed
+-- at avg luminance 165 against normal's 93, because inverting a dark palette
+-- necessarily produces a light one. This set sits at 72, marginally darker than
+-- normal.
+--
+-- What's preserved from the normal set is *structure*, since that's what the
+-- eye reads at speed: road brighter than wall by a comparable margin (84 here,
+-- 69 normally), checkpoint outline a step darker than its fill, and the two
+-- gate colors split cool/warm so forward and reverse stay tellable apart.
+local PALETTES               = {
+  normal = {
+    tiles     = {
+      [0] = gfx.COLOR_DARK_BLUE, -- wall
+      [1] = gfx.COLOR_INDIGO,    -- road
+      [2] = gfx.COLOR_BLACK,     -- solid (also the stamped gate wall)
+      [3] = gfx.COLOR_WHITE,
+    },
+    cp_fill   = gfx.COLOR_DARK_GREEN,
+    cp_line   = gfx.COLOR_DARK_GRAY,
+    cp_label  = gfx.COLOR_BLACK,
+    gate_fwd  = gfx.COLOR_DARK_BLUE,
+    gate_back = gfx.COLOR_DARK_PURPLE,
+  },
+  reverse = {
+    tiles     = {
+      -- Wall and solid trade places with the normal set: black wall, dark_blue
+      -- solid. Keeps the two distinguishable where a stamped gate wall (tile 2)
+      -- meets real wall, which is the one place they touch.
+      [0] = gfx.COLOR_BLACK,
+      [1] = gfx.COLOR_DARK_GREEN, -- teal road, the theme's whole tell
+      [2] = gfx.COLOR_DARK_BLUE,
+      [3] = gfx.COLOR_LIGHT_GRAY, -- the accent tile, off the blazing white
+    },
+    cp_fill   = gfx.COLOR_DARK_PURPLE,
+    cp_line   = gfx.COLOR_DARK_BLUE,
+    cp_label  = gfx.COLOR_BLACK,
+    -- dark_green would be the hue-faithful forward gate but it's the road here,
+    -- so forward borrows the normal theme's road violet instead.
+    gate_fwd  = gfx.COLOR_INDIGO,
+    gate_back = gfx.COLOR_BROWN,
+  },
 }
+
+-- Fixed at load: REVERSE_MODE is a build-time flag, not something a race
+-- toggles. gates.lua reads the gate colors off this (it already depends on
+-- road transitively; road can't depend on gates without a cycle).
+local COLORS                 = track_data.REVERSE_MODE and PALETTES.reverse or PALETTES.normal
+local tile_colors            = COLORS.tiles
 
 local CHECKPOINT_LABEL_SCALE = 2
 local GHOST_ALPHA            = 0.6
 
 local M                      = {}
+
+M.COLORS                     = COLORS
 
 local function get_tile(map, x, y)
   local layer = map.layers[1].data
@@ -44,17 +94,17 @@ function M.draw_track(map)
     for col = 0, mw - 1 do
       local tile = layer[row * mw + col + 1]
       gfx.rect_fill(col * tile_size, row * tile_size, tile_size, tile_size,
-        tile_colors[tile] or gfx.COLOR_INDIGO)
+        tile_colors[tile] or tile_colors[1])
     end
   end
 end
 
 function M.draw_checkpoint(cp, n, faded, total)
   local rect          = track_data.checkpoint_rect(cp)
-  local outline_color = gfx.COLOR_DARK_GREEN
+  local outline_color = COLORS.cp_fill
   if not faded then
-    outline_color = gfx.COLOR_DARK_GRAY
-    gfx.rect_fill(rect.x, rect.y, rect.w, rect.h, gfx.COLOR_DARK_GREEN)
+    outline_color = COLORS.cp_line
+    gfx.rect_fill(rect.x, rect.y, rect.w, rect.h, COLORS.cp_fill)
   end
   gfx.rect(rect.x, rect.y, rect.w, rect.h, outline_color)
 
@@ -64,7 +114,7 @@ function M.draw_checkpoint(cp, n, faded, total)
   local tw, th = usagi.measure_text(label)
   local tx     = math.floor(rect.x + (rect.w - tw * CHECKPOINT_LABEL_SCALE) / 2)
   local ty     = math.floor(rect.y + (rect.h - th * CHECKPOINT_LABEL_SCALE) / 2)
-  gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, gfx.COLOR_BLACK,
+  gfx.text_ex(label, tx, ty, CHECKPOINT_LABEL_SCALE, 0, COLORS.cp_label,
     faded and GHOST_ALPHA or 1)
 end
 

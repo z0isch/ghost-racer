@@ -9,7 +9,9 @@ local M        = {}
 -- checkpoints, coins, spawn) and unlocks the flip (double-tap BTN1) that puts
 -- the car in reverse gear, where the always-on throttle accelerates it
 -- backwards. Spawn facing stays east, which lands facing away from checkpoint 1
--- on the mirrored layout, so the first move is a flip. Everything downstream (ghosts,
+-- on the mirrored layout, so the car also *starts* in reverse gear (car.lua's
+-- START_GEAR) and pulls toward checkpoint 1 off the line. The level palette
+-- swaps to its own darker teal theme to match (road.lua PALETTES). Everything downstream (ghosts,
 -- ranks, economy) runs unchanged on the mirrored data, so don't flip this on
 -- a save that has forward ghost laps -- they'd clip through mirrored walls
 -- and skew idle income. Snapshot via Dev: Save State and test on a fresh
