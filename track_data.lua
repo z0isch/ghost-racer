@@ -44,8 +44,8 @@ M.LOOP_SECONDS  = 300
 -- the optimal line would stop being "race well" and become "drive past coins on
 -- purpose". LAP_CP_MULT is *lap*-attached, which is safe because checkpoints
 -- are mandatory and in-order: there's nothing to sandbag.
-M.LAP_COIN_MULT = 2
-M.LAP_CP_MULT   = 2
+M.LAP_COIN_MULT = 3
+M.LAP_CP_MULT   = 3
 
 -- Fixed cash price of Nirvana, the always-available escape item (the eventual
 -- win condition). Ungated - never keyed to rank/loop/track - and unreachable
