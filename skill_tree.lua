@@ -68,7 +68,7 @@ M.NODES     = {
     max    = 1,
     -- Costs whatever the player is holding: it's the only thing on sale at the
     -- first garage, so it always lands and always empties the wallet.
-    cost   = function(st) return 0 end, --st.points end,
+    cost   = function(st) return st.points end,
     pos    = { x = 352, y = 144 },
     links  = { "start_coins", "laps" },
     locked = function(stats)

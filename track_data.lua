@@ -104,6 +104,34 @@ function M.upgrade_item(kind)
   return nil
 end
 
+-- Per-track rank thresholds (`ranks`) are $/sec on a single race:
+-- pay * (weighted checkpoint crossings + weighted coin pickups) / race time,
+-- with lap-2 crossings worth LAP_CP_MULT and every `coins2` pickup worth
+-- LAP_COIN_MULT. They're derived from that track's reference lap
+-- (data/ref_<id>.json: arc length L and clean lap time T at the top speed the
+-- capture ran at, 220 = TOP_VEL_BASE + 2 Engine Tune ranks), so each tier is
+-- "the coin haul the tier names, driven at the pace the car of that era can
+-- hold", with the threshold set 12% under that ideal run so a good-but-not-
+-- perfect lap still earns it:
+--
+--   C  course only, no coins,      base car   (120 px/s, no Engine Tune)
+--   B  half the buyable coins,     1 tune     (170 px/s)
+--   A  every buyable gold coin,    2 tunes    (220 px/s, reference pace)
+--   S  A's lap plus a second one sweeping every buyable coins2 coin
+--
+-- Lap time at top speed v is T * 220/v; a coin's detour costs 2x its
+-- perpendicular distance off the reference line at that lap's average speed
+-- (gold sits on the line almost everywhere, so A is nearly free time-wise;
+-- coins2 is authored off-line on purpose and lap 2 pays for it).
+--
+-- Two things the tiers deliberately do *not* do. C stays inside reach of a
+-- base-speed car on every track: rank is the only ¥ source (economy.RANK_YEN),
+-- so a corridor where the un-tuned car ranks D everywhere would lock the tree
+-- shut. And the coin sets counted are the *buyable* ones (base_coins from each
+-- list) rather than the full authored lists - Head Start's extra gold coin has
+-- to be a cushion on top of a tier, never the thing a tier requires. Track 1 is
+-- the exception at S: it has no second lap, so its S is both gold coins (Head
+-- Start included) at reference pace.
 M.TRACKS = {
   track1 = {
     map         = track1,
@@ -120,7 +148,7 @@ M.TRACKS = {
       { col = 26, row = 9 },
     },
     base_coins  = 1,
-    ranks       = { C = 1.05, B = 2.15, A = 2.65, S = 4 },
+    ranks       = { C = 1.05, B = 2.25, A = 4.3, S = 6.4 },
     label       = "Track 1",
     pay         = 5,
     -- Cash price to *buy* this track for the current loop. Track 1 is owned free
@@ -173,7 +201,7 @@ M.TRACKS = {
     },
     laps        = 2,
     base_coins  = 3,
-    ranks       = { C = 2.6, B = 6.5, A = 8.4, S = 11.0 },
+    ranks       = { C = 2.6, B = 6.9, A = 11.0, S = 22.0 },
     label       = "Track 2",
     pay         = 15,
     unlock_cost = 25,
@@ -238,7 +266,7 @@ M.TRACKS = {
     },
     laps        = 2,
     base_coins  = 4,
-    ranks       = { C = 9.0, B = 18.0, A = 22.0, S = 27.0 },
+    ranks       = { C = 8.0, B = 19.0, A = 34.0, S = 65.0 },
     label       = "Track 3",
     pay         = 45,
     unlock_cost = 200,
@@ -296,10 +324,10 @@ M.TRACKS = {
     },
     laps        = 2,
     base_coins  = 4,
-    ranks       = { C = 30.0, B = 60.0, A = 80.0, S = 89.0 },
+    ranks       = { C = 30.0, B = 61.0, A = 100.0, S = 178.0 },
     label       = "Track 4",
     pay         = 135,
-    unlock_cost = 1500,
+    unlock_cost = 1200,
     shop        = {
       {
         kind      = "ghosts",
