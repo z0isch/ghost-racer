@@ -21,6 +21,18 @@ local FINISH_BEAT_SECS = .5
 -- decay so the lap flash reads as the same kind of event as the start.
 local GO_FLASH_SECS    = 0.6
 local LAP_FLASH_SECS   = 0.6
+-- Rank-up badge: fires when the projected finish rank (the same number the HUD
+-- needle rides) climbs above the one it last showed. Held off until the car has
+-- covered this much of the course, matching the meter's own warmup -- before
+-- that the projection is still the 0/0 singularity and would fling the badge up
+-- through every rank on the first frames.
+local RANK_POP_WARMUP  = 0.05
+-- Losing a rank re-arms the badge, so climbing back into it celebrates again.
+-- That only works with hysteresis: the drop doesn't register until the needle
+-- is this far (in bar fractions, ~a tenth of a zone) below the rank's floor, so
+-- a projection sitting right on a threshold can't rattle up and down and spit
+-- out a badge every few frames.
+local RANK_POP_HYST    = 0.02
 
 local countdown_time   = 0
 local countdown_shown  = 0
@@ -56,6 +68,10 @@ function M.enter()
     -- parallel and share indices.
     coins_collected = { {}, {} },
     first_race      = not State.seen_help,
+    -- Ladder index (1 = D .. 5 = S) the badge last showed. Climbing above it
+    -- pops; dropping below it (with hysteresis) re-arms that rank. Starts at
+    -- the D floor, so the badge starts at the first C.
+    popped_zone     = 1,
   }
   ghost.reset_recording()
   reference.begin(State.active_track)
@@ -260,6 +276,27 @@ function M.update(dt)
 
     local car_rect = car.rect(State.car)
     local magnet_r = track_data.magnet_radius(State.magnet)
+
+    -- Rank-up badge, placed in the same bar-fraction space the needle rides
+    -- (track_data.rank_fraction), where each rank owns an equal fifth -- so the
+    -- zone the badge names is exactly the zone the meter lights up, and the
+    -- hysteresis margin below is a distance on that same bar. A climb pops; a
+    -- drop is silent but re-arms the rank it fell out of, so fighting back up
+    -- to it celebrates again.
+    if economy.race_progress() >= RANK_POP_WARMUP then
+      local f    = track_data.rank_fraction(id, economy.projected_rate() or 0)
+      local zone = math.min(math.floor(f * 5) + 1, 5)
+      if zone > race.popped_zone then
+        race.popped_zone = zone
+        popups.spawn_rank({
+          rank = economy.RANK_LADDER[zone],
+          x    = car_rect.x + car.SIZE / 2,
+          y    = car_rect.y,
+        })
+      elseif zone < race.popped_zone and f < (race.popped_zone - 1) / 5 - RANK_POP_HYST then
+        race.popped_zone = zone
+      end
+    end
 
     local pay = economy.player_pay(id)
 

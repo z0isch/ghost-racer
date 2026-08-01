@@ -4,7 +4,7 @@ local ghost        = require "ghost"
 local skill_tree   = require "skill_tree"
 local loop_history = require "loop_history"
 
-local M          = {}
+local M            = {}
 
 local function default_state()
   return {
@@ -116,11 +116,11 @@ local function apply_progression(loaded)
     end
   end
 
-  State.accel          = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
-  State.drift          = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
-  State.drift_boost    = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
-  State.boost          = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
-  State.magnet         = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
+  State.accel       = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
+  State.drift       = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
+  State.drift_boost = math.min(loaded.drift_boost or 0, track_data.kind_max("drift_boost") or 0)
+  State.boost       = math.min(loaded.boost or 0, track_data.kind_max("boost") or 0)
+  State.magnet      = math.min(loaded.magnet or 0, track_data.kind_max("magnet") or 0)
 
   if loaded.active_track and track_data.TRACKS[loaded.active_track] then
     State.active_track = loaded.active_track
@@ -231,16 +231,16 @@ end
 -- Fires only when the loop clock runs out (scenes/buy dismiss_timeout) - there's
 -- no voluntary Rebirth; the player races the loop until time is up.
 function M.start_new_loop()
-  local next_loop     = (State.loop or 1) + 1
-  local seen_help     = State.seen_help
-  local seen_modals   = State.seen_modals
-  local history       = State.loop_history
-  local tree          = State.skill_tree
+  local next_loop   = (State.loop or 1) + 1
+  local seen_help   = State.seen_help
+  local seen_modals = State.seen_modals
+  local history     = State.loop_history
+  local tree        = State.skill_tree
   -- The last thing State.tracks is good for: each track's best race $/sec this
   -- loop, taken here because this reset is what wipes it. Tracks never raced
   -- this loop are left out rather than stored as 0 - the breakdown's ghost
   -- arrow is "where you were", and a track you never drove has no where.
-  local prev_rates    = {}
+  local prev_rates  = {}
   for id, ts in pairs(State.tracks) do
     if ts.best_rate then prev_rates[id] = ts.best_rate end
   end
