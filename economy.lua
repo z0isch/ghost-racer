@@ -1,19 +1,19 @@
-local ghost              = require "ghost"
-local track_data         = require "track_data"
-local popups             = require "popups"
-local car                = require "car"
-local persist            = require "persist"
-local reference          = require "reference"
+local ghost      = require "ghost"
+local track_data = require "track_data"
+local popups     = require "popups"
+local car        = require "car"
+local persist    = require "persist"
+local reference  = require "reference"
 
 -- Rank multipliers, tuning knobs only - change freely.
-local RANK_MULTS         = {
+local RANK_MULTS = {
   D = 0.2,
   C = 0.4,
   B = 0.6,
   A = 1.0,
   S = 2.0
 }
-local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
+local RANK_ORDER = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 
 
 -- ¥ a track is worth this loop at each best-race rank, the cross-loop payout
@@ -22,17 +22,17 @@ local RANK_ORDER         = { D = 0, C = 1, B = 2, A = 3, S = 4 }
 -- climbs from C to A banks the gap and ends the loop worth RANK_YEN[A]. D pays
 -- nothing - a track you only limped through doesn't fund the climb. Tuning
 -- knobs only (Q15's D->0, C->x, B->y, A->z, S->w) - change freely.
-local RANK_YEN           = { D = 0, C = 15, B = 30, A = 60, S = 120 }
+local RANK_YEN     = { D = 0, C = 15, B = 30, A = 60, S = 120 }
 
 -- The current-speed estimate of remaining time is padded by this factor so the
 -- meter leans conservative: better to under-promise and let the player beat the
 -- bar than to promise a rank and rob it at the finish.
-local FINISH_FUDGE       = 1.08
+local FINISH_FUDGE = 1.08
 
-local M                  = {}
+local M            = {}
 
-M.RANK_MULTS             = RANK_MULTS
-M.RANK_YEN               = RANK_YEN
+M.RANK_MULTS       = RANK_MULTS
+M.RANK_YEN         = RANK_YEN
 
 function M.rank_yen(rank)
   return RANK_YEN[rank] or 0
@@ -115,7 +115,7 @@ function M.projected_rate()
   local race = State.race
   local id   = State.active_track
   if not race or not race.time or race.time <= 0 then return nil end
-  local s_N, t_N  = reference.finish()
+  local s_N, t_N = reference.finish()
   if not s_N or s_N <= 0 or not t_N or t_N <= 0 then return nil end
   if not race.s_live or race.s_live <= 0 then return nil end
   if not race.t_ref or race.t_ref <= 0 then return nil end
@@ -136,8 +136,8 @@ function M.projected_rate()
   -- lap multiplier. Counting them unweighted would park the needle low through
   -- lap 1 and jump it at the lap boundary - exactly the lie the lap-offset
   -- ruler exists to prevent.
-  local n        = M.cp_count(id)
-  local pending  = 0
+  local n       = M.cp_count(id)
+  local pending = 0
   for k = race.next_checkpoint, M.race_cp_count(id) do
     pending = pending + track_data.lap_mult(math.floor((k - 1) / n) + 1)
   end
@@ -282,20 +282,6 @@ function M.seconds_to_nirvana(rate)
   return remaining / rate
 end
 
-function M.lap_cash_rate(line)
-  local period = ghost.loop_period(line)
-  if period <= 0 then return 0 end
-  local id     = State.active_track
-  local tdata  = track_data.TRACKS[id]
-  local tstate = State.tracks[id]
-  local laps   = track_data.effective_laps(id)
-  local radius = track_data.magnet_radius(State.magnet)
-  local pay    = (ghost.pay_units(ghost.compute_cp_crossings(line, tdata.checkpoints, laps))
-    + ghost.pay_units(ghost.compute_all_coin_pickups(line, tdata, tstate.coins, tstate.coins2, radius, laps)))
-    * tdata.pay
-  return pay / period
-end
-
 -- Shop item definition for `kind` in the current context: global car
 -- upgrades first (track-independent), then the active track's shop
 -- (ghosts/coins).
@@ -303,7 +289,6 @@ function M.shop_item(kind)
   return track_data.upgrade_item(kind)
       or track_data.track_shop_item(State.active_track, kind)
 end
-
 
 -- Gold coins still for sale on `id`. The Head Start freebies sit on top of the
 -- buyable set rather than inside it, so the floor is subtracted out before the

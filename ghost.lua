@@ -100,22 +100,40 @@ end
 
 -- `coin_count` is this list's own unlock count (gold and magenta are sold and
 -- clamped independently), clamped to this list's own length. `mult` rides each
--- event: it's list-attached, so a lap-2 coin pays double whenever the ghost
--- grabs it, on either lap.
-local function compute_coin_pickups(line, coins, coin_count, radius, mult)
+-- event: it's list-attached, so a gold coin pays 1x even when swept up on lap
+-- 2 (see track_data's LAP_COIN_MULT).
+--
+-- `from_t` is when the list goes live (nil for the gold list, lap 2's start
+-- for the magenta one): samples before it are skipped entirely, because the
+-- live race can't collect out of a list its lap hasn't opened yet. Without it a
+-- ghost banks magenta coins its lap-1 pass swept -- coins the player drove
+-- straight through for nothing -- and the track's income overstates the lap
+-- that earned it. At a window that opens mid-drive there's no earlier frame to
+-- take an edge off, and the live race collects on any overlapping frame (no
+-- rising edge there at all), so an overlap on the first sample counts.
+local function compute_coin_pickups(line, coins, coin_count, radius, mult, from_t)
   if not line or #line == 0 then return nil end
   local pickups = {}
   local ts      = track_data.tile_size
   for ci = 1, math.min(coin_count, #coins) do
     local rect        = track_data.coin_rect(coins[ci])
-    local inside_prev = sample_overlaps(line[1], rect, radius)
+    -- A window that opens mid-drive has no earlier frame to edge off, so it
+    -- starts "outside" and an overlap on its first sample counts. The whole-line
+    -- window instead seeds from its own first sample, so a coin the car is sat
+    -- on at the grid still needs a rising edge. (Not `from_t and false or nil`:
+    -- `false or nil` is nil.)
+    local inside_prev = nil
+    if from_t then inside_prev = false end
     for _, s in ipairs(line) do
-      local inside = sample_overlaps(s, rect, radius)
-      if inside and not inside_prev then
-        pickups[#pickups + 1] = { t = s.t, x = rect.x + ts / 2, y = rect.y, mult = mult or 1 }
-        break
+      if not from_t or s.t >= from_t then
+        local inside = sample_overlaps(s, rect, radius)
+        if inside_prev == nil then inside_prev = inside end
+        if inside and not inside_prev then
+          pickups[#pickups + 1] = { t = s.t, x = rect.x + ts / 2, y = rect.y, mult = mult or 1 }
+          break
+        end
+        inside_prev = inside
       end
-      inside_prev = inside
     end
   end
   return pickups
@@ -123,16 +141,33 @@ end
 
 M.compute_coin_pickups = compute_coin_pickups
 
+-- When the stored line opens lap 2: its crossing of the last checkpoint of lap
+-- 1, which is exactly the rollover the live race gates the magenta list behind
+-- (scenes/race's begin_next_lap). nil when the line never completed a lap 1's
+-- worth of checkpoints - a single-lap recording still sitting on a track whose
+-- Extra Lap was bought afterwards - and the magenta list then contributes
+-- nothing, which is the truth: that lap was never driven.
+function M.lap2_start(crossings, cp_count)
+  local ev = crossings and crossings[cp_count]
+  return ev and ev.t
+end
+
 -- Pickups across both of a track's coin lists, merged into one event list. The
--- lap-2 list only exists on a lap track and only when laps are switched on.
--- `coin_count` and `coin2_count` are each list's own independent unlock count.
-function M.compute_all_coin_pickups(line, tdata, coin_count, coin2_count, radius, laps)
+-- lap-2 list only exists on a lap track and only when laps are switched on, and
+-- only counts from lap 2's start (see compute_coin_pickups' `from_t`), so
+-- `crossings` -- the same list compute_cp_crossings built for this line -- has
+-- to come in with it. `coin_count` and `coin2_count` are each list's own
+-- independent unlock count.
+function M.compute_all_coin_pickups(line, tdata, coin_count, coin2_count, radius, laps, crossings)
   local pickups = compute_coin_pickups(line, tdata.coins, coin_count, radius, 1)
   if not pickups then return nil end
   if laps > 1 and tdata.coins2 then
-    local lap2 = compute_coin_pickups(line, tdata.coins2, coin2_count, radius,
-      track_data.LAP_COIN_MULT)
-    for _, ev in ipairs(lap2 or {}) do pickups[#pickups + 1] = ev end
+    local from_t = M.lap2_start(crossings, #tdata.checkpoints)
+    if from_t then
+      local lap2 = compute_coin_pickups(line, tdata.coins2, coin2_count, radius,
+        track_data.LAP_COIN_MULT, from_t)
+      for _, ev in ipairs(lap2 or {}) do pickups[#pickups + 1] = ev end
+    end
   end
   return pickups
 end
@@ -148,7 +183,7 @@ function M.rebuild_sim(id)
   local laps            = track_data.effective_laps(id)
   ts.ghost_cp_crossings = compute_cp_crossings(tstate.ghost_line, tdata.checkpoints, laps)
   ts.ghost_coin_pickups = M.compute_all_coin_pickups(tstate.ghost_line, tdata, tstate.coins, tstate.coins2,
-    track_data.magnet_radius(State.magnet), laps)
+    track_data.magnet_radius(State.magnet), laps, ts.ghost_cp_crossings)
   ts.ghost_prev_phase   = {}
 end
 
