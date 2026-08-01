@@ -1,7 +1,8 @@
-local track_data = require "track_data"
-local car        = require "car"
-local ghost      = require "ghost"
-local skill_tree = require "skill_tree"
+local track_data   = require "track_data"
+local car          = require "car"
+local ghost        = require "ghost"
+local skill_tree   = require "skill_tree"
+local loop_history = require "loop_history"
 
 local M          = {}
 
@@ -13,6 +14,9 @@ local function default_state()
     loop             = 1,
     loop_time_left   = track_data.LOOP_SECONDS,
     seen_modals      = {},
+    -- Ending ghost $/sec of each finished loop, for the loop-end progression
+    -- graph (see loop_history).
+    loop_history     = loop_history.new(),
     accel            = 0,
     top_speed        = 0,
     start_coins      = 0,
@@ -56,6 +60,9 @@ local function progression_of_state()
     -- clock where it left off (game time, not wall-clock) rather than at 5:00.
     loop_time_left = State.loop_time_left,
     seen_modals    = State.seen_modals,
+    -- Cross-loop, like the skill tree: the whole point is comparing the first
+    -- climbs against the most recent ones.
+    loop_history   = State.loop_history,
     accel          = State.accel,
     -- top_speed / start_coins / coins_unlocked / laps / max_accel /
     -- ghost_efficiency are derived caches of the skill tree, and
@@ -90,6 +97,7 @@ local function apply_progression(loaded)
   -- Default a full clock for pre-existing saves that predate the field.
   State.loop_time_left = loaded.loop_time_left or track_data.LOOP_SECONDS
   State.seen_modals    = loaded.seen_modals or {}
+  State.loop_history   = loop_history.sanitize(loaded.loop_history)
 
   State.accel          = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
   State.drift          = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
@@ -209,11 +217,16 @@ function M.start_new_loop()
   local next_loop     = (State.loop or 1) + 1
   local seen_help     = State.seen_help
   local seen_modals   = State.seen_modals
+  local history       = State.loop_history
   local tree          = State.skill_tree
   State               = default_state()
   State.loop          = next_loop
   State.seen_help     = seen_help
   State.seen_modals   = seen_modals
+  -- The ending $/sec of the loop being left was recorded before this reset
+  -- (scenes/buy raises the timeout modal, which records, then dismisses into
+  -- here), so carrying the list forward is all that's left to do.
+  State.loop_history  = history
   -- Carry the skill tree across the reset (like seen_help). fx is transient,
   -- rebuilt empty. Its points already include everything earned this loop.
   State.skill_tree    = tree

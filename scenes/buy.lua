@@ -11,6 +11,7 @@ local car_demo         = require "car_demo"
 local car              = require "car"
 local gates            = require "gates"
 local persist          = require "persist"
+local loop_history     = require "loop_history"
 
 local SHOP_COST_W      = 50
 local GHOST_ALPHA      = 0.6
@@ -113,14 +114,14 @@ local TIMEOUT_BEATS = {
   -- race better -> higher rank -> more ¥ -> upgrades that outlive the loop.
   -- The taunt is a function (like MODAL_INFO's body) so it can quote how far
   -- off Nirvana the player's ghost income actually was, using the same ETA
-  -- math and formatting the HUD's $300m readout uses (hud.duration_text).
+  -- math and formatting the HUD's $300m readout uses (duration_text).
   [2] = {
     function()
       local lines = { '"Well that wasn\'t close.' }
       local secs  = economy.seconds_to_nirvana(economy.ghost_cash_rate())
       if secs then
         lines[#lines + 1] = ""
-        lines[#lines + 1] = '"We don\'t have ' .. hud.duration_text(secs) .. ' to wait."'
+        lines[#lines + 1] = '"We don\'t have ' .. loop_history.duration_text(secs) .. ' to wait."'
       end
       return table.concat(lines, "\n")
     end,
@@ -134,11 +135,39 @@ local TIMEOUT_BEATS = {
   },
 }
 
--- Number of modals the timeout sequence runs through: this loop's beats, plus
--- the ¥ breakdown for every loop that banks any (loop 1 doesn't).
-local function timeout_steps()
+-- The timeout sequence, in order: this loop's beats, then the ¥ breakdown for
+-- every loop that banks any (loop 1 doesn't), then the progression graph once
+-- there's more than one loop's ending wait-for-$300m to plot. Each is one step of
+-- State.loop_timeout; these say which step is which, so the draw doesn't have
+-- to re-derive the layout from the index.
+local function beat_count()
   local beats = TIMEOUT_BEATS[State.loop]
-  return (beats and #beats or 0) + (State.loop >= 2 and 1 or 0)
+  return beats and #beats or 0
+end
+
+local function breakdown_step()
+  return State.loop >= 2 and beat_count() + 1 or nil
+end
+
+-- Present only from the second recorded loop on: one dot isn't a progression.
+-- The recording happens as the sequence opens (record_loop_end), so this is
+-- stable for the whole sequence.
+local function graph_step()
+  if not loop_history.has_graph(State.loop_history) then return nil end
+  return (breakdown_step() or beat_count()) + 1
+end
+
+local function timeout_steps()
+  return graph_step() or breakdown_step() or beat_count()
+end
+
+-- Files this loop's ending ghost income before anything resets it, at the
+-- moment the timeout sequence opens. Idempotent per loop (loop_history.record
+-- upserts), so re-entering the sequence - quitting and reloading into a dead
+-- clock - corrects the entry instead of doubling it.
+local function record_loop_end()
+  loop_history.record(State.loop_history, State.loop, economy.ghost_cash_rate())
+  persist.save()
 end
 
 -- Dismissing the last TIME'S UP step fires the Rebirth, then routes on. The
@@ -217,6 +246,7 @@ function M.update(dt)
   if not State.loop_timeout and State.loop_time_left <= 0
       and not State.purchase_modal and not State.race_modal
       and not M.shop_modal_open() then
+    record_loop_end()
     State.loop_timeout = 1
   end
   if State.loop_timeout and input.pressed(input.BTN1) then
@@ -474,16 +504,40 @@ end
 
 -- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Runs
 -- this loop's scripted beats (TIMEOUT_BEATS), then the ¥ breakdown (read before
--- the reset wipes State.tracks) - so loop 1 is beat-only and loops 3+, with no
--- beats left to play, are breakdown-only. The first step announces the dead
--- clock under a rainbow "TIME'S UP!" title, and the breakdown carries it again
--- over its table; the beats between are dialogue-only, like the intro's.
+-- the reset wipes State.tracks), then the progression graph - so loop 1 is
+-- beat-only and loops 3+, with no beats left to play, are breakdown-then-graph.
+-- The first step announces the dead clock under a rainbow "TIME'S UP!" title,
+-- and the breakdown carries it again over its table; the beats between are
+-- dialogue-only, like the intro's, and the graph titles itself.
 -- Dismissing the last step fires the Rebirth and routes on. A BTN1 press
 -- advances in M.update.
 function M.draw_timeout()
-  local step   = State.loop_timeout
-  local beats  = TIMEOUT_BEATS[State.loop]
-  local last   = step == timeout_steps()
+  local step  = State.loop_timeout
+  local beats = TIMEOUT_BEATS[State.loop]
+  local last  = step == timeout_steps()
+
+  -- The graph closes the sequence: the ¥ breakdown says what this one loop
+  -- earned, and the graph puts that number next to every loop before it, which
+  -- is the note to leave on before Rebirth wipes the climb.
+  if step == graph_step() then
+    local hist = State.loop_history
+    if modal.draw({
+          title  = "THE CLIMB",
+          body   = "How long $300m would take?",
+          demo   = {
+            w    = loop_history.GRAPH_W,
+            h    = loop_history.GRAPH_H,
+            draw = function(x, y)
+              loop_history.draw(hist, x, y, loop_history.GRAPH_W, loop_history.GRAPH_H)
+            end,
+          },
+          button = last and "OKAY" or "CONTINUE",
+        }) then
+      advance_timeout()
+    end
+    return
+  end
+
   local titled = step == 1 or (beats and step > #beats)
 
   local body, draw_body

@@ -1,4 +1,5 @@
 local economy           = require "economy"
+local loop_history      = require "loop_history"
 local track_data        = require "track_data"
 local ui                = require "ui"
 local reference         = require "reference"
@@ -47,38 +48,10 @@ local function clock_text(secs)
   return string.format("%d:%02d", math.floor(secs / 60), secs % 60)
 end
 
--- Unit ladder for the Nirvana ETA line, seconds up through millennia. Each
--- entry is { name, seconds-per-unit }; duration_text promotes to the next
--- unit at exactly 1.0 of it, always rendering one decimal.
-local DURATION_UNITS = {
-  { "sec",       1 },
-  { "min",       60 },
-  { "hours",     3600 },
-  { "days",      86400 },
-  { "weeks",     86400 * 7 },
-  { "months",    86400 * 365 / 12 },
-  { "years",     86400 * 365 },
-  { "decades",   86400 * 365 * 10 },
-  { "centuries", 86400 * 365 * 100 },
-  { "millennia", 86400 * 365 * 1000 },
-}
-
--- Formats a duration in seconds against DURATION_UNITS, picking the largest
--- unit that rounds to at least 1.0 (falling back to sec for anything under a
--- second). No cap on the top end -- centuries and millennia just keep growing.
--- Exported (M.duration_text) so the loop-2 TIME'S UP taunt can quote the same
--- ETA the HUD shows, instead of re-deriving its own unit ladder.
-local function duration_text(secs)
-  for i = #DURATION_UNITS, 2, -1 do
-    local name, unit_secs = DURATION_UNITS[i][1], DURATION_UNITS[i][2]
-    local value           = secs / unit_secs
-    if math.floor(value * 10 + 0.5) / 10 >= 1.0 then
-      return string.format("%.1f %s", value, name)
-    end
-  end
-  return string.format("%.1f %s", secs, DURATION_UNITS[1][1])
-end
-M.duration_text = duration_text
+-- The ETA line and the loop-end graph quote the same wait, so they share one
+-- unit ladder; it lives in loop_history, which is the module built around that
+-- number (loop_history.duration_text).
+local duration_text = loop_history.duration_text
 
 -- Draws the loop clock with its left edge at (x, y) and the given scale. Color
 -- escalates as the loop drains: white, yellow at/under a minute, red at/under
