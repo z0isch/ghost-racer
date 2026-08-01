@@ -17,6 +17,11 @@ local function default_state()
     -- Ending ghost $/sec of each finished loop, for the loop-end progression
     -- graph (see loop_history).
     loop_history     = loop_history.new(),
+    -- Best race $/sec per track on the loop before this one, snapshotted by
+    -- start_new_loop as the reset wipes State.tracks. Empty on loop 1 (there is
+    -- no previous loop); read by the loop-end breakdown to park a ghost arrow
+    -- on what each track managed last time.
+    prev_rates       = {},
     accel            = 0,
     top_speed        = 0,
     start_coins      = 0,
@@ -63,6 +68,10 @@ local function progression_of_state()
     -- Cross-loop, like the skill tree: the whole point is comparing the first
     -- climbs against the most recent ones.
     loop_history   = State.loop_history,
+    -- Cross-loop for the same reason: it's the comparison the breakdown's ghost
+    -- arrows are made of, and it has to survive a mid-loop quit to still be
+    -- there when the clock runs out.
+    prev_rates     = State.prev_rates,
     accel          = State.accel,
     -- top_speed / start_coins / coins_unlocked / laps / max_accel /
     -- ghost_efficiency are derived caches of the skill tree, and
@@ -98,6 +107,14 @@ local function apply_progression(loaded)
   State.loop_time_left = loaded.loop_time_left or track_data.LOOP_SECONDS
   State.seen_modals    = loaded.seen_modals or {}
   State.loop_history   = loop_history.sanitize(loaded.loop_history)
+  -- Keyed by track id, so a renamed or dropped track drops out on load rather
+  -- than parking an arrow on a bar that no longer exists.
+  State.prev_rates     = {}
+  for id, rate in pairs(loaded.prev_rates or {}) do
+    if track_data.TRACKS[id] and type(rate) == "number" and rate > 0 then
+      State.prev_rates[id] = rate
+    end
+  end
 
   State.accel          = math.min(loaded.accel or 0, track_data.kind_max("accel") or 0)
   State.drift          = math.min(loaded.drift or 0, track_data.kind_max("drift") or 0)
@@ -219,7 +236,16 @@ function M.start_new_loop()
   local seen_modals   = State.seen_modals
   local history       = State.loop_history
   local tree          = State.skill_tree
+  -- The last thing State.tracks is good for: each track's best race $/sec this
+  -- loop, taken here because this reset is what wipes it. Tracks never raced
+  -- this loop are left out rather than stored as 0 - the breakdown's ghost
+  -- arrow is "where you were", and a track you never drove has no where.
+  local prev_rates    = {}
+  for id, ts in pairs(State.tracks) do
+    if ts.best_rate then prev_rates[id] = ts.best_rate end
+  end
   State               = default_state()
+  State.prev_rates    = prev_rates
   State.loop          = next_loop
   State.seen_help     = seen_help
   State.seen_modals   = seen_modals

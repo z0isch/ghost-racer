@@ -14,6 +14,9 @@ local RANK_MULTS = {
   S = 2.0
 }
 local RANK_ORDER = { D = 0, C = 1, B = 2, A = 3, S = 4 }
+-- The same ranks as a list, worst first: the order anything that draws the
+-- whole ladder left-to-right needs (the loop-end breakdown's bars).
+local RANK_LADDER = { "D", "C", "B", "A", "S" }
 
 
 -- ¥ a track is worth this loop at each best-race rank, the cross-loop payout
@@ -33,6 +36,7 @@ local M            = {}
 
 M.RANK_MULTS       = RANK_MULTS
 M.RANK_YEN         = RANK_YEN
+M.RANK_LADDER      = RANK_LADDER
 
 function M.rank_yen(rank)
   return RANK_YEN[rank] or 0

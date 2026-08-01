@@ -12,6 +12,7 @@ local car              = require "car"
 local gates            = require "gates"
 local persist          = require "persist"
 local loop_history     = require "loop_history"
+local loop_breakdown   = require "loop_breakdown"
 
 local SHOP_COST_W      = 50
 local GHOST_ALPHA      = 0.6
@@ -416,90 +417,59 @@ function M.draw_purchase_modal()
   end
 end
 
--- Aligned character width of a "Label ..... VALUE" breakdown row, so the value
--- column right-aligns across the per-track and Loop Time lines.
-local BREAKDOWN_ROW_CHARS = 20
-
--- Glyph count of a string. `#` counts bytes, which overcounts the multibyte ¥
--- in the reward row and would shift its value column out of line with the
--- rest; UTF-8 continuation bytes (0x80-0xBF) are what to skip.
-local function glyph_len(s)
-  local _, n = s:gsub("[^\128-\191]", "")
-  return n
-end
-
--- One dotted "Label ..... value" line padded to BREAKDOWN_ROW_CHARS.
-local function breakdown_dots(label, value)
-  local ndots = BREAKDOWN_ROW_CHARS - glyph_len(label) - glyph_len(value) - 2
-  if ndots < 1 then ndots = 1 end
-  return label .. " " .. string.rep(".", ndots) .. " " .. value
-end
-
--- Draws one breakdown row centered at `cx`. Rows with a `rank` draw their
--- trailing rank letter in that rank's color (rank_color for the list, the
--- animated rank_text for the big `big` RANK line); the rest is light gray with
--- currency glyphs yellow (coin_text), matching modal's default body render.
-local function draw_breakdown_row(row, cx, y, scale)
-  local text = row.text
-  local w    = usagi.measure_text(text) * scale
-  local x    = math.floor(cx - w / 2)
-  if not row.rank then
-    ui.coin_text(text, x, y, scale, gfx.COLOR_LIGHT_GRAY)
-    return
+-- The loop breakdown spec loop_breakdown.draw renders: the ¥ ladder every
+-- track is priced on, then a row per corridor track saying where this loop's
+-- best race landed on it. This is the teacher of the whole climb - "race
+-- better, bank more ¥, upgrade more" - shown when the clock runs out, so the
+-- rows a track earned nothing on are the point rather than noise: an unraced
+-- or unbought track shows its empty ladder and the ¥ sitting on it.
+local function loop_breakdown_spec()
+  local zones = {}
+  for _, rank in ipairs(economy.RANK_LADDER) do
+    zones[#zones + 1] = { rank = rank, yen = economy.rank_yen(rank) }
   end
-  local prefix = text:sub(1, #text - #row.rank)
-  local pw     = usagi.measure_text(prefix) * scale
-  ui.coin_text(prefix, x, y, scale, gfx.COLOR_LIGHT_GRAY)
-  if row.big then
-    ui.rank_text(row.rank, row.rank, x + pw, y, scale)
-  else
-    gfx.text_ex(row.rank, x + pw, y, scale, 0, ui.rank_color(row.rank, 0), 1)
-  end
-end
 
--- Rows of the loop breakdown: a line per corridor track showing the ¥ its
--- best rank this loop is worth (with that rank colored), then the total. This
--- is the teacher of the whole climb - "race better, bank more ¥, upgrade more"
--- - shown when the clock runs out. A track not yet raced this loop reads as
--- a dash. The rank letter is the trailing token of the value ("¥60 A"), so
--- draw_breakdown_row colors it.
-local function loop_breakdown_rows()
-  local rows    = {}
-  local divider = string.rep("-", BREAKDOWN_ROW_CHARS)
-  local total   = 0
+  local rows  = {}
+  local total = 0
   for _, id in ipairs(track_data.track_order()) do
     local ts    = State.tracks[id]
-    local label = track_data.TRACKS[id].label
-    local rank  = economy.track_rank(id)
-    local yen   = economy.rank_yen(rank)
-    if yen > 0 then
-      if ts and ts.best_rate then
-        total = total + yen
-        rows[#rows + 1] = { text = breakdown_dots(label, "¥" .. yen .. " " .. rank), rank = rank }
-      else
-        rows[#rows + 1] = { text = breakdown_dots(label, "--") }
-      end
-    end
+    local raced = ts ~= nil and ts.best_rate ~= nil
+    local rank  = raced and economy.track_rank(id) or nil
+    local state = raced and "raced" or (State.unlocked[id] and "owned" or "locked")
+    if raced then total = total + economy.rank_yen(rank) end
+    -- Last loop's best on this track, if it was raced then (persist snapshots
+    -- the rates as Rebirth wipes State.tracks). Passed on every row, raced or
+    -- not: a track sitting unraced under last loop's mark is the row saying so.
+    local prev_rate = State.prev_rates[id]
+    local prev      = prev_rate and {
+      rank = economy.rank_for_rate(id, prev_rate),
+      frac = track_data.rank_fraction(id, prev_rate),
+    } or nil
+    rows[#rows + 1] = {
+      label = track_data.TRACKS[id].label,
+      state = state,
+      rank  = rank,
+      frac  = raced and track_data.rank_fraction(id, ts.best_rate) or nil,
+      prev  = prev,
+    }
   end
-  rows[#rows + 1] = { text = divider }
-  rows[#rows + 1] = { text = breakdown_dots("Total ", "¥" .. total) }
-  return rows
+
+  return { zones = zones, rows = rows, total = total }
 end
 
--- Packs breakdown `rows` for modal.draw: the plain-text body it measures the
--- panel from, plus the draw_body that paints the same rows with their rank
--- letters colored.
-local function breakdown_body(rows)
-  local lines = {}
-  for _, r in ipairs(rows) do lines[#lines + 1] = r.text end
-  local cx = math.floor(usagi.GAME_W / 2)
-  return table.concat(lines, "\n"), function(_, by, scale)
-    local _, line_h = usagi.measure_text("A")
-    for _, r in ipairs(rows) do
-      draw_breakdown_row(r, cx, by, scale)
-      by = by + line_h * scale
-    end
-  end
+-- Packs the breakdown for modal.draw: a one-line reading of the table, and the
+-- bars themselves in the panel's demo slot (they're wider than a body line and
+-- have to draw last, under the total). The body stays one line on purpose -
+-- the panel is within ~25px of the screen at four tracks, and a second line
+-- costs more than that.
+local function breakdown_modal_parts()
+  local spec = loop_breakdown_spec()
+  local w, h = loop_breakdown.measure(spec)
+  return "Your best rank on each track pays ¥", {
+    w    = w,
+    h    = h,
+    draw = function(x, y) loop_breakdown.draw(spec, x, y) end,
+  }
 end
 
 -- Loop-timeout modal: the clock hit 0, which is the only way a loop ends. Runs
@@ -540,12 +510,12 @@ function M.draw_timeout()
 
   local titled = step == 1 or (beats and step > #beats)
 
-  local body, draw_body
+  local body, demo
   if beats and step <= #beats then
     local beat = beats[step]
     body       = type(beat) == "function" and beat() or beat
   else
-    body, draw_body = breakdown_body(loop_breakdown_rows())
+    body, demo = breakdown_modal_parts()
   end
 
   local draw_title
@@ -555,7 +525,7 @@ function M.draw_timeout()
   if modal.draw({
         title      = titled and "TIME'S UP!" or "",
         body       = body,
-        draw_body  = draw_body,
+        demo       = demo,
         draw_title = draw_title,
         button     = last and "OKAY" or "CONTINUE",
       }) then

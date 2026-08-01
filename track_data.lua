@@ -486,6 +486,29 @@ function M.rank_for_rate(id, rate)
   return rank
 end
 
+-- Where a $/sec `rate` sits along the whole D->S ladder, as a 0..1 fraction:
+-- each rank owns an equal fifth and the rate interpolates between its own
+-- thresholds inside that fifth, so two runs at the same rank still land at
+-- different places. The S zone runs to twice the S threshold, so a monster run
+-- eases toward the right edge instead of pinning to it at the first S.
+--
+-- Pure (no State), like M.rank_for_rate. Both the race HUD's needle and the
+-- loop-end breakdown's arrows are placed with it, which is what makes "how far
+-- along the bar" mean the same thing mid-race and at the loop-end table.
+function M.rank_fraction(id, rate)
+  local t      = M.ranks(id)
+  local bounds = { 0, t.C, t.B, t.A, t.S, t.S * 2 }
+  local n      = #bounds - 1
+  rate         = rate or 0
+  if rate >= bounds[n + 1] then return 1 end
+  for i = n, 1, -1 do
+    if rate >= bounds[i] then
+      return (i - 1) / n + ((rate - bounds[i]) / (bounds[i + 1] - bounds[i])) / n
+    end
+  end
+  return 0
+end
+
 function M.track_shop_item(track_id, kind)
   for _, item in ipairs(M.shop(track_id)) do
     if item.kind == kind then return item end

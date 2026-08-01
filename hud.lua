@@ -103,17 +103,10 @@ local function draw_money(place, y, scale)
 end
 
 -- Maps a $/sec rate onto the bar: each rank zone is a fifth of the height,
--- with the arrow interpolating between that rank's thresholds inside it.
+-- with the arrow interpolating between that rank's thresholds inside it. The
+-- loop-end breakdown places its arrows off the same function.
 local function bar_fraction(rate)
-  local t      = track_data.ranks(State.active_track)
-  local bounds = { 0, t.C, t.B, t.A, t.S, t.S * 2 }
-  if rate >= bounds[6] then return 1 end
-  for i = 5, 1, -1 do
-    if rate >= bounds[i] then
-      return (i - 1) / 5 + ((rate - bounds[i]) / (bounds[i + 1] - bounds[i])) / 5
-    end
-  end
-  return 0
+  return track_data.rank_fraction(State.active_track, rate)
 end
 
 -- Screen x at bar fraction `f` (0 = left end of the bar, 1 = right end).
