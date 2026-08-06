@@ -231,6 +231,57 @@ function M.sample_at(line, time)
   return last
 end
 
+-- The same left-right flip track_data.mirror_track applies to a track's
+-- geometry, applied to a recorded line so a ghost can run the mirrored layout.
+-- Positions are the car's top-left corner, so the x flip has to subtract the
+-- car's own footprint as well -- without it every sample sits one car-width
+-- into the wall on the far side.
+function M.mirror_line(line, map_w_px)
+  if not line then return nil end
+  local out = {}
+  for i, s in ipairs(line) do
+    out[i] = {
+      t     = s.t,
+      x     = map_w_px - CAR_SIZE - s.x,
+      y     = s.y,
+      angle = angle.normalize(math.pi - s.angle),
+      drift = s.drift,
+    }
+  end
+  return out
+end
+
+-- A playable ghost line built from a track's stored reference lap
+-- (data/ref_<id>.json), for callers with no save and therefore no
+-- tstate.ghost_line. The reference holds only {t, x, y}, so headings are
+-- derived from each point's delta to the next -- good enough to point a sprite
+-- the right way, which is all a ghost's angle is ever used for. Returns nil
+-- when the track has no reference recorded.
+--
+-- `reference` is required lazily: it requires this module at load, so a
+-- top-level require here would be a cycle.
+function M.line_from_reference(id)
+  local reference = require "reference"
+  local data      = reference.load(id)
+  local pts       = data and data.points
+  if not pts or #pts == 0 then return nil end
+  local line = {}
+  local prev = 0
+  for i, p in ipairs(pts) do
+    local nxt = pts[i + 1]
+    local a   = prev
+    if nxt then
+      local dx, dy = nxt.x - p.x, nxt.y - p.y
+      -- A pair of coincident points (the car stopped) carries the last real
+      -- heading forward rather than snapping the sprite to east.
+      if dx * dx + dy * dy > 0 then a = math.atan(dy, dx) end
+    end
+    line[i] = { t = p.t, x = p.x, y = p.y, angle = a, drift = false }
+    prev    = a
+  end
+  return line
+end
+
 -- Advance sim_time and detect ghost crossings for all unlocked tracks.
 -- Results are queued; call collect_crossings() to drain them.
 function M.update(dt)

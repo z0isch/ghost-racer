@@ -51,10 +51,12 @@ local PALETTES               = {
   },
 }
 
--- Fixed at load: REVERSE_MODE is a build-time flag, not something a race
--- toggles. gates.lua reads the gate colors off this (it already depends on
+-- The active set. Seeded from REVERSE_MODE at load, which is where the shipping
+-- game leaves it, but selectable at runtime through M.set_palette so a harness
+-- drawing a mirrored track and a forward one on the same screen can theme each
+-- correctly. gates.lua reads the gate colors off this (it already depends on
 -- road transitively; road can't depend on gates without a cycle).
-local COLORS                 = track_data.REVERSE_MODE and PALETTES.reverse or PALETTES.normal
+local COLORS                 = PALETTES.normal
 local tile_colors            = COLORS.tiles
 
 local CHECKPOINT_LABEL_SCALE = 2
@@ -62,7 +64,15 @@ local GHOST_ALPHA            = 0.6
 
 local M                      = {}
 
-M.COLORS                     = COLORS
+-- Swap the level theme. Call before the draw calls that should use it; the
+-- whole module (tiles, checkpoints, M.COLORS) follows in one step.
+function M.set_palette(reverse)
+  COLORS      = reverse and PALETTES.reverse or PALETTES.normal
+  tile_colors = COLORS.tiles
+  M.COLORS    = COLORS
+end
+
+M.set_palette(track_data.REVERSE_MODE)
 
 local function get_tile(map, x, y)
   local layer = map.layers[1].data

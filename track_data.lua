@@ -373,27 +373,37 @@ local function mirror_map(map)
   return mirrored
 end
 
+-- Produces a track's mirrored twin and leaves the input pristine, so both
+-- orientations of a track can exist at once (see M.mirrored). Fields that
+-- aren't position-dependent -- ranks, pay, shop, laps -- ride across by
+-- reference; every geometric one is rebuilt.
 local function mirror_track(tdata)
-  local mw          = tdata.map.width
-  tdata.map         = mirror_map(tdata.map)
-  tdata.spawn       = { col = mw - 1 - tdata.spawn.col, row = tdata.spawn.row }
+  local mw  = tdata.map.width
+  local out = {}
+  for k, v in pairs(tdata) do out[k] = v end
+  out.map   = mirror_map(tdata.map)
+  out.spawn = { col = mw - 1 - tdata.spawn.col, row = tdata.spawn.row }
+
   local checkpoints = {}
   for i, cp in ipairs(tdata.checkpoints) do
     checkpoints[i] = { col = mw - cp.col - cp.w, row = cp.row, w = cp.w, h = cp.h }
   end
-  tdata.checkpoints = checkpoints
-  local coins       = {}
+  out.checkpoints = checkpoints
+
+  local coins     = {}
   for i, coin in ipairs(tdata.coins) do
     coins[i] = { col = mw - 1 - coin.col, row = coin.row }
   end
-  tdata.coins = coins
+  out.coins = coins
+
   if tdata.coins2 then
     local coins2 = {}
     for i, coin in ipairs(tdata.coins2) do
       coins2[i] = { col = mw - 1 - coin.col, row = coin.row }
     end
-    tdata.coins2 = coins2
+    out.coins2 = coins2
   end
+
   if tdata.gates then
     local gates = {}
     for i, g in ipairs(tdata.gates) do
@@ -406,12 +416,30 @@ local function mirror_track(tdata)
         mode     = g.mode,
       }
     end
-    tdata.gates = gates
+    out.gates = gates
   end
+  return out
 end
 
+-- Mirrored variants, built on first request and cached. A mirrored track is a
+-- second *place* rather than a mode: asking for one never disturbs the forward
+-- data, so a reverse corridor can be driven while forward ghost lines stay
+-- valid. REVERSE_MODE is the degenerate case of that, below.
+local MIRRORED = {}
+
+function M.mirrored(id)
+  if not MIRRORED[id] then MIRRORED[id] = mirror_track(M.TRACKS[id]) end
+  return MIRRORED[id]
+end
+
+-- REVERSE_MODE re-expressed on top of M.mirrored: swap each track for its twin
+-- at load. Same observable behavior as the old in-place mutation -- one set of
+-- track data, all-forward or all-reverse for the lifetime of the run -- with no
+-- call site aware of it.
 if M.REVERSE_MODE then
-  for _, tdata in pairs(M.TRACKS) do mirror_track(tdata) end
+  local ids = {}
+  for id in pairs(M.TRACKS) do ids[#ids + 1] = id end
+  for _, id in ipairs(ids) do M.TRACKS[id] = M.mirrored(id) end
 end
 
 -- Full authored track order. A track flagged `hidden = true` exists in TRACKS
