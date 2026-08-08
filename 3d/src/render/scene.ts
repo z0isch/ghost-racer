@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { createKart, type Kart, type KartPose } from "./kart.js";
 import { createGhostView, type GhostView } from "./ghosts.js";
+import { createCoinView, type CoinView } from "./coins.js";
 import { createTrack, PALETTE, type TrackView } from "./track.js";
 import { createChaseCamera, type ChaseCamera } from "./camera.js";
 import { type TrackExport } from "../io/types.js";
 import type { GhostField } from "../sim/ghosts.js";
+import type { CoinField } from "../sim/coins.js";
 
 /**
  * The renderer, its lights, the track, and one kart. Owns the frame; the track's
@@ -28,16 +30,21 @@ import type { GhostField } from "../sim/ghosts.js";
  */
 export interface Scene {
   /**
-   * One frame: the kart at its interpolated pose, and the ghost field at the
-   * poses the sim currently reports.
+   * One frame: the kart at its interpolated pose, the ghost field at the poses
+   * the sim currently reports, and the coin field at whichever slots are still
+   * holding a coin.
    *
-   * The field is passed in rather than held, because it is *sim* state and this
-   * is the render side of the seam — the same reason `pose` is a parameter. It is
-   * read every frame rather than pushed on change: at `ghostSpeed` 0 nothing
-   * moves, but `hitRadius`, `ghosts` and `taken` all change without anybody
-   * notifying us, and fifty transforms a frame is not worth a subscription.
+   * Both fields are passed in rather than held, because they are *sim* state and
+   * this is the render side of the seam — the same reason `pose` is a parameter.
+   * They are read every frame rather than pushed on change: at `ghostSpeed` 0
+   * nothing moves, but `hitRadius`, `ghosts`, `taken` and every coin pickup
+   * change without anybody notifying us, and a few dozen transforms a frame is
+   * not worth a subscription.
+   *
+   * `wallSeconds` drives the coins' bob and spin, which are cosmetic and so run
+   * on wall time rather than on the fixed step.
    */
-  draw(pose: KartPose, ghosts: GhostField): void;
+  draw(pose: KartPose, ghosts: GhostField, coins: CoinField, wallSeconds: number): void;
   /** The rendered track, for callers that need its checkpoint / line knobs. */
   readonly track: TrackView;
   /** The chase camera. `loop.ts` steps it; nothing here does. */
@@ -62,6 +69,9 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   // and owns disposing it.
   const ghostView: GhostView = createGhostView();
   scene.add(ghostView.object);
+
+  const coinView: CoinView = createCoinView(track);
+  scene.add(coinView.object);
 
   const kart: Kart = createKart(ghostView.kartGeometry);
   scene.add(kart.object);
@@ -90,15 +100,17 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   return {
     track: trackView,
     camera: chase,
-    draw(pose, ghosts) {
+    draw(pose, ghosts, coins, wallSeconds) {
       kart.update(pose);
       ghostView.update(ghosts);
+      coinView.update(coins, wallSeconds);
       renderer.render(scene, chase.camera);
     },
     dispose() {
       window.removeEventListener("resize", resize);
       kart.dispose();
       ghostView.dispose();
+      coinView.dispose();
       trackView.dispose();
       renderer.dispose();
       renderer.domElement.remove();

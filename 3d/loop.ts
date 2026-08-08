@@ -21,6 +21,8 @@ import {
 } from "./src/sim/car.js";
 import { createCollider } from "./src/sim/collision.js";
 import { createLedger } from "./src/sim/cash.js";
+import { createCoins } from "./src/sim/coins.js";
+import { createContact } from "./src/sim/contact.js";
 import { createGhosts } from "./src/sim/ghosts.js";
 import { createLap } from "./src/sim/lap.js";
 import { TUNE } from "./src/sim/tune.js";
@@ -197,7 +199,10 @@ scene.camera.snap(chasePose());
 const probe = document.getElementById("probe");
 let probeAt = 0;
 
-/** The money. Checkpoints pay into it; coins and ghost hits are T12. */
+/**
+ * The money. All three of the plan's cash sources pay into it now: checkpoints
+ * (`sim/lap.ts`), the coin field and boosted ghost hits (both T12).
+ */
 const ledger = createLedger();
 
 /**
@@ -205,11 +210,24 @@ const ledger = createLedger();
  * recording of the lap in progress. Seeded with the track's reference lap, so
  * run one already has a plausible chain to drive.
  *
- * `render/ghosts.ts` draws it (T11); nothing pays for hitting one yet, which is
- * T12. What is live is the machinery underneath both: `lap.ts` promotes into it
- * every time a lap wins on `$/sec`.
+ * `render/ghosts.ts` draws it (T11) and `sim/contact.ts` pays for hitting one
+ * (T12). Underneath both: `lap.ts` promotes into it every time a lap wins on
+ * `$/sec`.
  */
 const ghosts = createGhosts(track3);
+
+/**
+ * The coin field: the second, competing route. Authored slots, topped back up to
+ * `TUNE.maxCoins` at every line, so an uncollected coin is still standing there
+ * next lap.
+ */
+const coins = createCoins({ track: track3, car, ledger });
+
+/**
+ * Ghost contact — cash plus a forward shove, not a collision. Reads `lap.graceT`
+ * so a ghost laid on the grid is not free money at the green.
+ */
+const contact = createContact({ car, ghosts, ledger });
 
 /**
  * Push the ghost line at the ribbon in `render/track.ts`. Called only when the
@@ -242,6 +260,9 @@ const lap = createLap({
     scene.camera.snap(chasePose());
     // A promoted lap has just replaced the line the ribbon was drawing.
     showLine();
+    // `top_up_coins()` at `endless_dev.lua:499`: refill the *shortfall* only, so
+    // a coin the last lap skipped is still standing where it was.
+    coins.topUp();
     // The comparison the prototype exists to make: this lap's `$/sec` against
     // the lap it was measured against. Silent on lap 1, which has none.
     if (delta !== null) hud.flashRate(delta);
@@ -258,6 +279,9 @@ const lap = createLap({
  */
 function restartSession(): void {
   lap.restart();
+  // A fresh coin roll, `endless_dev.lua:555`. Not `lap.restart()`'s business:
+  // the coin field is not lap state, and laps know nothing about it.
+  coins.restart();
   syncPrevious();
   scene.camera.snap(chasePose());
   // `lap.restart()` has put the field back on the seeded reference lap.
@@ -317,6 +341,12 @@ startLoop({
     // does it: on the step that closes a lap, the sample belongs to the new lap
     // starting on the grid, not to the one just filed.
     ghosts.step(dt, car.x, car.z);
+    // The two payouts T12 added, in `endless_dev.lua:659-660`'s order: coins
+    // first, then ghost contact. Both are position tests against the car's
+    // post-move pose, and contact can shove the car forward — after the sample
+    // has been recorded, so a boost never lands between a lap's own samples.
+    coins.step();
+    contact.step(lap.graceT);
     // Camera spring on the same fixed cadence as the sim: a spring integrated
     // against frame deltas is a different camera at 60Hz and at 144Hz.
     scene.camera.follow(chasePose(), dt);
@@ -335,6 +365,8 @@ startLoop({
       // ghost is a reference rather than a thing you aim at, so a step of lag on
       // it is invisible.
       ghosts,
+      coins,
+      stats.wallSeconds,
     );
 
     hud.update(stats.wallSeconds);
@@ -374,6 +406,11 @@ startLoop({
         // is, and whether that line is still the seeded reference (`v1`) or a lap
         // of your own.
         `ghosts     ${ghosts.count}   line ${ghosts.line.length} pts   v${ghosts.lineVersion}`,
+        // The three cash sources, side by side: this is the split the payout
+        // ratio is judged on, and `hits` is how many ghosts the lap actually
+        // collected. `grace` only shows while it is holding contact off.
+        `cash       cp $${ledger.cpCash.toFixed(0)}   coin $${ledger.coinCash.toFixed(0)}   hits ${ledger.hits}`,
+        `coins      ${coins.count}/${track3.coins.length} out${lap.graceT > 0 ? `   grace ${lap.graceT.toFixed(2)}s` : ""}`,
         ``,
         // Echoed because they are edited live from the console: without this you
         // cannot tell a tuning you set from one you thought you set.

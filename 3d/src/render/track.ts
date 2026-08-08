@@ -100,6 +100,15 @@ export const PALETTE = {
   ghostHazard: 0xff5cc8,
   /** The non-interactive pace ghost, `PACE_GHOST_TINT`. */
   ghostPace: 0x5cc8ff,
+  /**
+   * The coin field (T12). Gold, and deliberately a *deeper* one than the kart's
+   * warm yellow: the coins are the competing route the plan names (open risk 2),
+   * so telling a coin from your own kart at the edge of vision has to be free.
+   * `coinRim` lights the disc's rim so it still reads at the moment its spin
+   * turns it edge-on.
+   */
+  coin: 0xffc61a,
+  coinRim: 0xfff0a8,
 } as const;
 
 /** Blocking tiles, derived from the drivable set so the two can't disagree. */
