@@ -5,6 +5,9 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "types": ["vite/client"],
+    // `io/trackData.ts` imports the exported track as a static module, so the
+    // app boots with the track already in hand and no loading state.
+    "resolveJsonModule": true,
 
     "strict": true,
     "noUncheckedIndexedAccess": true,
