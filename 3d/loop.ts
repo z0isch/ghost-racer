@@ -163,6 +163,10 @@ let probeAt = 0;
 // is the console: `car.driftDrag = 1.2`. T8 replaces this with real lil-gui
 // knobs; until then it beats editing a constant and losing the drive.
 (window as unknown as { car: Car }).car = car;
+// Same reasoning for the track's render knobs. `track.setLineAlpha(0.5)` is the
+// map's first legibility fallback if the `$/sec` curve plateaus — reachable, and
+// off, which is the whole decision (`endless_dev.lua:107`).
+(window as unknown as { track: typeof scene.track }).track = scene.track;
 
 startLoop({
   step(dt) {
