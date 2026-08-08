@@ -50,7 +50,7 @@ export const CAR_MARGIN = 3;
 
 const ACCEL_BASE = 35;
 const ACCEL_STEP = 10;
-const TOP_VEL_BASE = 120;
+const TOP_VEL_BASE = 50;
 const TOP_VEL_STEP = 50;
 
 /** One manual (BTN3) boost, in px/s along the travel direction. */
@@ -170,10 +170,10 @@ export function createCar(): Car {
     accel: ACCEL_BASE,
     deccel: 150,
     topVel: TOP_VEL_BASE,
-    turnRateSlow: 2.0,
-    turnRateFast: 1.0,
+    turnRateSlow: 2,
+    turnRateFast: 1,
     turnRefSpeed: TOP_VEL_BASE,
-    driftTurnRate: 3.2,
+    driftTurnRate: 2.2,
     driftSlide: Math.PI / 8,
     driftDeccel: 80,
     driftDrag: 0.7,
@@ -203,7 +203,12 @@ export function createCar(): Car {
 }
 
 /** `car.reset` — back to a spawn pose. Position is a top-left corner. */
-export function resetCar(car: Car, spawnX: number, spawnZ: number, facing = 0): void {
+export function resetCar(
+  car: Car,
+  spawnX: number,
+  spawnZ: number,
+  facing = 0,
+): void {
   car.x = spawnX;
   car.z = spawnZ;
   car.vel = 0;
@@ -307,7 +312,10 @@ export type ResolveMove = (
   dt: number,
 ) => { x: number; z: number };
 
-const freeMove: ResolveMove = (car, dx, dz) => ({ x: car.x + dx, z: car.z + dz });
+const freeMove: ResolveMove = (car, dx, dz) => ({
+  x: car.x + dx,
+  z: car.z + dz,
+});
 
 /**
  * One fixed step. Mutates `car`.
@@ -361,7 +369,9 @@ export function stepCar(
   if (car.flipT > 0) {
     car.flipT = cutFlip ? 0 : Math.max(0, car.flipT - dt);
     const progress = 1 - car.flipT / FLIP_DURATION;
-    car.facingAngle = angle.normalize(car.flipFrom + car.flipDir * progress * Math.PI);
+    car.facingAngle = angle.normalize(
+      car.flipFrom + car.flipDir * progress * Math.PI,
+    );
     if (car.flipT <= 0) {
       // Spin finished: swap gears. Travel continues in the original direction at
       // the same speed, now with the other end of the car leading, and the
@@ -399,7 +409,11 @@ export function stepCar(
   }
 
   if (isDrifting) {
-    car.velAngle = angle.lerp(car.velAngle, targetVelAngle, car.driftSlide * dt);
+    car.velAngle = angle.lerp(
+      car.velAngle,
+      targetVelAngle,
+      car.driftSlide * dt,
+    );
   } else if (flipping) {
     // Mid-spin the car keeps sliding along its pre-flip line; the 180 is a gear
     // change, not a U-turn.
@@ -444,11 +458,18 @@ export function stepCar(
   } else if (braking) {
     car.vel = bleedVel(car.vel, car.deccel * dt);
   } else {
-    car.vel = clamp(car.vel + car.gear * car.accel * dt, minVel, effectiveTopVel);
+    car.vel = clamp(
+      car.vel + car.gear * car.accel * dt,
+      minVel,
+      effectiveTopVel,
+    );
   }
 
   if (isDrifting) {
-    car.vel = bleedVel(car.vel, (car.driftDeccel + Math.abs(car.vel) * car.driftDrag) * dt);
+    car.vel = bleedVel(
+      car.vel,
+      (car.driftDeccel + Math.abs(car.vel) * car.driftDrag) * dt,
+    );
     // Belt and braces on the drift's sign lock. driftDir comes from the gear and
     // the throttle only ever pushes along the gear, so nothing above should
     // cross zero on its own; this pins a scrubbed-out drift at a standstill if
@@ -475,7 +496,11 @@ export function stepCar(
   if (isDrifting) {
     car.isDrifting = true;
     car.driftTime += dt;
-    if (car.driftTime >= car.driftThreshold && !car.boostReady && car.driftBoostEnabled) {
+    if (
+      car.driftTime >= car.driftThreshold &&
+      !car.boostReady &&
+      car.driftBoostEnabled
+    ) {
       car.boostReady = true;
     }
   } else {
