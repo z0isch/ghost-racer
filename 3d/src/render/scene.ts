@@ -84,7 +84,11 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   const resize = (): void => {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
-    renderer.setSize(w, h, false);
+    // updateStyle left on: without the CSS size, the canvas lays out at its
+    // *buffer* size, which devicePixelRatio has already multiplied — so on a 2x
+    // display the canvas is twice the viewport and only its top-left quadrant is
+    // visible, putting the centred kart down in the bottom-right corner.
+    renderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   };
