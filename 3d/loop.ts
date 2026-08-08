@@ -21,6 +21,7 @@ import {
 } from "./src/sim/car.js";
 import { createCollider } from "./src/sim/collision.js";
 import { createLedger } from "./src/sim/cash.js";
+import { createLap } from "./src/sim/lap.js";
 import { TUNE } from "./src/sim/tune.js";
 import { createKeyboard } from "./src/io/keyboard.js";
 import { track3 } from "./src/io/trackData.js";
@@ -160,6 +161,21 @@ const previous = {
 };
 
 /**
+ * Collapse the interpolation window onto the car's current pose.
+ *
+ * Needed wherever the car *teleports* — a grid start, a restart. Interpolation
+ * assumes `previous` is one fixed step behind; across a teleport it is half a
+ * track away, and the kart would be drawn flying to the line rather than
+ * appearing on it.
+ */
+function syncPrevious(): void {
+  previous.x = car.x;
+  previous.z = car.z;
+  previous.facingAngle = car.facingAngle;
+  previous.velAngle = car.velAngle;
+}
+
+/**
  * The pose the chase camera follows: the *unstretched* sim pose, since the
  * camera is stepped on the fixed timestep rather than per rendered frame.
  */
@@ -180,21 +196,43 @@ scene.camera.snap(chasePose());
 const probe = document.getElementById("probe");
 let probeAt = 0;
 
-/** The money. Nothing pays into it yet — see the debug keys at the bottom. */
+/** The money. Checkpoints pay into it; coins and ghost hits are T12. */
 const ledger = createLedger();
+
+/**
+ * The lap: checkpoint order, the `$/sec` promotion decision, and the grid-start
+ * beat. `ghosts` is left out until T10 — with no field to promote into, laps
+ * still run, pay and compare rates; they just have no line to install.
+ */
+const lap = createLap({
+  track: track3,
+  car,
+  collider,
+  ledger,
+  onRollover({ delta }) {
+    // The car is already back on the grid: collapse the interpolation window
+    // and put the camera behind it, or the "1" beat is spent watching the whole
+    // track swing past.
+    syncPrevious();
+    scene.camera.snap(chasePose());
+    // The comparison the prototype exists to make: this lap's `$/sec` against
+    // the lap it was measured against. Silent on lap 1, which has none.
+    if (delta !== null) hud.flashRate(delta);
+  },
+});
 
 /**
  * Session restart, `endless_dev.lua`'s `R`: the run goes back to zero, the
  * *tuning* does not. That asymmetry is the whole point of the TUNE/DEFAULTS
  * split — restoring the authored knobs is a separate, deliberate act (`0`).
  *
- * T9 owns the real version of this, along with the grid-start beat.
+ * The run's own state — cash, lap counter, best rate, the car on the grid —
+ * belongs to `sim/lap.ts`; what is left here is the render side of a teleport.
  */
 function restartSession(): void {
-  resetCar(car, spawn.x, spawn.z, spawn.facing);
-  collider.reset();
+  lap.restart();
+  syncPrevious();
   scene.camera.snap(chasePose());
-  ledger.reset();
 }
 
 const hud = createHud({
@@ -211,6 +249,9 @@ const hud = createHud({
 });
 scene.track.setLineAlpha(TUNE.lineAlpha);
 
+/** Which checkpoint the pads are currently lit for. `-1` forces the first push. */
+let shownCp = -1;
+
 // The panel is the supported way to tune now, but the console still reaches the
 // same objects — a field the panel does not expose is one assignment away, and
 // mutating them from either side is equivalent.
@@ -220,16 +261,25 @@ scene.track.setLineAlpha(TUNE.lineAlpha);
 
 startLoop({
   step(dt) {
-    previous.x = car.x;
-    previous.z = car.z;
-    previous.facingAngle = car.facingAngle;
-    previous.velAngle = car.velAngle;
+    syncPrevious();
+    // The grid-start beat freezes the world, and freezing means *everything*:
+    // the clocks hold with the car, so the held frames cost nothing in `$/sec`.
+    // Input is still drained so a key held across the line does not fire twice
+    // on the green.
+    if (!lap.beginStep(dt)) {
+      keyboard.takeStep();
+      return;
+    }
     stepCar(car, keyboard.takeStep(), dt, collider.resolveMove);
     // The session and lap clocks advance on the fixed step, never on wall time:
     // every `$/sec` this prototype reports is a ratio against this number, so it
     // has to be the same on any display. (The HUD's flash fade is the one thing
     // that runs on wall time — it is cosmetic.)
     ledger.step(dt);
+    // After the car has moved: checkpoint crossings, and the rollover they
+    // eventually trigger. The camera follows *after* that, so on the rollover
+    // step it reads the pose the grid start just wrote.
+    lap.endStep(dt);
     // Camera spring on the same fixed cadence as the sim: a spring integrated
     // against frame deltas is a different camera at 60Hz and at 144Hz.
     scene.camera.follow(chasePose(), dt);
@@ -244,6 +294,14 @@ startLoop({
     });
 
     hud.update(stats.wallSeconds);
+    hud.setBeat(lap.beat);
+
+    // Pushed on change rather than every frame: the pads only move between the
+    // target and the faded state when a checkpoint is crossed.
+    if (lap.nextCp !== shownCp) {
+      shownCp = lap.nextCp;
+      scene.track.setCheckpointsCrossed(lap.faded);
+    }
 
     // Timestep proof: sim seconds should track wall seconds minus dropped time,
     // whatever the display refresh rate is. The car lines below it are the only
@@ -264,41 +322,38 @@ startLoop({
         `boosts     ${car.boosts}/${car.maxBoosts}`,
         `wall       ${collider.touching ? "CONTACT" : "-"}   bounce ${Math.hypot(collider.bounceX, collider.bounceZ).toFixed(0)} px/s`,
         ``,
+        // The lap line: what the race thinks is happening, next to the number it
+        // is being judged on. `best` is the rate a promotion has to beat.
+        `lap        ${ledger.lap}   cp ${lap.nextCp + 1}/${track3.checkpoints.length}   ${lap.held ? "HELD" : `${ledger.lapTime.toFixed(1)}s`}`,
+        `rate       lap ${ledger.lapRate.toFixed(2)}   best ${lap.bestRate === null ? "-" : lap.bestRate.toFixed(2)}   (${lap.promoteMode})`,
+        ``,
         // Echoed because they are edited live from the console: without this you
         // cannot tell a tuning you set from one you thought you set.
         `cam        blend ${scene.camera.knobs.velBlend.toFixed(2)}   k ${scene.camera.knobs.stiffness.toFixed(0)}   zeta ${scene.camera.knobs.damping.toFixed(2)}`,
         ``,
         `arrows/AD steer   Z brake   X drift   C boost   R restart`,
-        `\` hud   0 defaults   J cp  K coin  L lap  (T8 stubs)`,
+        `\` hud   0 defaults   P promote mode`,
       ].join("\n");
     }
   },
 });
 
 /**
- * Stubs, and only stubs. Nothing in the sim pays cash or crosses a line yet —
- * checkpoints and the rollover beat are T9, coins are T12 — so these keys drive
- * the ledger by hand, which is what makes the readout watchable today:
+ * The two session-level keys. T8's `J`/`K`/`L` ledger stubs are **gone**: laps
+ * now pay their own checkpoints, and those three codes are the driving buttons
+ * (`io/keyboard.ts` binds `J`/`K`/`L` alongside `Z`/`X`/`C`), so with real cash
+ * flowing a drift tap would have been quietly paying itself $25 a press and
+ * poisoning the one number this prototype reports. The wiring they exercised —
+ * `award`, `rollover`, `flashRate` — stays, now driven by `sim/lap.ts`.
  *
- * - `J` / `K` — pay a checkpoint / a coin, at the current `TUNE` rate.
- * - `L` — close the lap. Files the record, then flashes this lap's `$/sec`
- *   against the previous lap's, which is the comparison `rollover()` will make
- *   against the *promoted* lap's rate once T9 owns promotion.
- * - `R` — restart the session (a wedged car needs some way back regardless).
- *
- * Delete these three keys when their real callers land; the wiring they exercise
- * stays.
+ * - `R` — restart the session. Zeroes the run, keeps the tuning.
+ * - `P` — flip the promotion rule (`endless_dev.lua:591`). `best` is the game;
+ *   `always` replaces the line with whatever lap just finished, which is how you
+ *   look at a *specific* lap's ghosts rather than your best one's.
  */
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyR") restartSession();
-  else if (e.code === "KeyJ") ledger.award("cp", TUNE.cpPay);
-  else if (e.code === "KeyK") ledger.award("coin", TUNE.coinPay);
-  else if (e.code === "KeyL") {
-    const previous = ledger.laps[ledger.laps.length - 1];
-    const record = ledger.rollover();
-    if (previous) hud.flashRate(record.rate - previous.rate);
-    resetCar(car, spawn.x, spawn.z, spawn.facing);
-    collider.reset();
-    scene.camera.snap(chasePose());
+  else if (e.code === "KeyP") {
+    lap.promoteMode = lap.promoteMode === "always" ? "best" : "always";
   }
 });

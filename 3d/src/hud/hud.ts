@@ -25,16 +25,21 @@
  *
  * ## What is stubbed
  *
- * Nothing in the sim awards cash yet: coins are T12, checkpoints and the
- * rollover beat are T9. The HUD is wired against the shape those tickets will
- * fill — `CashLedger` — and `loop.ts` currently drives that shape from two debug
- * keys so the readout can be watched working. Delete the keys, not the wiring.
+ * Nothing now. T9 landed `sim/lap.ts`, so checkpoints pay and rollovers flash
+ * for real, and the `J`/`K`/`L` ledger stubs `loop.ts` carried are deleted.
+ * Coins and ghost hits (T12) pay through the same `CashLedger` when they land —
+ * no panel change.
+ *
+ * The one piece here that is not a readout is `setBeat`: the grid-start
+ * countdown, drawn outside the toggleable block because it is the game speaking,
+ * not the instrument.
  */
 
 import GUI from "lil-gui";
 import type { Car, Upgrades } from "../sim/car.js";
 import { applyUpgrades, MID_SPEC } from "../sim/car.js";
 import type { CashLedger } from "../sim/cash.js";
+import type { Beat } from "../sim/lap.js";
 import type { ChaseKnobs } from "../render/camera.js";
 import { KNOBS, TUNE, restoreDefaults, type Tune } from "../sim/tune.js";
 
@@ -73,6 +78,13 @@ export interface Hud {
    * measured against. T9 calls this from `rollover()`.
    */
   flashRate(delta: number): void;
+  /**
+   * Draw the grid-start countdown, or clear it with `null` (T9, issue #10).
+   * `sim/lap.ts` owns the beat and its timing; this only paints it, and it
+   * paints on the render frame rather than the fixed step because the alpha is
+   * a fade, not a rule.
+   */
+  setBeat(beat: Beat | null): void;
   /** Show/hide the whole HUD — panel and readout. Bound to backtick. */
   toggle(): void;
   dispose(): void;
@@ -99,6 +111,23 @@ const CSS = `
 .hud-debug { margin-top: 4px; color: #9aa0aa; white-space: pre; }
 .hud-laps { color: #6f757e; white-space: pre; }
 .hud.off { display: none; }
+
+/* The countdown lives outside .hud on purpose: backtick hides the debug
+   instrument, and the grid-start beat is not one — it is the game telling you
+   the lap has started. draw_countdown (endless_dev.lua:759) scales the text
+   4x and centres it; a shadow keeps it readable over pale curbs. */
+.hud-beat {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font: 700 64px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-shadow: 2px 2px 0 #000;
+}
+.hud-beat.hold { color: #ffffff; }
+.hud-beat.go { color: #7bf59a; }
 `;
 
 function injectStyle(): HTMLStyleElement | null {
@@ -128,6 +157,7 @@ export function createHud(deps: HudDeps): Hud {
   const flashEl = div(root, "hud-flash");
   const debugEl = div(root, "hud-debug");
   const lapsEl = div(root, "hud-laps");
+  const beatEl = div(container, "hud-beat");
 
   const gui = new GUI({ title: "tune" });
 
@@ -212,7 +242,8 @@ export function createHud(deps: HudDeps): Hud {
     },
   };
   gui.add(actions, "restoreDefaults").name("restore authored defaults (0)");
-  if (deps.onRestart) gui.add(actions, "restartSession").name("restart session (R)");
+  if (deps.onRestart)
+    gui.add(actions, "restartSession").name("restart session (R)");
 
   let flash: { text: string; up: boolean; until: number } | null = null;
   let visible = true;
@@ -267,8 +298,7 @@ export function createHud(deps: HudDeps): Hud {
         `cp $${ledger.cpCash.toFixed(0)} . coins $${ledger.coinCash.toFixed(0)} . hits ${ledger.hits}`;
       lapsEl.textContent = ledger.laps
         .map(
-          (l) =>
-            `lap ${l.lap}  ${l.t.toFixed(1)}s  $/sec ${l.rate.toFixed(1)}`,
+          (l) => `lap ${l.lap}  ${l.t.toFixed(1)}s  $/sec ${l.rate.toFixed(1)}`,
         )
         .join("\n");
     },
@@ -281,11 +311,18 @@ export function createHud(deps: HudDeps): Hud {
       };
     },
 
+    setBeat(beat) {
+      beatEl.textContent = beat ? beat.text : "";
+      beatEl.className = `hud-beat ${beat?.text === "GO" ? "go" : "hold"}`;
+      beatEl.style.opacity = String(beat?.alpha ?? 0);
+    },
+
     toggle,
 
     dispose() {
       window.removeEventListener("keydown", onKey);
       gui.destroy();
+      beatEl.remove();
       root.remove();
       style?.remove();
     },

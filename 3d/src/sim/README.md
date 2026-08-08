@@ -20,9 +20,12 @@ Landed:
   HUD writes it. A restart resets the run, never the tuning.
 - `cash.ts` — the cash ledger and the `$/sec` arithmetic (T8). Here rather than
   in the HUD because promotion (T9) decides on `lapRate`; the panel only reads.
+- `lap.ts` — checkpoints, `rollover()`, promotion by `$/sec`, and the grid-start
+  beat (T9). Laps own the beat; ghosts own the line, so `rollover()` calls the
+  `GhostLine` seam to install it. The freeze is a gate — `beginStep` returning
+  false means the caller steps *nothing*, clocks included.
 
 Planned inhabitants (see the map, issue #1):
 
-- `ghosts.ts` — the ghost field: layout by distance, `taken` semantics.
-- `lap.ts` — checkpoints, `rollover()`, promotion by `$/sec`. Laps own the beat;
-  ghosts own the line, so `rollover()` calls into `ghosts.ts` to install it.
+- `ghosts.ts` — the ghost field: layout by distance, `taken` semantics. It
+  implements `lap.ts`'s `GhostLine`; `createLap` runs without one until it does.
