@@ -69,7 +69,16 @@ export interface Tune {
   ghostSpeed: number;
   /** Ghost contact is a boost pickup rather than a run-ending hazard. */
   boostOnHit: boolean;
-  /** Impulse a boosted ghost hit pays, px/s. */
+  /**
+   * Impulse a boosted ghost hit pays, px/s — added on top of `topVel` and bled
+   * back down by `OVERSPEED_DECAY` (100 px/s^2 in `sim/car.ts`), which is what
+   * makes this number a *duration* as much as a speed.
+   *
+   * Authored at 50 from the Lua, and that was measured to be nothing here: at a
+   * mid-spec `topVel` of 110 the excess was gone in 0.5s and bought 12px of
+   * track, under one car length. A collected ghost has to be worth feeling, so
+   * it is 150 — 1.5s of overspeed and ~110px gained, about a second of driving.
+   */
   boostAmount: number;
   /**
    * Cash a boosted ghost hit pays. Authored at 5 against `coinPay` 25 — the
@@ -83,7 +92,7 @@ export interface Tune {
 export const DEFAULTS: Readonly<Tune> = Object.freeze({
   cpPay: 45,
   coinPay: 25,
-  hitRadius: 25,
+  hitRadius: 50,
   spawnGrace: 0,
   headOnOnly: false,
   coinRadius: 10,
@@ -95,7 +104,7 @@ export const DEFAULTS: Readonly<Tune> = Object.freeze({
   sameDir: true,
   ghostSpeed: 0,
   boostOnHit: true,
-  boostAmount: 50,
+  boostAmount: 150,
   boostPay: 5,
   paceGhost: true,
 });

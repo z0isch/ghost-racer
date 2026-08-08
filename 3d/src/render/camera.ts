@@ -113,7 +113,11 @@ export const DEFAULT_KNOBS: ChaseKnobs = {
 };
 
 /** What the camera needs beyond a pose: how fast, to fade the blend in. */
-export interface ChasePose extends KartPose {
+// `boostFlame` is dropped rather than inherited: it is what the kart's tailpipe
+// draws, and the camera has no opinion about it. Keeping it required here would
+// mean the chase pose — built on the fixed step, from the sim, once per follow —
+// had to carry a render-only countdown it never reads.
+export interface ChasePose extends Omit<KartPose, "boostFlame"> {
   /** Signed travel speed, px/s — `car.vel`. */
   speed: number;
   /** Top speed for the current spec, px/s, so `speedPull` has a scale. */

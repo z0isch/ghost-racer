@@ -30,9 +30,9 @@
  * Coins and ghost hits (T12) pay through the same `CashLedger` when they land —
  * no panel change.
  *
- * The one piece here that is not a readout is `setBeat`: the grid-start
- * countdown, drawn outside the toggleable block because it is the game speaking,
- * not the instrument.
+ * Two things here are not part of the toggleable instrument, because neither is
+ * the instrument speaking: `setBeat`'s grid-start countdown, and the cash /
+ * `$/sec` readout — that is the score, so backtick leaves it up.
  */
 
 import GUI from "lil-gui";
@@ -85,7 +85,10 @@ export interface Hud {
    * a fade, not a rule.
    */
   setBeat(beat: Beat | null): void;
-  /** Show/hide the whole HUD — panel and readout. Bound to backtick. */
+  /**
+   * Show/hide the instrument: the tuning panel and the debug block. The cash and
+   * `$/sec` readout stays up either way. Bound to backtick.
+   */
   toggle(): void;
   dispose(): void;
 }
@@ -110,7 +113,6 @@ const CSS = `
 .hud-flash.down { color: #ff6b6b; }
 .hud-debug { margin-top: 4px; color: #9aa0aa; white-space: pre; }
 .hud-laps { color: #6f757e; white-space: pre; }
-.hud.off { display: none; }
 
 /* The countdown lives outside .hud on purpose: backtick hides the debug
    instrument, and the grid-start beat is not one — it is the game telling you
@@ -256,10 +258,13 @@ export function createHud(deps: HudDeps): Hud {
   };
   window.addEventListener("keydown", onKey);
 
+  // Backtick hides the *instrument*, not the game: the panel and the debug
+  // block go, the cash and `$/sec` readout stays. Those two numbers are what the
+  // prototype is for, and hiding them is what you do to look at the track with
+  // the tuning UI out of the way — not to stop reading the score.
   function toggle(): void {
     visible = !visible;
     debugOn = visible;
-    root.classList.toggle("off", !visible);
     if (visible) gui.show();
     else gui.hide();
   }
@@ -267,7 +272,6 @@ export function createHud(deps: HudDeps): Hud {
   return {
     update(wallSeconds) {
       lastWall = wallSeconds;
-      if (!visible) return;
 
       // Cash and the rolling rate are the two numbers worth seeing even with the
       // debug block hidden, so they are never gated on `debugOn`.

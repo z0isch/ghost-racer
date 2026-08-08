@@ -198,6 +198,13 @@ scene.camera.snap(chasePose());
 
 const probe = document.getElementById("probe");
 let probeAt = 0;
+/**
+ * Backtick hides the probe alongside the HUD panel and readout: it is the same
+ * instrument, and leaving it up while the HUD is gone defeats the point of the
+ * key, which is seeing the game with nothing drawn over it. Tracked here rather
+ * than asked of the HUD so the probe stays `loop.ts`'s own.
+ */
+let probeOn = true;
 
 /**
  * The money. All three of the plan's cash sources pay into it now: checkpoints
@@ -359,6 +366,10 @@ startLoop({
         facingAngle: angle.lerp(previous.facingAngle, car.facingAngle, alpha),
         velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
         drifting: car.isDrifting,
+        // Not interpolated: it is a countdown, not a position, and the frame it
+        // starts on is the frame the hit landed on. Lerping it against
+        // `previous` would delay the one thing that has to be immediate.
+        boostFlame: car.boostFlameT,
       },
       // Not interpolated, and not `previous`-tracked: at the authored
       // `ghostSpeed` of 0 the field does not move within a lap, and the pace
@@ -382,7 +393,7 @@ startLoop({
     // Timestep proof: sim seconds should track wall seconds minus dropped time,
     // whatever the display refresh rate is. The car lines below it are the only
     // instrument T4 has for telling a bad number from a bad feel.
-    if (probe && stats.wallSeconds - probeAt > 0.1) {
+    if (probe && probeOn && stats.wallSeconds - probeAt > 0.1) {
       probeAt = stats.wallSeconds;
       const drift = stats.wallSeconds - stats.droppedSeconds - stats.simSeconds;
       const slip = angle.lerp(0, car.velAngle - car.facingAngle, 1);
@@ -435,10 +446,15 @@ startLoop({
  * - `P` — flip the promotion rule (`endless_dev.lua:591`). `best` is the game;
  *   `always` replaces the line with whatever lap just finished, which is how you
  *   look at a *specific* lap's ghosts rather than your best one's.
+ * - `` ` `` — the probe's half of the HUD toggle. The HUD binds the same key for
+ *   its own panel; both listeners see the event, so the two hide together.
  */
 window.addEventListener("keydown", (e) => {
   if (e.code === "KeyR") restartSession();
   else if (e.code === "KeyP") {
     lap.promoteMode = lap.promoteMode === "always" ? "best" : "always";
+  } else if (e.code === "Backquote") {
+    probeOn = !probeOn;
+    probe?.classList.toggle("off", !probeOn);
   }
 });

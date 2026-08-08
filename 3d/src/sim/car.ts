@@ -50,7 +50,7 @@ export const CAR_MARGIN = 3;
 
 const ACCEL_BASE = 35;
 const ACCEL_STEP = 10;
-const TOP_VEL_BASE = 50;
+const TOP_VEL_BASE = 10;
 const TOP_VEL_STEP = 50;
 
 /** One manual (BTN3) boost, in px/s along the travel direction. */
@@ -62,7 +62,7 @@ const OVERSPEED_DECAY = 100;
  * The hard global cap: `OVERSPEED_DECAY` still bleeds the excess away, this only
  * stops stacked boosts from running off.
  */
-const OVERSPEED_MAX = 100;
+const OVERSPEED_MAX = 200;
 
 const BOOST_FLAME_TIME = 0.8;
 

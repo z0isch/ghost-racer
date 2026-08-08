@@ -41,6 +41,11 @@
  * No `sfx`, no `effect.hitstop` — T8 dropped the `hitstop` knob for want of an
  * effect bus, and this is the beat it would have decorated. If one ever lands,
  * this is the call site.
+ *
+ * The one piece of feedback a hit does produce is the boost flame, and it is
+ * produced *indirectly*: `applyBoost` sets `car.boostFlameT`, and
+ * `render/kart.ts` draws it. Nothing here reaches at the renderer, and the flame
+ * is the same one the manual boost and the drift cash-out raise.
  */
 
 import { applyBoost, CAR_SIZE, type Car } from "./car.js";

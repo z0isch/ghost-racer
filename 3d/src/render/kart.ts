@@ -57,6 +57,15 @@ export interface KartPose {
   /** Radians. Diverges from `facingAngle` only in a drift. */
   velAngle: number;
   drifting: boolean;
+  /**
+   * `car.boostFlameT`: seconds of flame left, counting down from
+   * `BOOST_FLAME_TIME`. Every impulse in the sim sets it — the manual boost, the
+   * drift cash-out, and `applyBoost`, which is what a ghost hit calls. Until
+   * T13 nothing read it and a collected ghost was completely silent: no flame,
+   * no sfx, no hitstop, and a 0.5s overspeed blip worth under a car length. The
+   * flame is the whole of the feedback now, so it is not optional decoration.
+   */
+  boostFlame: number;
 }
 
 /**
@@ -77,6 +86,22 @@ export const KART_SLOTS = { BODY: 0, ACCENT: 1, DARK: 2 } as const;
 export function kartScaleFor(size: number): number {
   return size / CAR_SIZE;
 }
+
+/**
+ * How large the player's kart is drawn relative to its 16px collision box.
+ * Purely cosmetic: the sim's box, the gate tests and the ghost contact radius
+ * are all still `CAR_SIZE`, so shrinking this makes the kart look smaller
+ * without making it drive smaller.
+ */
+export const KART_VISUAL_SCALE = 0.5;
+
+/**
+ * `BOOST_FLAME_TIME` in `sim/car.ts`, repeated here rather than imported so the
+ * flame's own fade curve is a render number. The sim's countdown is the source
+ * of truth for *whether* there is a flame; this is only what a full one looks
+ * like, and the two are allowed to drift apart.
+ */
+const FLAME_FULL = 0.8;
 
 export interface Kart {
   readonly object: THREE.Object3D;
@@ -164,6 +189,9 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
     new THREE.MeshLambertMaterial({ color: PALETTE.kart.dark, flatShading: true }),
   ];
   const mesh = new THREE.Mesh(geometry, materials);
+  // Scaled on the mesh rather than the group so the ground needle below keeps
+  // its own length: it measures the travel line, not the car.
+  mesh.scale.setScalar(KART_VISUAL_SCALE);
   group.add(mesh);
 
   // Travel direction, drawn on the ground and rotated independently of the body
@@ -176,6 +204,48 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
   needlePivot.add(needle);
   group.add(needlePivot);
 
+  // The boost flame: two faceted cones out of the back, an orange body around a
+  // pale core, pointing -x because that is behind a kart that faces +x. Six
+  // segments for the same reason the wheels have eight.
+  //
+  // Basic materials, not Lambert: a flame is the one thing on the kart that is
+  // emitting rather than lit, and shading it with the scene's lights would sink
+  // it into the chassis it is supposed to be brighter than. Depth writing is off
+  // so the translucent cones do not punch a hole in each other.
+  const flameCone = (radius: number, length: number): THREE.BufferGeometry => {
+    const g = new THREE.ConeGeometry(radius, length, 6);
+    // The cone's axis is +y with the tip at the top; this lays it down pointing
+    // backwards, with its base at the origin so scaling x stretches the flame
+    // out of the tailpipe rather than through it.
+    g.rotateZ(Math.PI / 2);
+    g.translate(-length / 2, 0, 0);
+    return g;
+  };
+  const flameOuterGeom = flameCone(2.6, 10);
+  const flameInnerGeom = flameCone(1.3, 6);
+  const flameOuterMat = new THREE.MeshBasicMaterial({
+    color: 0xff7043,
+    transparent: true,
+    depthWrite: false,
+  });
+  const flameInnerMat = new THREE.MeshBasicMaterial({
+    color: 0xffe082,
+    transparent: true,
+    depthWrite: false,
+  });
+  // Its own pivot, turned by `facingAngle` like the body and scaled to match the
+  // geometry's source-pixel space, so the offsets above are the same numbers
+  // `buildKartGeometry` lays parts out in.
+  const flamePivot = new THREE.Group();
+  flamePivot.scale.setScalar(KART_VISUAL_SCALE);
+  const flame = new THREE.Group();
+  // Just behind the rear wing (x -6.8, half-depth 0.7) and level with the
+  // chassis, so the cones leave the kart rather than start inside it.
+  flame.position.set(-7.8, 4.4, 0);
+  flame.add(new THREE.Mesh(flameOuterGeom, flameOuterMat), new THREE.Mesh(flameInnerGeom, flameInnerMat));
+  flamePivot.add(flame);
+  group.add(flamePivot);
+
   return {
     object: group,
     update(pose) {
@@ -186,12 +256,29 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
       mesh.rotation.y = -pose.facingAngle;
       needlePivot.rotation.y = -pose.velAngle;
       needleMat.color.setHex(pose.drifting ? 0xff9100 : 0x4dd0e1);
+
+      // A flame the full length of the kart at the instant of the hit, shrinking
+      // and fading together over the countdown: length is what reads at speed
+      // from behind, alpha is what stops the tail end of it looking like a solid
+      // part of the vehicle.
+      const f = Math.max(0, Math.min(1, pose.boostFlame / FLAME_FULL));
+      flamePivot.visible = f > 0;
+      if (f > 0) {
+        flamePivot.rotation.y = -pose.facingAngle;
+        flame.scale.set(f, 1, 1);
+        flameOuterMat.opacity = 0.65 * f;
+        flameInnerMat.opacity = 0.9 * f;
+      }
     },
     dispose() {
       // Not the geometry: it is shared, and belongs to whoever built it.
       for (const m of materials) m.dispose();
       needleGeom.dispose();
       needleMat.dispose();
+      flameOuterGeom.dispose();
+      flameInnerGeom.dispose();
+      flameOuterMat.dispose();
+      flameInnerMat.dispose();
     },
   };
 }

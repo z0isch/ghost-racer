@@ -59,7 +59,7 @@ import * as THREE from "three";
 import { CAR_SIZE } from "../sim/car.js";
 import { MAX_GHOSTS, TUNE } from "../sim/tune.js";
 import type { GhostField } from "../sim/ghosts.js";
-import { buildKartGeometry, kartScaleFor } from "./kart.js";
+import { KART_VISUAL_SCALE, buildKartGeometry, kartScaleFor } from "./kart.js";
 import { PALETTE } from "./track.js";
 
 /**
@@ -139,7 +139,10 @@ export function createGhostView(): GhostView {
   /** One kart per slot, built up front and hidden rather than allocated in play. */
   const kart = (fill: THREE.Material, edge: THREE.Material): THREE.Object3D => {
     const holder = new THREE.Group();
-    holder.add(new THREE.Mesh(geometry, fill), new THREE.LineSegments(edgeGeometry, edge));
+    holder.add(
+      new THREE.Mesh(geometry, fill),
+      new THREE.LineSegments(edgeGeometry, edge),
+    );
     holder.visible = false;
     group.add(holder);
     return holder;
@@ -150,6 +153,10 @@ export function createGhostView(): GhostView {
   // allocations during a tuning slider drag would.
   const pool = Array.from({ length: MAX_GHOSTS }, () => kart(fillMat, edgeMat));
   const pace = kart(paceFillMat, paceEdgeMat);
+  // The pace kart is drawn at car size, not at the contact radius — it is not
+  // collectable — so it takes the cosmetic shrink once, here, rather than per
+  // frame like the pool above.
+  pace.scale.setScalar(KART_VISUAL_SCALE);
 
   /** Last-pushed values, so the per-frame update touches materials only on change. */
   let shownAlpha = -1;
@@ -177,9 +184,12 @@ export function createGhostView(): GhostView {
         edgeMat.color.setHex(tint);
       }
 
-      // Sized to the contact radius, which is a live slider: what you see is what
-      // you hit, at whatever the slider currently says.
-      const scale = kartScaleFor(TUNE.hitRadius);
+      // Sized to the contact radius, which is a live slider, then shrunk by the
+      // same cosmetic factor the player kart wears so the field reads as the same
+      // vehicle. Note the knock-on: the drawn ghost is now smaller than the
+      // radius it is collected at, so "what you see is what you hit" holds only
+      // for the centre — a ghost can be taken from a little outside its mesh.
+      const scale = kartScaleFor(TUNE.hitRadius) * KART_VISUAL_SCALE;
       const count = field.count;
 
       for (let i = 0; i < pool.length; i++) {
