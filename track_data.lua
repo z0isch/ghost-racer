@@ -381,8 +381,8 @@ local function mirror_track(tdata)
   local mw  = tdata.map.width
   local out = {}
   for k, v in pairs(tdata) do out[k] = v end
-  out.map   = mirror_map(tdata.map)
-  out.spawn = { col = mw - 1 - tdata.spawn.col, row = tdata.spawn.row }
+  out.map           = mirror_map(tdata.map)
+  out.spawn         = { col = mw - 1 - tdata.spawn.col, row = tdata.spawn.row }
 
   local checkpoints = {}
   for i, cp in ipairs(tdata.checkpoints) do

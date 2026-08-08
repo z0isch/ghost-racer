@@ -53,7 +53,7 @@ M.NODES     = {
     desc      = "Increase top speed\nGotta go fast!",
     max       = 2,
     base_cost = 25,
-    growth    = 1.5,
+    growth    = 0.75,
     pos       = { x = 254, y = 90 },
     links     = {},
     apply     = function(ctx, rank)
