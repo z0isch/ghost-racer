@@ -20,9 +20,12 @@ import {
   type Car,
 } from "./src/sim/car.js";
 import { createCollider } from "./src/sim/collision.js";
+import { createLedger } from "./src/sim/cash.js";
+import { TUNE } from "./src/sim/tune.js";
 import { createKeyboard } from "./src/io/keyboard.js";
 import { track3 } from "./src/io/trackData.js";
 import { createScene } from "./src/render/scene.js";
+import { createHud } from "./src/hud/hud.js";
 import * as angle from "./src/sim/angle.js";
 
 export const FIXED_HZ = 120;
@@ -177,16 +180,42 @@ scene.camera.snap(chasePose());
 const probe = document.getElementById("probe");
 let probeAt = 0;
 
-// Nothing in this prototype persists, so the fastest way to try a tuning change
-// is the console: `car.driftDrag = 1.2`. T8 replaces this with real lil-gui
-// knobs; until then it beats editing a constant and losing the drive.
+/** The money. Nothing pays into it yet — see the debug keys at the bottom. */
+const ledger = createLedger();
+
+/**
+ * Session restart, `endless_dev.lua`'s `R`: the run goes back to zero, the
+ * *tuning* does not. That asymmetry is the whole point of the TUNE/DEFAULTS
+ * split — restoring the authored knobs is a separate, deliberate act (`0`).
+ *
+ * T9 owns the real version of this, along with the grid-start beat.
+ */
+function restartSession(): void {
+  resetCar(car, spawn.x, spawn.z, spawn.facing);
+  collider.reset();
+  scene.camera.snap(chasePose());
+  ledger.reset();
+}
+
+const hud = createHud({
+  ledger,
+  car,
+  camera: scene.camera.knobs,
+  onRestart: restartSession,
+  onTuneChange(key) {
+    // The sim reads `TUNE` directly; only the knobs that have to be *pushed*
+    // somewhere are handled here. `lineAlpha` is the map's first legibility
+    // fallback, and it is a render-side property, not a per-step read.
+    if (key === "lineAlpha") scene.track.setLineAlpha(TUNE.lineAlpha);
+  },
+});
+scene.track.setLineAlpha(TUNE.lineAlpha);
+
+// The panel is the supported way to tune now, but the console still reaches the
+// same objects — a field the panel does not expose is one assignment away, and
+// mutating them from either side is equivalent.
 (window as unknown as { car: Car }).car = car;
-// Same reasoning for the track's render knobs. `track.setLineAlpha(0.5)` is the
-// map's first legibility fallback if the `$/sec` curve plateaus — reachable, and
-// off, which is the whole decision (`endless_dev.lua:107`).
 (window as unknown as { track: typeof scene.track }).track = scene.track;
-// And the same for the chase camera's knobs — `cam.velBlend = 1` mid-drift is
-// the whole T7 experiment, and it has to be tried while driving, not by reload.
 (window as unknown as { cam: typeof scene.camera.knobs }).cam = scene.camera.knobs;
 
 startLoop({
@@ -196,6 +225,11 @@ startLoop({
     previous.facingAngle = car.facingAngle;
     previous.velAngle = car.velAngle;
     stepCar(car, keyboard.takeStep(), dt, collider.resolveMove);
+    // The session and lap clocks advance on the fixed step, never on wall time:
+    // every `$/sec` this prototype reports is a ratio against this number, so it
+    // has to be the same on any display. (The HUD's flash fade is the one thing
+    // that runs on wall time — it is cosmetic.)
+    ledger.step(dt);
     // Camera spring on the same fixed cadence as the sim: a spring integrated
     // against frame deltas is a different camera at 60Hz and at 144Hz.
     scene.camera.follow(chasePose(), dt);
@@ -208,6 +242,8 @@ startLoop({
       velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
       drifting: car.isDrifting,
     });
+
+    hud.update(stats.wallSeconds);
 
     // Timestep proof: sim seconds should track wall seconds minus dropped time,
     // whatever the display refresh rate is. The car lines below it are the only
@@ -232,16 +268,35 @@ startLoop({
         // cannot tell a tuning you set from one you thought you set.
         `cam        blend ${scene.camera.knobs.velBlend.toFixed(2)}   k ${scene.camera.knobs.stiffness.toFixed(0)}   zeta ${scene.camera.knobs.damping.toFixed(2)}`,
         ``,
-        `arrows/AD steer   Z brake   X drift   C boost   R reset`,
+        `arrows/AD steer   Z brake   X drift   C boost   R restart`,
+        `\` hud   0 defaults   J cp  K coin  L lap  (T8 stubs)`,
       ].join("\n");
     }
   },
 });
 
-// Not a game input — there is no lap line to cross yet, and a car wedged in a
-// corner needs some way back. T9 owns the real reset beat.
+/**
+ * Stubs, and only stubs. Nothing in the sim pays cash or crosses a line yet —
+ * checkpoints and the rollover beat are T9, coins are T12 — so these keys drive
+ * the ledger by hand, which is what makes the readout watchable today:
+ *
+ * - `J` / `K` — pay a checkpoint / a coin, at the current `TUNE` rate.
+ * - `L` — close the lap. Files the record, then flashes this lap's `$/sec`
+ *   against the previous lap's, which is the comparison `rollover()` will make
+ *   against the *promoted* lap's rate once T9 owns promotion.
+ * - `R` — restart the session (a wedged car needs some way back regardless).
+ *
+ * Delete these three keys when their real callers land; the wiring they exercise
+ * stays.
+ */
 window.addEventListener("keydown", (e) => {
-  if (e.code === "KeyR") {
+  if (e.code === "KeyR") restartSession();
+  else if (e.code === "KeyJ") ledger.award("cp", TUNE.cpPay);
+  else if (e.code === "KeyK") ledger.award("coin", TUNE.coinPay);
+  else if (e.code === "KeyL") {
+    const previous = ledger.laps[ledger.laps.length - 1];
+    const record = ledger.rollover();
+    if (previous) hud.flashRate(record.rate - previous.rate);
     resetCar(car, spawn.x, spawn.z, spawn.facing);
     collider.reset();
     scene.camera.snap(chasePose());

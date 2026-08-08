@@ -14,12 +14,15 @@ Landed:
   level, `*Pressed` is an edge that must reach exactly one fixed step.
 - `car.ts` — the scalar-speed driving model ported from `car.lua` (T4). Walls are
   not in it: `stepCar` takes a `ResolveMove` callback, and T5 supplies one.
+- `collision.ts` — tile lookup, the stepped sweep and the wall bounce (T5),
+  filling `car.ts`'s `ResolveMove` seam. One collider per car.
+- `tune.ts` — `DEFAULTS` / `TUNE` / `KNOBS` (T8). The sim reads `TUNE`; only the
+  HUD writes it. A restart resets the run, never the tuning.
+- `cash.ts` — the cash ledger and the `$/sec` arithmetic (T8). Here rather than
+  in the HUD because promotion (T9) decides on `lapRate`; the panel only reads.
 
 Planned inhabitants (see the map, issue #1):
 
-- `collision.ts` — tile-grid lookup, stepped movement, wall bounce. Plugs into
-  `car.ts`'s `ResolveMove` seam.
 - `ghosts.ts` — the ghost field: layout by distance, `taken` semantics.
 - `lap.ts` — checkpoints, `rollover()`, promotion by `$/sec`. Laps own the beat;
   ghosts own the line, so `rollover()` calls into `ghosts.ts` to install it.
-- `tune.ts` — the `TUNE` / `DEFAULTS` / `KNOBS` structure.
