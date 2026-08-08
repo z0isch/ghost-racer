@@ -21,6 +21,7 @@ import {
 } from "./src/sim/car.js";
 import { createCollider } from "./src/sim/collision.js";
 import { createLedger } from "./src/sim/cash.js";
+import { createGhosts } from "./src/sim/ghosts.js";
 import { createLap } from "./src/sim/lap.js";
 import { TUNE } from "./src/sim/tune.js";
 import { createKeyboard } from "./src/io/keyboard.js";
@@ -200,21 +201,47 @@ let probeAt = 0;
 const ledger = createLedger();
 
 /**
+ * The ghost field: the promoted line, the ghosts laid along it, and the
+ * recording of the lap in progress. Seeded with the track's reference lap, so
+ * run one already has a plausible chain to drive.
+ *
+ * Nothing draws it yet — that is T11 — and nothing pays for hitting one yet,
+ * which is T12. What is live is the machinery underneath both: `lap.ts` promotes
+ * into it every time a lap wins on `$/sec`.
+ */
+const ghosts = createGhosts(track3);
+
+/**
+ * Push the ghost line at the ribbon in `render/track.ts`. Called only when the
+ * line actually changes, since it rebuilds the geometry — and the ribbon is
+ * invisible at the authored `lineAlpha` of 0 regardless.
+ */
+let shownLine = -1;
+function showLine(): void {
+  if (ghosts.lineVersion === shownLine) return;
+  shownLine = ghosts.lineVersion;
+  scene.track.setLine(ghosts.line);
+}
+
+/**
  * The lap: checkpoint order, the `$/sec` promotion decision, and the grid-start
- * beat. `ghosts` is left out until T10 — with no field to promote into, laps
- * still run, pay and compare rates; they just have no line to install.
+ * beat. It drives the field through the `GhostLine` seam and knows nothing else
+ * about it.
  */
 const lap = createLap({
   track: track3,
   car,
   collider,
   ledger,
+  ghosts,
   onRollover({ delta }) {
     // The car is already back on the grid: collapse the interpolation window
     // and put the camera behind it, or the "1" beat is spent watching the whole
     // track swing past.
     syncPrevious();
     scene.camera.snap(chasePose());
+    // A promoted lap has just replaced the line the ribbon was drawing.
+    showLine();
     // The comparison the prototype exists to make: this lap's `$/sec` against
     // the lap it was measured against. Silent on lap 1, which has none.
     if (delta !== null) hud.flashRate(delta);
@@ -233,6 +260,8 @@ function restartSession(): void {
   lap.restart();
   syncPrevious();
   scene.camera.snap(chasePose());
+  // `lap.restart()` has put the field back on the seeded reference lap.
+  showLine();
 }
 
 const hud = createHud({
@@ -248,6 +277,10 @@ const hud = createHud({
   },
 });
 scene.track.setLineAlpha(TUNE.lineAlpha);
+// The ribbon is built from the reference lap and the field starts on that same
+// lap, so this changes nothing today — it is what keeps `shownLine` honest from
+// the first frame rather than from the first rollover.
+showLine();
 
 /** Which checkpoint the pads are currently lit for. `-1` forces the first push. */
 let shownCp = -1;
@@ -280,6 +313,10 @@ startLoop({
     // eventually trigger. The camera follows *after* that, so on the rollover
     // step it reads the pose the grid start just wrote.
     lap.endStep(dt);
+    // Recorded *after* the crossing test, exactly as `endless_dev.lua:655-657`
+    // does it: on the step that closes a lap, the sample belongs to the new lap
+    // starting on the grid, not to the one just filed.
+    ghosts.step(dt, car.x, car.z);
     // Camera spring on the same fixed cadence as the sim: a spring integrated
     // against frame deltas is a different camera at 60Hz and at 144Hz.
     scene.camera.follow(chasePose(), dt);
@@ -326,6 +363,10 @@ startLoop({
         // is being judged on. `best` is the rate a promotion has to beat.
         `lap        ${ledger.lap}   cp ${lap.nextCp + 1}/${track3.checkpoints.length}   ${lap.held ? "HELD" : `${ledger.lapTime.toFixed(1)}s`}`,
         `rate       lap ${ledger.lapRate.toFixed(2)}   best ${lap.bestRate === null ? "-" : lap.bestRate.toFixed(2)}   (${lap.promoteMode})`,
+        // The ghost field, with no way to see it until T11 draws it: how many
+        // are laid, how long the line they are laid on is, and whether that line
+        // is still the seeded reference (`v1`) or a lap of your own.
+        `ghosts     ${ghosts.count}   line ${ghosts.line.length} pts   v${ghosts.lineVersion}`,
         ``,
         // Echoed because they are edited live from the console: without this you
         // cannot tell a tuning you set from one you thought you set.

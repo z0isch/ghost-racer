@@ -25,7 +25,12 @@ Landed:
   `GhostLine` seam to install it. The freeze is a gate — `beginStep` returning
   false means the caller steps *nothing*, clocks included.
 
+- `ghosts.ts` — the ghost field (T10): the promoted line, the ghosts laid along
+  it by *arc length*, `taken` semantics, and the raw lap recording that
+  downsamples to `MIN_SPACING` at promotion. Implements `lap.ts`'s `GhostLine`;
+  headings are derived off the polyline here and nowhere else.
+
 Planned inhabitants (see the map, issue #1):
 
-- `ghosts.ts` — the ghost field: layout by distance, `taken` semantics. It
-  implements `lap.ts`'s `GhostLine`; `createLap` runs without one until it does.
+- T12's coin field and the ghost contact test that spends `ghosts.ts`'s `take` /
+  `touched` and `lap.ts`'s `graceT`. The last thing `sim/` is waiting on.

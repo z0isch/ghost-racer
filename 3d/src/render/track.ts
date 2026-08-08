@@ -112,10 +112,22 @@ export interface TrackView {
    *
    * The knob is kept because it is the map's first legibility fallback if the
    * `$/sec` curve plateaus — but it is *off*, because a rendered line is the
-   * telegraphing the whole prototype is built to do without. It currently draws
-   * the seeded reference lap; T10 repoints it at the promoted line.
+   * telegraphing the whole prototype is built to do without.
    */
   setLineAlpha(alpha: number): void;
+  /**
+   * Repoint the ribbon at a different polyline — the promoted line (T10), which
+   * replaces the seeded reference lap this view is built with the moment a lap
+   * wins on `$/sec`. Drawing the reference lap after that would be showing the
+   * player a route the ghosts are no longer standing on.
+   *
+   * Rebuilds the geometry, so call it when the line *changes* (once per
+   * rollover) rather than per frame. `endless_dev.lua:676` is explicit that the
+   * whole loop is drawn at constant alpha and frozen until rollover: on a closed
+   * loop "the path they will take" is the entire loop, and it cannot morph
+   * mid-lap without becoming unreadable.
+   */
+  setLine(points: readonly LinePoint[]): void;
   dispose(): void;
 }
 
@@ -253,7 +265,10 @@ export function createTrack(track: TrackExport, options: TrackViewOptions = {}):
 
   // --- the racing line -----------------------------------------------------
 
-  const lineGeom = own(ribbon(track.referenceLap.points, LINE_HALF_WIDTH, Y_LINE));
+  // Seeded with the reference lap, repointed at the promoted line by `setLine`.
+  // Owned by hand rather than through `own`, since it is the one thing here that
+  // is replaced during the session: the old geometry is disposed as it goes.
+  let lineGeom = ribbon(track.referenceLap.points, LINE_HALF_WIDTH, Y_LINE);
   const lineMat = own(
     new THREE.MeshBasicMaterial({
       color: PALETTE.line,
@@ -265,6 +280,8 @@ export function createTrack(track: TrackExport, options: TrackViewOptions = {}):
   );
   const line = new THREE.Mesh(lineGeom, lineMat);
   line.visible = false;
+  /** Whether the current polyline has anything to draw at all. */
+  let lineVisible = track.referenceLap.points.length >= 2;
   group.add(line);
 
   const view: TrackView = {
@@ -278,10 +295,21 @@ export function createTrack(track: TrackExport, options: TrackViewOptions = {}):
     },
     setLineAlpha(alpha) {
       lineMat.opacity = alpha;
-      line.visible = alpha > 0;
+      line.visible = alpha > 0 && lineVisible;
+    },
+    setLine(points) {
+      const next = ribbon(points, LINE_HALF_WIDTH, Y_LINE);
+      lineGeom.dispose();
+      lineGeom = next;
+      line.geometry = next;
+      // A polyline too short to have segments produces an empty geometry, which
+      // renders as nothing but would leave the alpha knob claiming a line is up.
+      lineVisible = points.length >= 2;
+      view.setLineAlpha(lineMat.opacity);
     },
     dispose() {
       group.clear();
+      lineGeom.dispose();
       for (const thing of owned) thing.dispose();
     },
   };
