@@ -19,7 +19,9 @@ import {
   MID_SPEC,
   type Car,
 } from "./src/sim/car.js";
+import { createCollider } from "./src/sim/collision.js";
 import { createKeyboard } from "./src/io/keyboard.js";
+import { track3 } from "./src/io/trackData.js";
 import { createScene } from "./src/render/scene.js";
 import * as angle from "./src/sim/angle.js";
 
@@ -122,12 +124,22 @@ export function startLoop(spec: LoopSpec): LoopHandle {
 
 // --- composition root ------------------------------------------------------
 
-const scene = createScene(document.body);
+const scene = createScene(document.body, track3);
 const keyboard = createKeyboard();
+
+/** The authored spawn pose, in source pixels — a top-left corner, as always. */
+const spawn = {
+  x: track3.spawn.col * track3.tileSize,
+  z: track3.spawn.row * track3.tileSize,
+  facing: track3.spawn.facing,
+};
 
 const car: Car = createCar();
 applyUpgrades(car, MID_SPEC);
-resetCar(car, 0, 0);
+// One collider per car: it owns the bounce accumulator `Car` deliberately does
+// not carry.
+const collider = createCollider(track3);
+resetCar(car, spawn.x, spawn.z, spawn.facing);
 
 /**
  * Last step's pose, kept so `render` can interpolate across the leftover
@@ -158,8 +170,7 @@ startLoop({
     previous.z = car.z;
     previous.facingAngle = car.facingAngle;
     previous.velAngle = car.velAngle;
-    // No collider: T4 judges the model on an empty plane. T5 passes one here.
-    stepCar(car, keyboard.takeStep(), dt);
+    stepCar(car, keyboard.takeStep(), dt, collider.resolveMove);
   },
   render(alpha, stats) {
     scene.draw({
@@ -187,6 +198,7 @@ startLoop({
         `slip       ${((slip * 180) / Math.PI).toFixed(1)}°   ${car.isDrifting ? "DRIFT" : ""}`,
         `drift t    ${car.driftTime.toFixed(2)}s   ${car.boostReady ? "BOOST READY" : ""}`,
         `boosts     ${car.boosts}/${car.maxBoosts}`,
+        `wall       ${collider.touching ? "CONTACT" : "-"}   bounce ${Math.hypot(collider.bounceX, collider.bounceZ).toFixed(0)} px/s`,
         ``,
         `arrows/AD steer   Z brake   X drift   C boost   R reset`,
       ].join("\n");
@@ -194,8 +206,11 @@ startLoop({
   },
 });
 
-// Not a game input — an empty plane has no lap line to cross, and a car that has
-// wandered off into the grid needs some way back. T9 owns the real reset beat.
+// Not a game input — there is no lap line to cross yet, and a car wedged in a
+// corner needs some way back. T9 owns the real reset beat.
 window.addEventListener("keydown", (e) => {
-  if (e.code === "KeyR") resetCar(car, 0, 0);
+  if (e.code === "KeyR") {
+    resetCar(car, spawn.x, spawn.z, spawn.facing);
+    collider.reset();
+  }
 });

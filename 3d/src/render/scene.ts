@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { createKart, type Kart, type KartPose } from "./kart.js";
+import { Tile, type TrackExport } from "../io/types.js";
 
 /**
- * The renderer, its lights, and an empty plane with one kart on it.
+ * The renderer, its lights, the track's blocking tiles as boxes, and one kart.
  *
  * ## Why the camera here is deliberately dumb
  *
@@ -16,21 +17,36 @@ import { createKart, type Kart, type KartPose } from "./kart.js";
  * T4's feel judgement be about `car.lua`'s model and nothing else, and leaves
  * T7's decision uncontaminated by a chase cam improvised here.
  *
- * The ground is a bare grid at tile pitch. No walls, no track: an untextured
- * plane gives no sense of motion, and a grid is the cheapest thing that does.
+ * ## The track here is a placeholder, not T6
+ *
+ * `buildTrack` below stamps one box per blocking tile through two
+ * `InstancedMesh`es — flat colours, one height, no palette, no curbs, no
+ * decoration. It exists because T5's question is *how does hitting a wall feel*,
+ * and that cannot be judged against an invisible collision grid.
+ *
+ * **T6 owns `render/track.ts` and the real render vocabulary**, which is why the
+ * placeholder deliberately squats in this file rather than claiming that
+ * filename. What it does establish, and T6 inherits: `WALL` (0) and `SOLID` (2)
+ * are painted *differently*, because on track 3 the outer boundary is `SOLID`
+ * and the interior fill is `WALL` — the opposite of what the 2D palette's
+ * ordering suggests (see T3's resolution).
  */
 export interface Scene {
   draw(pose: KartPose): void;
   dispose(): void;
 }
 
-/** Source pixels per tile — `track_data.tile_size`. Grid pitch only. */
-const TILE = 16;
 /** Camera height and southward pull-back, in source pixels. */
 const CAM_HEIGHT = 260;
 const CAM_BACK = 90;
 
-export function createScene(container: HTMLElement): Scene {
+/** Placeholder barrier height, source pixels. T6 decides the real one. */
+const WALL_HEIGHT = 14;
+
+export function createScene(container: HTMLElement, track: TrackExport): Scene {
+  const TILE = track.tileSize;
+  const worldW = track.map.width * TILE;
+  const worldH = track.map.height * TILE;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
@@ -40,15 +56,23 @@ export function createScene(container: HTMLElement): Scene {
 
   const camera = new THREE.PerspectiveCamera(55, 1, 1, 4000);
 
-  const groundGeom = new THREE.PlaneGeometry(4000, 4000);
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x2e7d5b, flatShading: true });
+  // The road surface. Sized to the world rather than to infinity so the edge of
+  // the map is visible as an edge — off-map is not somewhere the car can be.
+  const groundGeom = new THREE.PlaneGeometry(worldW, worldH);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0x554b8c, flatShading: true });
   const ground = new THREE.Mesh(groundGeom, groundMat);
   ground.rotation.x = -Math.PI / 2;
+  ground.position.set(worldW / 2, 0, worldH / 2);
   scene.add(ground);
 
-  const grid = new THREE.GridHelper(4000, 4000 / TILE, 0x53c48a, 0x3a8f6a);
-  grid.position.y = 0.05;
+  const grid = new THREE.GridHelper(Math.max(worldW, worldH), Math.max(worldW, worldH) / TILE);
+  grid.position.set(worldW / 2, 0.05, worldH / 2);
+  (grid.material as THREE.Material).opacity = 0.15;
+  (grid.material as THREE.Material).transparent = true;
   scene.add(grid);
+
+  const barriers = buildTrack(track, TILE);
+  for (const b of barriers) scene.add(b);
 
   const kart: Kart = createKart();
   scene.add(kart.object);
@@ -82,6 +106,10 @@ export function createScene(container: HTMLElement): Scene {
     dispose() {
       window.removeEventListener("resize", resize);
       kart.dispose();
+      for (const b of barriers) {
+        b.geometry.dispose();
+        (b.material as THREE.Material).dispose();
+      }
       groundGeom.dispose();
       groundMat.dispose();
       grid.dispose();
@@ -89,4 +117,50 @@ export function createScene(container: HTMLElement): Scene {
       renderer.domElement.remove();
     },
   };
+}
+
+/**
+ * One box per blocking tile, batched into an `InstancedMesh` per tile id — 351
+ * boxes on track 3, in two draw calls.
+ *
+ * Boxes sit on whole tile cells because that is precisely what
+ * `sim/collision.ts` tests: the barrier you see is the barrier the four corner
+ * samples hit, with no artistic slack between them. That exactness is the point
+ * for T5 — a wall drawn even half a tile off would make a correct collision read
+ * as a bug.
+ */
+function buildTrack(track: TrackExport, tileSize: number): THREE.InstancedMesh[] {
+  const COLORS: ReadonlyMap<number, number> = new Map([
+    [Tile.WALL, 0x2b2b57],
+    [Tile.SOLID, 0x14141f],
+  ]);
+
+  const meshes: THREE.InstancedMesh[] = [];
+  const matrix = new THREE.Matrix4();
+
+  for (const [tileId, color] of COLORS) {
+    const cells: number[] = [];
+    for (let i = 0; i < track.map.tiles.length; i++) {
+      if (track.map.tiles[i] === tileId) cells.push(i);
+    }
+    if (cells.length === 0) continue;
+
+    const geom = new THREE.BoxGeometry(tileSize, WALL_HEIGHT, tileSize);
+    const mat = new THREE.MeshLambertMaterial({ color, flatShading: true });
+    const mesh = new THREE.InstancedMesh(geom, mat, cells.length);
+    cells.forEach((cell, n) => {
+      const col = cell % track.map.width;
+      const row = Math.floor(cell / track.map.width);
+      matrix.setPosition(
+        col * tileSize + tileSize / 2,
+        WALL_HEIGHT / 2,
+        row * tileSize + tileSize / 2,
+      );
+      mesh.setMatrixAt(n, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    meshes.push(mesh);
+  }
+
+  return meshes;
 }

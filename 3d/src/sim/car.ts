@@ -27,10 +27,10 @@
  * ## What is deliberately absent
  *
  * - **Walls.** No tile lookup, no `MAX_MOVE_STEP` sweep, no `bounce_x/bounce_y`,
- *   no world-bounds clamp. T5 owns all of it and inserts at the `resolveMove`
- *   seam below. Splitting it out is what makes the feel judgement bisectable: if
- *   the kart feels wrong on an empty plane it is this file, if it only feels
- *   wrong once walls exist it is T5.
+ *   no world-bounds clamp. All of it lives in `sim/collision.ts` (T5) and enters
+ *   through the `resolveMove` seam below. Splitting it out is what makes the
+ *   feel judgement bisectable: if the kart feels wrong on an empty plane it is
+ *   this file, if it only feels wrong once walls exist it is collision.
  * - **Everything drawn or heard.** Headlights, taillights, flames, skid marks,
  *   the engine loop and the squeal (~320 of `car.lua`'s 573 lines) are dropped.
  *   `boostFlameT` survives as *state* only, because `render/kart.ts` will want
@@ -45,7 +45,7 @@ import type { CarInput } from "./input.js";
 
 /** Side of the car's collision box, in source pixels. */
 export const CAR_SIZE = 16;
-/** Inset used by the tile test. Unused until T5; kept next to CAR_SIZE. */
+/** Inset used by `collision.ts`'s tile test. Kept next to CAR_SIZE. */
 export const CAR_MARGIN = 3;
 
 const ACCEL_BASE = 35;
@@ -442,13 +442,13 @@ export function stepCar(
   } else if (car.vel < minVel) {
     car.vel = Math.min(minVel, car.vel + OVERSPEED_DECAY * dt);
   } else if (braking) {
-    car.vel = bleed(car.vel, car.deccel * dt);
+    car.vel = bleedVel(car.vel, car.deccel * dt);
   } else {
     car.vel = clamp(car.vel + car.gear * car.accel * dt, minVel, effectiveTopVel);
   }
 
   if (isDrifting) {
-    car.vel = bleed(car.vel, (car.driftDeccel + Math.abs(car.vel) * car.driftDrag) * dt);
+    car.vel = bleedVel(car.vel, (car.driftDeccel + Math.abs(car.vel) * car.driftDrag) * dt);
     // Belt and braces on the drift's sign lock. driftDir comes from the gear and
     // the throttle only ever pushes along the gear, so nothing above should
     // cross zero on its own; this pins a scrubbed-out drift at a standstill if
@@ -504,7 +504,11 @@ function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-/** Reduces `v` toward 0 by `amount`, never crossing zero. `bleed_vel`. */
-function bleed(v: number, amount: number): number {
+/**
+ * Reduces `v` toward 0 by `amount`, never crossing zero. `car.lua`'s local
+ * `bleed_vel`, exported because the wall response in `sim/collision.ts` is its
+ * other caller there and charges speed by the same rule.
+ */
+export function bleedVel(v: number, amount: number): number {
   return v < 0 ? Math.min(0, v + amount) : Math.max(0, v - amount);
 }
