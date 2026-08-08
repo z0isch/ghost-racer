@@ -205,9 +205,9 @@ const ledger = createLedger();
  * recording of the lap in progress. Seeded with the track's reference lap, so
  * run one already has a plausible chain to drive.
  *
- * Nothing draws it yet — that is T11 — and nothing pays for hitting one yet,
- * which is T12. What is live is the machinery underneath both: `lap.ts` promotes
- * into it every time a lap wins on `$/sec`.
+ * `render/ghosts.ts` draws it (T11); nothing pays for hitting one yet, which is
+ * T12. What is live is the machinery underneath both: `lap.ts` promotes into it
+ * every time a lap wins on `$/sec`.
  */
 const ghosts = createGhosts(track3);
 
@@ -322,13 +322,20 @@ startLoop({
     scene.camera.follow(chasePose(), dt);
   },
   render(alpha, stats) {
-    scene.draw({
-      x: previous.x + (car.x - previous.x) * alpha,
-      z: previous.z + (car.z - previous.z) * alpha,
-      facingAngle: angle.lerp(previous.facingAngle, car.facingAngle, alpha),
-      velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
-      drifting: car.isDrifting,
-    });
+    scene.draw(
+      {
+        x: previous.x + (car.x - previous.x) * alpha,
+        z: previous.z + (car.z - previous.z) * alpha,
+        facingAngle: angle.lerp(previous.facingAngle, car.facingAngle, alpha),
+        velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
+        drifting: car.isDrifting,
+      },
+      // Not interpolated, and not `previous`-tracked: at the authored
+      // `ghostSpeed` of 0 the field does not move within a lap, and the pace
+      // ghost is a reference rather than a thing you aim at, so a step of lag on
+      // it is invisible.
+      ghosts,
+    );
 
     hud.update(stats.wallSeconds);
     hud.setBeat(lap.beat);
@@ -363,9 +370,9 @@ startLoop({
         // is being judged on. `best` is the rate a promotion has to beat.
         `lap        ${ledger.lap}   cp ${lap.nextCp + 1}/${track3.checkpoints.length}   ${lap.held ? "HELD" : `${ledger.lapTime.toFixed(1)}s`}`,
         `rate       lap ${ledger.lapRate.toFixed(2)}   best ${lap.bestRate === null ? "-" : lap.bestRate.toFixed(2)}   (${lap.promoteMode})`,
-        // The ghost field, with no way to see it until T11 draws it: how many
-        // are laid, how long the line they are laid on is, and whether that line
-        // is still the seeded reference (`v1`) or a lap of your own.
+        // The ghost field: how many are laid, how long the line they are laid on
+        // is, and whether that line is still the seeded reference (`v1`) or a lap
+        // of your own.
         `ghosts     ${ghosts.count}   line ${ghosts.line.length} pts   v${ghosts.lineVersion}`,
         ``,
         // Echoed because they are edited live from the console: without this you

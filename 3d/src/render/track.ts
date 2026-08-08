@@ -78,6 +78,28 @@ export const PALETTE = {
   checkpointLine: 0x1a6b46,
   /** The racing line, when `lineAlpha` is turned up. */
   line: 0xffe066,
+  /**
+   * The kart, player and ghost alike (T11). One mesh, three material slots —
+   * see `kart.ts`. Warm yellow against the violet road is the widest hue gap
+   * the theme has, which is what a chase cam needs from the thing it follows;
+   * `dark` is the same near-black the outside boundary uses, so wheels and
+   * cockpit read as silhouette rather than as another colour to track.
+   */
+  kart: {
+    body: 0xffe066,
+    accent: 0xf2efff,
+    dark: 0x1b1f36,
+  },
+  /**
+   * Ghost tints, `endless_dev.lua:668-671`. The field's tint is the *bet*: green
+   * while `boostOnHit` is on (a pickup), pink when it is off (a hazard that ends
+   * the run). Deliberately not reusing `checkpointFill` for the green — a tweak
+   * to a checkpoint pad should not move what the ghosts look like.
+   */
+  ghostPickup: 0x4dffa0,
+  ghostHazard: 0xff5cc8,
+  /** The non-interactive pace ghost, `PACE_GHOST_TINT`. */
+  ghostPace: 0x5cc8ff,
 } as const;
 
 /** Blocking tiles, derived from the drivable set so the two can't disagree. */

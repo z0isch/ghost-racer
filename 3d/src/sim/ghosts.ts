@@ -118,6 +118,21 @@ export interface GhostField extends GhostLine {
   pose(i: number): GhostPose | null;
 
   /**
+   * Pose of the non-interactive **pace ghost** (`endless_dev.lua:366`): the
+   * promoted line sampled at the player's *own* lap clock, so it always shows
+   * where that lap was at the same elapsed time. Forward, real time, no
+   * `ghostSpeed` or `sameDir` involved — it is a reference, not part of the
+   * field, and `take`/`touched` never apply to it.
+   *
+   * `null` when there is no line, or when `TUNE.paceGhost` is off.
+   *
+   * This arrived with T11 rather than T10 because T10 built the *field* and the
+   * pace ghost is not in it. It is here rather than in the renderer because it
+   * is polyline math over the promoted line, which is this file's business.
+   */
+  pacePose(): GhostPose | null;
+
+  /**
    * Consume ghost `i` for the rest of the lap. Each ghost is worth exactly one
    * hit — otherwise the car could sit inside one farming boosts — and the whole
    * field comes back at `rollover()`. T12's contact test is the caller.
@@ -272,6 +287,30 @@ export function createGhosts(track: TrackExport): GhostField {
     return { x: last.x, y: last.y, head: headings[lastIndex]! };
   }
 
+  /**
+   * The line's pose at `phase`, with `flip` added to the heading — 0 for a ghost
+   * facing along the line, pi for one running it backwards.
+   *
+   * Shared by the field and the pace ghost so the lookahead rule is written
+   * once: prefer the tangent to a point `HEADING_DT` further along, and fall
+   * back to the per-point heading where the line does not actually move there.
+   */
+  function poseAt(phase: number, flip: number): GhostPose | null {
+    const s = sampleAt(phase);
+    if (s === null) return null;
+    let head = s.head + flip;
+    const ahead = sampleAt(wrap(phase + HEADING_DT, period));
+    if (ahead !== null) {
+      const dx = ahead.x - s.x;
+      const dy = ahead.y - s.y;
+      // The lookahead is the better tangent where the line actually moves; where
+      // it doesn't — a ghost parked where the lap stalled — the per-point heading
+      // is all there is, and it is already carried forward from the last real one.
+      if (dx * dx + dy * dy > 0.01) head = Math.atan2(dy, dx) + flip;
+    }
+    return { x: s.x, z: s.y, head: angle.normalize(head) };
+  }
+
   const field: GhostField = {
     get line() {
       return line;
@@ -307,24 +346,14 @@ export function createGhosts(track: TrackExport): GhostField {
       // each ghost simply sits on its arc-length offset all lap.
       const moved = lapT * TUNE.ghostSpeed;
       const phase = wrap(TUNE.sameDir ? offset + moved : offset - moved, period);
-      const s = sampleAt(phase);
-      if (s === null) return null;
-
       // Retrograde ghosts face the way they are *going*, which is backwards
       // along the line, so the heading flips with them.
-      const flip = TUNE.sameDir ? 0 : Math.PI;
-      let head = s.head + flip;
-      const ahead = sampleAt(wrap(phase + HEADING_DT, period));
-      if (ahead !== null) {
-        const dx = ahead.x - s.x;
-        const dy = ahead.y - s.y;
-        // The lookahead is the better tangent where the line actually moves;
-        // where it doesn't — a ghost parked where the lap stalled — the
-        // per-point heading is all there is, and it is already carried forward
-        // from the last real one.
-        if (dx * dx + dy * dy > 0.01) head = Math.atan2(dy, dx) + flip;
-      }
-      return { x: s.x, z: s.y, head: angle.normalize(head) };
+      return poseAt(phase, TUNE.sameDir ? 0 : Math.PI);
+    },
+
+    pacePose() {
+      if (!TUNE.paceGhost || period <= 0) return null;
+      return poseAt(wrap(lapT, period), 0);
     },
 
     take(i) {

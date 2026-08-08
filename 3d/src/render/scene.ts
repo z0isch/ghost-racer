@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { createKart, type Kart, type KartPose } from "./kart.js";
+import { createGhostView, type GhostView } from "./ghosts.js";
 import { createTrack, PALETTE, type TrackView } from "./track.js";
 import { createChaseCamera, type ChaseCamera } from "./camera.js";
 import { type TrackExport } from "../io/types.js";
+import type { GhostField } from "../sim/ghosts.js";
 
 /**
  * The renderer, its lights, the track, and one kart. Owns the frame; the track's
@@ -25,7 +27,17 @@ import { type TrackExport } from "../io/types.js";
  * ankle-high for exactly this camera's sightlines.
  */
 export interface Scene {
-  draw(pose: KartPose): void;
+  /**
+   * One frame: the kart at its interpolated pose, and the ghost field at the
+   * poses the sim currently reports.
+   *
+   * The field is passed in rather than held, because it is *sim* state and this
+   * is the render side of the seam — the same reason `pose` is a parameter. It is
+   * read every frame rather than pushed on change: at `ghostSpeed` 0 nothing
+   * moves, but `hitRadius`, `ghosts` and `taken` all change without anybody
+   * notifying us, and fifty transforms a frame is not worth a subscription.
+   */
+  draw(pose: KartPose, ghosts: GhostField): void;
   /** The rendered track, for callers that need its checkpoint / line knobs. */
   readonly track: TrackView;
   /** The chase camera. `loop.ts` steps it; nothing here does. */
@@ -46,7 +58,12 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   const trackView = createTrack(track);
   scene.add(trackView.object);
 
-  const kart: Kart = createKart();
+  // The field first: it builds the kart geometry both it and the player share,
+  // and owns disposing it.
+  const ghostView: GhostView = createGhostView();
+  scene.add(ghostView.object);
+
+  const kart: Kart = createKart(ghostView.kartGeometry);
   scene.add(kart.object);
 
   // N64 lighting: one hard key for the flat-shaded facets to break against, and
@@ -73,13 +90,15 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   return {
     track: trackView,
     camera: chase,
-    draw(pose) {
+    draw(pose, ghosts) {
       kart.update(pose);
+      ghostView.update(ghosts);
       renderer.render(scene, chase.camera);
     },
     dispose() {
       window.removeEventListener("resize", resize);
       kart.dispose();
+      ghostView.dispose();
       trackView.dispose();
       renderer.dispose();
       renderer.domElement.remove();
