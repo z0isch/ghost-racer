@@ -1,41 +1,39 @@
 import * as THREE from "three";
 import { createKart, type Kart, type KartPose } from "./kart.js";
 import { createTrack, PALETTE, type TrackView } from "./track.js";
+import { createChaseCamera, type ChaseCamera } from "./camera.js";
 import { type TrackExport } from "../io/types.js";
 
 /**
  * The renderer, its lights, the track, and one kart. Owns the frame; the track's
- * own vocabulary — curb heights, palette, checkpoints — lives in `track.ts`.
+ * own vocabulary — curb heights, palette, checkpoints — lives in `track.ts`, and
+ * the camera's — the spring, the blend — in `camera.ts`.
  *
- * ## Why the camera here is deliberately dumb
+ * ## The camera is no longer here
  *
- * The map's camera decision — a damped spring blend toward `vel_angle` — is T7's
- * whole ticket, and it is the decision most likely to be blamed for the model
- * feeling wrong ("the physics broke in 3D" when nothing broke but the view). So
- * this scene ships the opposite: a **fixed-orientation overhead follow cam**
- * that only ever translates. North stays up, nothing swings, nothing damps.
+ * Through T4-T6 this file carried a deliberately dumb fixed-orientation overhead
+ * follow cam: the same view the 2D game is judged in, so the car port's feel
+ * judgements were about `car.lua`'s model and nothing else, and T7's decision
+ * stayed uncontaminated by a chase cam improvised here.
  *
- * That is the same view the 2D game is judged in, which is the point — it lets
- * T4's and T5's feel judgements be about `car.lua`'s model and nothing else, and
- * leaves T7's decision uncontaminated by a chase cam improvised here.
+ * T7 has landed, so the scene now takes a `ChaseCamera` and does nothing to it
+ * but hand it the aspect ratio. It is `loop.ts` — the composition root that owns
+ * the sim/render split — that steps the camera, because the spring has to be
+ * integrated on the *fixed* timestep, not per rendered frame (see `camera.ts`).
  *
- * One consequence worth naming: T6's curbs are ankle-high for a *chase* cam's
- * sightlines, and from directly overhead they are almost edge-on. The track will
- * look flatter here than it is meant to until T7 lands.
+ * The consequence that motivated the curbs is now visible: T6's barriers are
+ * ankle-high for exactly this camera's sightlines.
  */
 export interface Scene {
   draw(pose: KartPose): void;
   /** The rendered track, for callers that need its checkpoint / line knobs. */
   readonly track: TrackView;
+  /** The chase camera. `loop.ts` steps it; nothing here does. */
+  readonly camera: ChaseCamera;
   dispose(): void;
 }
 
-/** Camera height and southward pull-back, in source pixels. */
-const CAM_HEIGHT = 260;
-const CAM_BACK = 90;
-
 export function createScene(container: HTMLElement, track: TrackExport): Scene {
-  const TILE = track.tileSize;
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   container.appendChild(renderer.domElement);
@@ -43,7 +41,7 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(PALETTE.sky);
 
-  const camera = new THREE.PerspectiveCamera(55, 1, 1, 4000);
+  const chase = createChaseCamera();
 
   const trackView = createTrack(track);
   scene.add(trackView.object);
@@ -67,24 +65,17 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
     // display the canvas is twice the viewport and only its top-left quadrant is
     // visible, putting the centred kart down in the bottom-right corner.
     renderer.setSize(w, h);
-    camera.aspect = w / h;
-    camera.updateProjectionMatrix();
+    chase.setAspect(w / h);
   };
   resize();
   window.addEventListener("resize", resize);
 
   return {
     track: trackView,
+    camera: chase,
     draw(pose) {
       kart.update(pose);
-      const cx = pose.x + TILE / 2;
-      const cz = pose.z + TILE / 2;
-      // Pulled back along +z (south) rather than sitting straight overhead: a
-      // camera directly above has its look direction parallel to `up`, and the
-      // tilt also keeps the kart's facing readable in silhouette.
-      camera.position.set(cx, CAM_HEIGHT, cz + CAM_BACK);
-      camera.lookAt(cx, 0, cz);
-      renderer.render(scene, camera);
+      renderer.render(scene, chase.camera);
     },
     dispose() {
       window.removeEventListener("resize", resize);

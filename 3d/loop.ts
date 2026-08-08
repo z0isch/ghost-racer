@@ -156,6 +156,24 @@ const previous = {
   velAngle: car.velAngle,
 };
 
+/**
+ * The pose the chase camera follows: the *unstretched* sim pose, since the
+ * camera is stepped on the fixed timestep rather than per rendered frame.
+ */
+const chasePose = () => ({
+  x: car.x,
+  z: car.z,
+  facingAngle: car.facingAngle,
+  velAngle: car.velAngle,
+  drifting: car.isDrifting,
+  speed: car.vel,
+  topSpeed: car.topVel,
+});
+
+// Start behind the kart rather than springing in from heading 0 on the first
+// step, which would swing the whole track past the camera at the green light.
+scene.camera.snap(chasePose());
+
 const probe = document.getElementById("probe");
 let probeAt = 0;
 
@@ -167,6 +185,9 @@ let probeAt = 0;
 // map's first legibility fallback if the `$/sec` curve plateaus — reachable, and
 // off, which is the whole decision (`endless_dev.lua:107`).
 (window as unknown as { track: typeof scene.track }).track = scene.track;
+// And the same for the chase camera's knobs — `cam.velBlend = 1` mid-drift is
+// the whole T7 experiment, and it has to be tried while driving, not by reload.
+(window as unknown as { cam: typeof scene.camera.knobs }).cam = scene.camera.knobs;
 
 startLoop({
   step(dt) {
@@ -175,6 +196,9 @@ startLoop({
     previous.facingAngle = car.facingAngle;
     previous.velAngle = car.velAngle;
     stepCar(car, keyboard.takeStep(), dt, collider.resolveMove);
+    // Camera spring on the same fixed cadence as the sim: a spring integrated
+    // against frame deltas is a different camera at 60Hz and at 144Hz.
+    scene.camera.follow(chasePose(), dt);
   },
   render(alpha, stats) {
     scene.draw({
@@ -204,6 +228,10 @@ startLoop({
         `boosts     ${car.boosts}/${car.maxBoosts}`,
         `wall       ${collider.touching ? "CONTACT" : "-"}   bounce ${Math.hypot(collider.bounceX, collider.bounceZ).toFixed(0)} px/s`,
         ``,
+        // Echoed because they are edited live from the console: without this you
+        // cannot tell a tuning you set from one you thought you set.
+        `cam        blend ${scene.camera.knobs.velBlend.toFixed(2)}   k ${scene.camera.knobs.stiffness.toFixed(0)}   zeta ${scene.camera.knobs.damping.toFixed(2)}`,
+        ``,
         `arrows/AD steer   Z brake   X drift   C boost   R reset`,
       ].join("\n");
     }
@@ -216,5 +244,6 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyR") {
     resetCar(car, spawn.x, spawn.z, spawn.facing);
     collider.reset();
+    scene.camera.snap(chasePose());
   }
 });
