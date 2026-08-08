@@ -11,8 +11,17 @@
  * at all.
  */
 
-import { createDemoState, stepDemo, type DemoState } from "./src/sim/demo.js";
+import {
+  applyUpgrades,
+  createCar,
+  resetCar,
+  stepCar,
+  MID_SPEC,
+  type Car,
+} from "./src/sim/car.js";
+import { createKeyboard } from "./src/io/keyboard.js";
 import { createScene } from "./src/render/scene.js";
+import * as angle from "./src/sim/angle.js";
 
 export const FIXED_HZ = 120;
 export const FIXED_DT = 1 / FIXED_HZ;
@@ -114,34 +123,79 @@ export function startLoop(spec: LoopSpec): LoopHandle {
 // --- composition root ------------------------------------------------------
 
 const scene = createScene(document.body);
-const state: DemoState = createDemoState();
-let previousAngle = state.angle;
+const keyboard = createKeyboard();
+
+const car: Car = createCar();
+applyUpgrades(car, MID_SPEC);
+resetCar(car, 0, 0);
+
+/**
+ * Last step's pose, kept so `render` can interpolate across the leftover
+ * accumulator. Only these five numbers cross the sim/render seam.
+ *
+ * `facingAngle` and `velAngle` interpolate through `angle.lerp`, not a plain
+ * lerp: both are normalized into `[0, 2pi)` every step, so a kart turning past
+ * north would otherwise spin a whole revolution backwards on the wrap frame.
+ */
+const previous = {
+  x: car.x,
+  z: car.z,
+  facingAngle: car.facingAngle,
+  velAngle: car.velAngle,
+};
 
 const probe = document.getElementById("probe");
 let probeAt = 0;
 
+// Nothing in this prototype persists, so the fastest way to try a tuning change
+// is the console: `car.driftDrag = 1.2`. T8 replaces this with real lil-gui
+// knobs; until then it beats editing a constant and losing the drive.
+(window as unknown as { car: Car }).car = car;
+
 startLoop({
   step(dt) {
-    previousAngle = state.angle;
-    stepDemo(state, dt);
+    previous.x = car.x;
+    previous.z = car.z;
+    previous.facingAngle = car.facingAngle;
+    previous.velAngle = car.velAngle;
+    // No collider: T4 judges the model on an empty plane. T5 passes one here.
+    stepCar(car, keyboard.takeStep(), dt);
   },
   render(alpha, stats) {
-    scene.draw(previousAngle + (state.angle - previousAngle) * alpha);
+    scene.draw({
+      x: previous.x + (car.x - previous.x) * alpha,
+      z: previous.z + (car.z - previous.z) * alpha,
+      facingAngle: angle.lerp(previous.facingAngle, car.facingAngle, alpha),
+      velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
+      drifting: car.isDrifting,
+    });
 
     // Timestep proof: sim seconds should track wall seconds minus dropped time,
-    // whatever the display refresh rate is.
-    if (probe && stats.wallSeconds - probeAt > 0.25) {
+    // whatever the display refresh rate is. The car lines below it are the only
+    // instrument T4 has for telling a bad number from a bad feel.
+    if (probe && stats.wallSeconds - probeAt > 0.1) {
       probeAt = stats.wallSeconds;
       const drift = stats.wallSeconds - stats.droppedSeconds - stats.simSeconds;
+      const slip = angle.lerp(0, car.velAngle - car.facingAngle, 1);
       probe.textContent = [
         `fixed      ${FIXED_HZ}Hz  (dt ${(FIXED_DT * 1000).toFixed(3)}ms)`,
         `render     ${stats.fps.toFixed(1)} fps`,
-        `steps      ${stats.steps}  (this frame ${stats.stepsThisFrame}, max ${stats.maxStepsInFrame})`,
-        `sim        ${stats.simSeconds.toFixed(2)}s`,
-        `wall       ${stats.wallSeconds.toFixed(2)}s  (dropped ${stats.droppedSeconds.toFixed(2)}s)`,
-        `drift      ${(drift * 1000).toFixed(1)}ms  (< 1 step = ${(FIXED_DT * 1000).toFixed(1)}ms)`,
-        `alpha      ${alpha.toFixed(3)}`,
+        `sim        ${stats.simSeconds.toFixed(2)}s   drift ${(drift * 1000).toFixed(1)}ms`,
+        ``,
+        `vel        ${car.vel.toFixed(1)} px/s   (top ${car.topVel})`,
+        `facing     ${((car.facingAngle * 180) / Math.PI).toFixed(0)}°`,
+        `slip       ${((slip * 180) / Math.PI).toFixed(1)}°   ${car.isDrifting ? "DRIFT" : ""}`,
+        `drift t    ${car.driftTime.toFixed(2)}s   ${car.boostReady ? "BOOST READY" : ""}`,
+        `boosts     ${car.boosts}/${car.maxBoosts}`,
+        ``,
+        `arrows/AD steer   Z brake   X drift   C boost   R reset`,
       ].join("\n");
     }
   },
+});
+
+// Not a game input — an empty plane has no lap line to cross, and a car that has
+// wandered off into the grid needs some way back. T9 owns the real reset beat.
+window.addEventListener("keydown", (e) => {
+  if (e.code === "KeyR") resetCar(car, 0, 0);
 });
