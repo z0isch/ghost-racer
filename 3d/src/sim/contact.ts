@@ -51,6 +51,7 @@
 import { applyBoost, CAR_SIZE, type Car } from "./car.js";
 import type { CashLedger } from "./cash.js";
 import type { GhostField } from "./ghosts.js";
+import type { OnPay } from "./payout.js";
 import { TUNE } from "./tune.js";
 
 export interface ContactDeps {
@@ -60,6 +61,12 @@ export interface ContactDeps {
   readonly ghosts: GhostField;
   /** Hits are counted here, and a boosted hit pays into it as `"coin"`. */
   readonly ledger: CashLedger;
+  /**
+   * Told at the *ghost* when a hit pays (`endless_dev.lua:429`), flagged
+   * `ghost` so the pop can be the quiet one — a chain pays often, and pops the
+   * size of a coin's would be a wall of text down the racing line.
+   */
+  readonly onPay?: OnPay;
 }
 
 export interface ContactTest {
@@ -115,7 +122,16 @@ export function createContact(deps: ContactDeps): ContactTest {
               ledger.countHit();
               if (TUNE.boostOnHit) {
                 applyBoost(car, TUNE.boostAmount);
-                if (TUNE.boostPay > 0) ledger.award("coin", TUNE.boostPay);
+                if (TUNE.boostPay > 0) {
+                  ledger.award("coin", TUNE.boostPay);
+                  deps.onPay?.({
+                    x: gx,
+                    z: gz,
+                    amount: TUNE.boostPay,
+                    kind: "coin",
+                    ghost: true,
+                  });
+                }
                 // Consumed for the lap, and no longer overlapping anything: it
                 // stops being posed or drawn at all until the rollover.
                 ghosts.take(i);

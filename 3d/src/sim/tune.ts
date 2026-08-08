@@ -97,7 +97,7 @@ export const DEFAULTS: Readonly<Tune> = Object.freeze({
   headOnOnly: false,
   coinRadius: 10,
   maxCoins: 10,
-  ghosts: 3,
+  ghosts: 0,
   rateWindow: 10,
   lineAlpha: 0.1,
   ghostAlpha: 0.1,

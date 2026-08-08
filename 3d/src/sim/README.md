@@ -30,6 +30,10 @@ Landed:
   downsamples to `MIN_SPACING` at promotion. Implements `lap.ts`'s `GhostLine`;
   headings are derived off the polyline here and nowhere else.
 
+- `payout.ts` — types only: `Payout` / `OnPay`, the "this paid, and here" report
+  every awarding caller offers and `cash.ts` deliberately does not carry.
+  `render/popups.ts` is its first listener.
+
 Planned inhabitants (see the map, issue #1):
 
 - T12's coin field and the ghost contact test that spends `ghosts.ts`'s `take` /

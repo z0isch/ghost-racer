@@ -33,6 +33,7 @@ import { CAR_SIZE, resetCar, type Car } from "./car.js";
 import type { Collider } from "./collision.js";
 import type { CashLedger, LapRecord } from "./cash.js";
 import { TUNE } from "./tune.js";
+import type { OnPay } from "./payout.js";
 import { checkpointRect, type Rect } from "../io/trackData.js";
 import type { TrackExport } from "../io/types.js";
 
@@ -71,6 +72,26 @@ export interface GhostLine {
   /** Session restart: back to the seeded reference line. */
   restart(): void;
 }
+
+/**
+ * How a single checkpoint pad should render, consumed by `render/track.ts`'s
+ * `setCheckpointStates`.
+ *
+ * The 2D game had only the first two — `road.draw_checkpoint` is called with
+ * `faded = i ~= State.next_cp` (`endless_dev.lua:832`), so exactly one pad is
+ * ever lit and everything else, ahead or behind, is dimmed the same way. From a
+ * top-down view that is enough: a faded pad behind you is visibly behind you.
+ * From a chase cam it is not, so the pads already taken are dropped from the
+ * world entirely and what stays on the ground is the lap you still have to
+ * drive. They all come back at the next rollover.
+ */
+export type CheckpointState =
+  /** The one to drive through: full fill, dark outline. */
+  | "target"
+  /** Still to come this lap: fill dropped, outline in the fill colour. */
+  | "pending"
+  /** Taken this lap. Not drawn at all. */
+  | "crossed";
 
 /**
  * How `rollover()` decides. `"best"` promotes only a lap that beats the stored
@@ -117,21 +138,28 @@ export interface LapDeps {
   readonly ghosts?: GhostLine;
   /** Called after the lap has been filed and the car put back on the grid. */
   readonly onRollover?: (event: RolloverEvent) => void;
+  /**
+   * Told when a checkpoint pays, at the *car* — `endless_dev.lua:510` spawns
+   * the pop there rather than at the pad, because what paid you is having
+   * driven through it.
+   */
+  readonly onPay?: OnPay;
 }
 
 export interface LapRun {
   /** 0-based index of the checkpoint that must be crossed next. */
   readonly nextCp: number;
   /**
-   * What `render/track.ts`'s `setCheckpointsCrossed` wants: one flag per
-   * checkpoint, true where it should render faded.
+   * What `render/track.ts`'s `setCheckpointStates` wants: one state per
+   * checkpoint, in authored order.
    *
-   * Faded means **"not the target"**, not "already crossed" — `road.draw_checkpoint`
-   * is called with `faded = i ~= State.next_cp` (`endless_dev.lua:832`), so
-   * exactly one pad is ever lit. On an in-order lap that fades the ones behind
-   * you, and the ones ahead too.
+   * Laps are strictly in order, so `nextCp` is the whole story — everything
+   * before it has been taken this lap and is `"crossed"`, everything after is
+   * `"pending"`. The 2D game drew both cases the same faded way
+   * (`endless_dev.lua:832`); the split is a chase-cam concession, and it lives
+   * here rather than in the view because "taken" is lap state.
    */
-  readonly faded: readonly boolean[];
+  readonly checkpointStates: readonly CheckpointState[];
   /** Best `$/sec` promoted so far this session. `null` before the first lap closes. */
   readonly bestRate: number | null;
   /** Seconds left on the countdown, `endless_dev.lua`'s `State.count_t`. */
@@ -236,8 +264,10 @@ export function createLap(deps: LapDeps): LapRun {
     get nextCp() {
       return nextCp;
     },
-    get faded() {
-      return rects.map((_, i) => i !== nextCp);
+    get checkpointStates() {
+      return rects.map<CheckpointState>((_, i) =>
+        i === nextCp ? "target" : i < nextCp ? "crossed" : "pending",
+      );
     },
     get bestRate() {
       return bestRate;
@@ -288,6 +318,12 @@ export function createLap(deps: LapDeps): LapRun {
       // target on the same step it entered this one — they do not touch.
       if (overlapsCar(car, target)) {
         ledger.award("cp", TUNE.cpPay);
+        deps.onPay?.({
+          x: car.x + CAR_SIZE / 2,
+          z: car.z + CAR_SIZE / 2,
+          amount: TUNE.cpPay,
+          kind: "cp",
+        });
         nextCp++;
         if (nextCp >= rects.length) {
           nextCp = 0;

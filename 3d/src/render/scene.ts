@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { createKart, type Kart, type KartPose } from "./kart.js";
 import { createGhostView, type GhostView } from "./ghosts.js";
 import { createCoinView, type CoinView } from "./coins.js";
+import { createPopupView, type PopupView } from "./popups.js";
 import { createTrack, PALETTE, type TrackView } from "./track.js";
 import { createChaseCamera, type ChaseCamera } from "./camera.js";
 import { type TrackExport } from "../io/types.js";
@@ -45,6 +46,12 @@ export interface Scene {
    * on wall time rather than on the fixed step.
    */
   draw(pose: KartPose, ghosts: GhostField, coins: CoinField, wallSeconds: number): void;
+  /**
+   * The cash pops. Spawned from the sim side — `loop.ts` wires every payer's
+   * `onPay` to it — and aged inside `draw`, so nothing else has to remember to
+   * tick them.
+   */
+  readonly popups: PopupView;
   /** The rendered track, for callers that need its checkpoint / line knobs. */
   readonly track: TrackView;
   /** The chase camera. `loop.ts` steps it; nothing here does. */
@@ -73,6 +80,9 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   const coinView: CoinView = createCoinView(track);
   scene.add(coinView.object);
 
+  const popupView: PopupView = createPopupView();
+  scene.add(popupView.object);
+
   const kart: Kart = createKart(ghostView.kartGeometry);
   scene.add(kart.object);
 
@@ -100,10 +110,12 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
   return {
     track: trackView,
     camera: chase,
+    popups: popupView,
     draw(pose, ghosts, coins, wallSeconds) {
       kart.update(pose);
       ghostView.update(ghosts);
       coinView.update(coins, wallSeconds);
+      popupView.update(wallSeconds);
       renderer.render(scene, chase.camera);
     },
     dispose() {
@@ -111,6 +123,7 @@ export function createScene(container: HTMLElement, track: TrackExport): Scene {
       kart.dispose();
       ghostView.dispose();
       coinView.dispose();
+      popupView.dispose();
       trackView.dispose();
       renderer.dispose();
       renderer.domElement.remove();

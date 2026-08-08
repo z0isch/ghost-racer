@@ -507,8 +507,16 @@ export function stepCar(
     if (car.boostReady) {
       // Cashed on *release*, and capped at topVel rather than the overspeed
       // ceiling: the drift boost restores the speed the scrub cost, it does not
-      // stack past flat-out. Note it lights no flame — `car.lua` only sounds the
-      // sfx here, unlike the manual boost and `applyBoost`.
+      // stack past flat-out.
+      //
+      // `car.lua` lights no flame here, because it sounds an sfx instead and
+      // that is feedback enough. Ported straight, that reasoning inverts: `3d/`
+      // has no audio at all, so the biggest impulse in the game — 200 px/s, more
+      // than the manual boost or a ghost hit — was the one the player got told
+      // nothing about. It flames, for `boostLength` rather than the usual
+      // `BOOST_FLAME_TIME`, which is what that knob was always describing and
+      // what finally gives it a consumer.
+      car.boostFlameT = car.boostLength;
       car.boostTimeRemaining = car.boostLength;
       car.vel =
         car.driftDir < 0

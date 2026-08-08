@@ -44,6 +44,7 @@
 import * as THREE from "three";
 import { DRIVABLE_TILES, Tile, type LinePoint, type TileId, type TrackExport } from "../io/types.js";
 import { checkpointRect, worldSize } from "../io/trackData.js";
+import type { CheckpointState } from "../sim/lap.js";
 
 /** Barrier height in source pixels. Ankle-high against `CAR_SIZE` (16). */
 const CURB_HEIGHT = 6;
@@ -132,12 +133,10 @@ export interface TrackView {
   /** Add this to the scene. Positioned in source pixels, world origin at the map's top-left. */
   readonly object: THREE.Object3D;
   /**
-   * Fade the checkpoints already crossed this lap, mirroring `road.draw_checkpoint`'s
-   * `faded` flag: a crossed checkpoint loses its fill and its outline takes the
-   * fill colour. T9 owns lap state and drives this; until then every checkpoint
-   * renders live.
+   * Repaint the pads, one state per checkpoint in authored order. T9 owns lap
+   * state and drives this; until then every checkpoint renders live.
    */
-  setCheckpointsCrossed(crossed: readonly boolean[]): void;
+  setCheckpointStates(states: readonly CheckpointState[]): void;
   /**
    * The racing line, off by default (`endless_dev.lua:107`, `line_alpha = 0`).
    *
@@ -317,11 +316,15 @@ export function createTrack(track: TrackExport, options: TrackViewOptions = {}):
 
   const view: TrackView = {
     object: group,
-    setCheckpointsCrossed(crossed) {
+    setCheckpointStates(states) {
       checkpoints.forEach((cp, i) => {
-        const faded = crossed[i] === true;
-        cp.fill.visible = !faded;
-        cp.outline.material = faded ? outlineCrossedMat : outlineMat;
+        // An unknown index is treated as the target rather than hidden: a short
+        // array should leave the lap's structure visible, not erase it.
+        const state = states[i] ?? "target";
+        const gone = state === "crossed";
+        cp.outline.visible = !gone;
+        cp.fill.visible = !gone && state === "target";
+        cp.outline.material = state === "pending" ? outlineCrossedMat : outlineMat;
       });
     },
     setLineAlpha(alpha) {

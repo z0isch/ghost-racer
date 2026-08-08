@@ -33,9 +33,14 @@
  * That is what makes "retracing my line collects everything" a thing you can
  * aim at rather than guess at.
  *
- * The player kart keeps T4's ground needle for `velAngle`. It is a debug cue,
- * not part of the kart, and the ghosts do not get one — a ghost has no velocity
- * and a needle on it would be the telegraphing the prototype withholds.
+ * The player kart carried T4's ground needle — a bar on the floor turned by
+ * `velAngle`, orange while drifting — until T6's palette and this file's
+ * silhouette made the drift readable from the kart itself. It was a debug cue
+ * standing in for geometry that did not exist yet, and once the geometry
+ * existed it was a line drawn out of the car in a game whose whole legibility
+ * question is what happens when you withhold the aids. It is gone. The drift is
+ * the wedge between where the kart points and where it goes, and the chase
+ * camera's `velBlend` is what makes that wedge visible.
  */
 
 import * as THREE from "three";
@@ -54,9 +59,12 @@ export interface KartPose {
   z: number;
   /** Radians, 0 = +x, increasing toward +z. */
   facingAngle: number;
-  /** Radians. Diverges from `facingAngle` only in a drift. */
+  /**
+   * Radians. Diverges from `facingAngle` only in a drift. The kart mesh is
+   * turned by `facingAngle` alone; this is here for `camera.ts`'s `ChasePose`,
+   * which blends the anchor heading toward it.
+   */
   velAngle: number;
-  drifting: boolean;
   /**
    * `car.boostFlameT`: seconds of flame left, counting down from
    * `BOOST_FLAME_TIME`. Every impulse in the sim sets it — the manual boost, the
@@ -96,10 +104,15 @@ export function kartScaleFor(size: number): number {
 export const KART_VISUAL_SCALE = 0.5;
 
 /**
- * `BOOST_FLAME_TIME` in `sim/car.ts`, repeated here rather than imported so the
- * flame's own fade curve is a render number. The sim's countdown is the source
- * of truth for *whether* there is a flame; this is only what a full one looks
- * like, and the two are allowed to drift apart.
+ * How much countdown left still draws a *full* flame, matching the sim's
+ * `BOOST_FLAME_TIME`. Repeated here rather than imported so the fade curve is a
+ * render number: the sim's countdown is the source of truth for whether there is
+ * a flame at all, and this is only what a full one looks like.
+ *
+ * The two are allowed to differ, and already do — the drift cash-out lights the
+ * flame for the longer `car.boostLength`, which the clamp below turns into a
+ * flame that *holds* at full length before it fades, rather than a longer fade.
+ * The bigger impulse reading as the steadier flame is the right way round.
  */
 const FLAME_FULL = 0.8;
 
@@ -189,20 +202,10 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
     new THREE.MeshLambertMaterial({ color: PALETTE.kart.dark, flatShading: true }),
   ];
   const mesh = new THREE.Mesh(geometry, materials);
-  // Scaled on the mesh rather than the group so the ground needle below keeps
-  // its own length: it measures the travel line, not the car.
+  // Scaled on the mesh rather than the group, so the flame pivot below carries
+  // its own scale and its offsets stay in `buildKartGeometry`'s pixel space.
   mesh.scale.setScalar(KART_VISUAL_SCALE);
   group.add(mesh);
-
-  // Travel direction, drawn on the ground and rotated independently of the body
-  // so a drift shows as a visible wedge between kart and needle.
-  const needleGeom = new THREE.BoxGeometry(CAR_SIZE * 1.6, 0.5, 1.5);
-  const needleMat = new THREE.MeshBasicMaterial({ color: 0x4dd0e1 });
-  const needle = new THREE.Mesh(needleGeom, needleMat);
-  needle.position.set(CAR_SIZE * 0.8, 0.6, 0);
-  const needlePivot = new THREE.Group();
-  needlePivot.add(needle);
-  group.add(needlePivot);
 
   // The boost flame: two faceted cones out of the back, an orange body around a
   // pale core, pointing -x because that is behind a kart that faces +x. Six
@@ -254,8 +257,6 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
       // three.js rotation.y turns +x toward -z, while the sim's angle turns +x
       // toward +z. Hence the negation, in one place, here.
       mesh.rotation.y = -pose.facingAngle;
-      needlePivot.rotation.y = -pose.velAngle;
-      needleMat.color.setHex(pose.drifting ? 0xff9100 : 0x4dd0e1);
 
       // A flame the full length of the kart at the instant of the hit, shrinking
       // and fading together over the countdown: length is what reads at speed
@@ -273,8 +274,6 @@ export function createKart(geometry: THREE.BufferGeometry): Kart {
     dispose() {
       // Not the geometry: it is shared, and belongs to whoever built it.
       for (const m of materials) m.dispose();
-      needleGeom.dispose();
-      needleMat.dispose();
       flameOuterGeom.dispose();
       flameInnerGeom.dispose();
       flameOuterMat.dispose();

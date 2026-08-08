@@ -35,6 +35,7 @@
 
 import { CAR_SIZE, type Car } from "./car.js";
 import type { CashLedger } from "./cash.js";
+import type { OnPay } from "./payout.js";
 import { TUNE } from "./tune.js";
 import { coinRect, type Rect } from "../io/trackData.js";
 import type { TrackExport } from "../io/types.js";
@@ -45,6 +46,8 @@ export interface CoinDeps {
   readonly car: Car;
   /** Collected coins pay into it as `"coin"` kind. */
   readonly ledger: CashLedger;
+  /** Told at the *coin's* center when one is collected (`endless_dev.lua:219`). */
+  readonly onPay?: OnPay;
 }
 
 export interface CoinField {
@@ -112,9 +115,16 @@ export function createCoins(deps: CoinDeps): CoinField {
       const cz = car.z + CAR_SIZE / 2;
       for (let i = 0; i < slots.length; i++) {
         if (present[i] !== true) continue;
-        if (!circleOverlapsRect(cx, cz, TUNE.coinRadius, slots[i]!)) continue;
+        const slot = slots[i]!;
+        if (!circleOverlapsRect(cx, cz, TUNE.coinRadius, slot)) continue;
         present[i] = false;
         ledger.award("coin", TUNE.coinPay);
+        deps.onPay?.({
+          x: slot.x + slot.w / 2,
+          z: slot.y + slot.h / 2,
+          amount: TUNE.coinPay,
+          kind: "coin",
+        });
       }
     },
 

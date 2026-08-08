@@ -10,7 +10,9 @@
  *
  * - **Knobs.** `sim/tune.ts`'s `KNOBS` walked into lil-gui, plus the car's own
  *   live tuning, its upgrade levels, and T7's `ChaseKnobs` wired in as-is. The
- *   panel edits `TUNE` in place; it never owns a value.
+ *   panel edits `TUNE` in place; it never owns a value. A few knobs also have
+ *   keys — `0` restores the authored defaults, `[` / `]` move the ghost count —
+ *   and those go through the same controllers, so panel and keyboard agree.
  * - **Readout.** The always-on core (cash, rolling `$/sec`) and a toggleable
  *   debug block (session rate, last lap, per-lap history, tallies), plus the
  *   post-rollover `$/sec`-delta flash.
@@ -41,7 +43,13 @@ import { applyUpgrades, MID_SPEC } from "../sim/car.js";
 import type { CashLedger } from "../sim/cash.js";
 import type { Beat } from "../sim/lap.js";
 import type { ChaseKnobs } from "../render/camera.js";
-import { KNOBS, TUNE, restoreDefaults, type Tune } from "../sim/tune.js";
+import {
+  KNOBS,
+  MAX_GHOSTS,
+  TUNE,
+  restoreDefaults,
+  type Tune,
+} from "../sim/tune.js";
 
 /** Seconds the rollover delta stays up, and the tail it fades over (`:76-77`). */
 const FLASH_TIME = 1.5;
@@ -168,11 +176,29 @@ export function createHud(deps: HudDeps): Hud {
   // makes a new knob a one-line change, and reproducing the list in the panel
   // would give it two places to drift apart.
   const tuneFolder = gui.addFolder("payouts / field");
+  /** The knob controllers by key, so a keyboard nudge can refresh its slider. */
+  const knobControllers = new Map<keyof Tune, { updateDisplay(): void }>();
   for (const knob of KNOBS) {
     const c = knob.bool
       ? tuneFolder.add(TUNE, knob.key)
       : tuneFolder.add(TUNE, knob.key, knob.min, knob.max, knob.step);
     c.onChange(() => deps.onTuneChange?.(knob.key));
+    knobControllers.set(knob.key, c);
+  }
+
+  /**
+   * `[` / `]` — the ghost count, `endless_dev.lua:37`'s pair with the two keys
+   * swapped so `[` adds and `]` removes. Here rather than in `loop.ts` because
+   * it is the same act as dragging the `ghosts` slider: mutate `TUNE`, refresh
+   * the widget that shows it, and announce the change. `sim/ghosts.ts` re-lays
+   * the field off `TUNE.ghosts` on its own, so nothing has to be pushed.
+   */
+  function nudgeGhosts(delta: number): void {
+    const next = Math.max(0, Math.min(MAX_GHOSTS, Math.round(TUNE.ghosts) + delta));
+    if (next === TUNE.ghosts) return;
+    TUNE.ghosts = next;
+    knobControllers.get("ghosts")?.updateDisplay();
+    deps.onTuneChange?.("ghosts");
   }
 
   // --- car: upgrades, then the model's own feel ----------------------------
@@ -255,6 +281,8 @@ export function createHud(deps: HudDeps): Hud {
   const onKey = (e: KeyboardEvent): void => {
     if (e.code === "Backquote") toggle();
     else if (e.code === "Digit0") actions.restoreDefaults();
+    else if (e.code === "BracketLeft") nudgeGhosts(1);
+    else if (e.code === "BracketRight") nudgeGhosts(-1);
   };
   window.addEventListener("keydown", onKey);
 

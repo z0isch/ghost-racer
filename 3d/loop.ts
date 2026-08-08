@@ -187,7 +187,6 @@ const chasePose = () => ({
   z: car.z,
   facingAngle: car.facingAngle,
   velAngle: car.velAngle,
-  drifting: car.isDrifting,
   speed: car.vel,
   topSpeed: car.topVel,
 });
@@ -228,13 +227,13 @@ const ghosts = createGhosts(track3);
  * `TUNE.maxCoins` at every line, so an uncollected coin is still standing there
  * next lap.
  */
-const coins = createCoins({ track: track3, car, ledger });
+const coins = createCoins({ track: track3, car, ledger, onPay: scene.popups.spawn });
 
 /**
  * Ghost contact — cash plus a forward shove, not a collision. Reads `lap.graceT`
  * so a ghost laid on the grid is not free money at the green.
  */
-const contact = createContact({ car, ghosts, ledger });
+const contact = createContact({ car, ghosts, ledger, onPay: scene.popups.spawn });
 
 /**
  * Push the ghost line at the ribbon in `render/track.ts`. Called only when the
@@ -259,6 +258,7 @@ const lap = createLap({
   collider,
   ledger,
   ghosts,
+  onPay: scene.popups.spawn,
   onRollover({ delta }) {
     // The car is already back on the grid: collapse the interpolation window
     // and put the camera behind it, or the "1" beat is spent watching the whole
@@ -286,6 +286,8 @@ const lap = createLap({
  */
 function restartSession(): void {
   lap.restart();
+  // The pops belong to money that no longer exists.
+  scene.popups.clear();
   // A fresh coin roll, `endless_dev.lua:555`. Not `lap.restart()`'s business:
   // the coin field is not lap state, and laps know nothing about it.
   coins.restart();
@@ -365,7 +367,6 @@ startLoop({
         z: previous.z + (car.z - previous.z) * alpha,
         facingAngle: angle.lerp(previous.facingAngle, car.facingAngle, alpha),
         velAngle: angle.lerp(previous.velAngle, car.velAngle, alpha),
-        drifting: car.isDrifting,
         // Not interpolated: it is a countdown, not a position, and the frame it
         // starts on is the frame the hit landed on. Lerping it against
         // `previous` would delay the one thing that has to be immediate.
@@ -383,11 +384,12 @@ startLoop({
     hud.update(stats.wallSeconds);
     hud.setBeat(lap.beat);
 
-    // Pushed on change rather than every frame: the pads only move between the
-    // target and the faded state when a checkpoint is crossed.
+    // Pushed on change rather than every frame: a pad only changes state when a
+    // checkpoint is crossed, which is exactly when `nextCp` moves — rollover
+    // included, since that snaps it back to 0 and brings the taken pads back.
     if (lap.nextCp !== shownCp) {
       shownCp = lap.nextCp;
-      scene.track.setCheckpointsCrossed(lap.faded);
+      scene.track.setCheckpointStates(lap.checkpointStates);
     }
 
     // Timestep proof: sim seconds should track wall seconds minus dropped time,
@@ -428,7 +430,7 @@ startLoop({
         `cam        blend ${scene.camera.knobs.velBlend.toFixed(2)}   k ${scene.camera.knobs.stiffness.toFixed(0)}   zeta ${scene.camera.knobs.damping.toFixed(2)}`,
         ``,
         `arrows/AD steer   Z brake   X drift   C boost   R restart`,
-        `\` hud   0 defaults   P promote mode`,
+        `\` hud   0 defaults   P promote mode   [ ] ghosts`,
       ].join("\n");
     }
   },

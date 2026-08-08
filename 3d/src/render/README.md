@@ -17,5 +17,8 @@ Inhabitants (see the map, issue #1):
 - `ghosts.ts` — the field as translucent parked karts, plus the pace ghost.
   Fill at `ghostAlpha` and edges at a multiple of it, because a translucent box
   has none of the outline the 2D sprite had.
+- `popups.ts` — the `+$N` cash pops from `popups.lua`, as world-space sprites
+  standing where the money came from. Fed by the sim's `OnPay` seam, aged on
+  wall time inside `scene.draw`.
 - `camera.ts` — the chase cam: a damped spring onto `facingAngle` blended toward
   `velAngle`. Every number in it is a knob, because every number in it is feel.
